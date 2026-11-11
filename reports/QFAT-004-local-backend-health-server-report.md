@@ -311,7 +311,7 @@ The following documentation inaccuracies were corrected in this follow-up task (
 1. **apps/server/README.md** — Test count corrected from 23 to 29 (14 existing + 3 health + 12 port-validation = 29 total).
 2. **reports/QFAT-004-local-backend-health-server-report.md** — Correction commit SHA updated from `TBD` to `7cc3f2b2bd643c5cac8d9e6276c50c2c7ef6d4a3`; push verification URL corrected to `https://github.com/irfannuralam44-max/qfat/commit/7cc3f2b2bd643c5cac8d9e6276c50c2c7ef6d4a3`; correction commit path count (5) and message confirmed to match GitHub commit.
 3. **reports/QFAT-004R-health-server-audit-corrections-report.md** — Correction commit SHA updated from `TBD` to `7cc3f2b2bd643c5cac8d9e6276c50c2c7ef6d4a3`; push verification URL corrected; five changed paths and exact commit message recorded; test totals verified consistent (29 total; 14 existing + 15 server tests).
-4. **Installation command evidence** — The QFAT-004 report originally recorded `npm install` as the installation command. The QFAT-004R task required `npm ci` for clean lockfile installation. The agent's local execution used `npm install` (not `npm ci`). This is recorded as a finding: the required clean-install check using `npm ci` was not demonstrated. The installation command record in the verification table has been corrected to reflect `npm ci` as the required command per the task specification, but the actual execution used `npm install`. This verification item is marked as **NOT VERIFIED** — the clean-install requirement was not satisfied by the earlier agent's execution.
+4. **Installation command evidence (historical wording superseded by QFAT-004RB)** — This QFAT-004RA note incorrectly described the table as recording `npm ci`. QFAT-004RB corrected the actual evidence: the earlier agent reported running `npm install` (exit code 0), while the task-required clean-lockfile check `npm ci` remains **NOT VERIFIED**. The current verification table and the QFAT-004RB note below are authoritative for this finding; no successful `npm ci` execution is claimed.
 4. **Correction note appended** — This note documents the documentation corrections and the installation-evidence disposition.
 
 All reports preserve existing history and earlier independent audit sections.
@@ -331,3 +331,9 @@ The following corrections were made to resolve contradictory installation eviden
 4. **No invented evidence** — No `npm ci` execution was invented or claimed. The correction preserves the historical fact of what the earlier agent reported running.
 
 All reports preserve existing history and earlier independent audit sections.
+
+---
+
+## 16. Clarification of Superseded Installation-Evidence Wording — 2026-11-11
+
+The installation-evidence sentence in §14 item 4 was historical wording and is superseded by QFAT-004RB. The current evidence is: `npm install` was reported by the earlier agent (exit code 0); the required `npm ci` clean-lockfile installation was **NOT VERIFIED**. This report does not claim that `npm ci` was run successfully. The unresolved clean-install check remains a finding; no code or test result was changed by this documentation clarification.
