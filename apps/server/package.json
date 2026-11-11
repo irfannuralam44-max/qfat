@@ -13,11 +13,14 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "audit:prod": "npm audit --omit=dev",
-    "audit:full": "npm audit"
+    "audit:full": "npm audit",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
   },
   "dependencies": {
     "better-sqlite3": "12.11.1",
-    "drizzle-orm": "0.45.4"
+    "drizzle-orm": "0.45.4",
+    "fastify": "5.12.8"
   },
   "devDependencies": {
     "@types/better-sqlite3": "7.6.11",

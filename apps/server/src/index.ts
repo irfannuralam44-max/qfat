@@ -1,0 +1,62 @@
+import Fastify from 'fastify';
+
+const DEFAULT_PORT = 3001;
+const HOST = '127.0.0.1';
+
+function getPort(): number {
+  const envPort = process.env.PORT;
+  if (envPort === undefined) {
+    return DEFAULT_PORT;
+  }
+  const parsed = Number.parseInt(envPort, 10);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    throw new Error(`Invalid PORT: "${envPort}". Must be an integer between 1 and 65535.`);
+  }
+  return parsed;
+}
+
+async function buildServer() {
+  const app = Fastify({
+    logger: false,
+  });
+
+  app.get('/api/v1/health', async () => {
+    return { status: 'ok', timestamp: new Date().toISOString() };
+  });
+
+  return app;
+}
+
+async function start() {
+  const port = getPort();
+  const app = await buildServer();
+
+  const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
+  let isShuttingDown = false;
+
+  for (const signal of signals) {
+    process.on(signal, async () => {
+      if (isShuttingDown) {
+        return;
+      }
+      isShuttingDown = true;
+      console.log(`Received ${signal}, shutting down gracefully...`);
+      await app.close();
+      process.exit(0);
+    });
+  }
+
+  try {
+    await app.listen({ port, host: HOST });
+    console.log(`Server listening on http://${HOST}:${port}`);
+  } catch (err) {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  }
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  start();
+}
+
+export { buildServer, start, getPort, HOST, DEFAULT_PORT };
