@@ -9,6 +9,7 @@ import Database from 'better-sqlite3';
 import { existsSync, unlinkSync, rmSync, readFileSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import * as schema from '../src/schema/index.js';
 
 /**
@@ -321,24 +322,33 @@ describe('Drizzle Migrations', () => {
     const v1FixtureDir = mkdtempSync(resolve(tmpdir(), 'qfat-v1-fixture-'));
 
     try {
-      // Step 1: Build v1-only migration fixture from committed artifacts
-      // Read the actual v1 migration SQL from the committed migration file
-      const v1MigrationPath = resolve(process.cwd(), 'migrations', '0000_lyrical_zemo.sql');
-      const v1MigrationSQL = readFileSync(v1MigrationPath, 'utf-8');
-
-      // Read the actual journal metadata to get the correct tag and timestamp
+      // Step 1: Read committed migration artifacts
       const journalPath = resolve(process.cwd(), 'migrations', 'meta', '_journal.json');
       const journal = JSON.parse(readFileSync(journalPath, 'utf-8'));
-      const v1Entry = journal.entries[0];
 
-      // Create the v1-only fixture directory structure
+      // Verify journal has exactly two entries with expected tags
+      assert.equal(journal.entries.length, 2, 'Journal should have exactly two entries');
+      const v1Entry = journal.entries[0];
+      const v2Entry = journal.entries[1];
+      assert.ok(v1Entry.tag && v2Entry.tag, 'Both entries should have tags');
+      assert.notEqual(v1Entry.tag, v2Entry.tag, 'Entry tags should be distinct');
+      assert.ok(v1Entry.when && v2Entry.when, 'Both entries should have timestamps');
+
+      // Dynamically compute expected hashes from committed SQL files
+      const v1SqlPath = resolve(process.cwd(), 'migrations', `${v1Entry.tag}.sql`);
+      const v2SqlPath = resolve(process.cwd(), 'migrations', `${v2Entry.tag}.sql`);
+      const v1SqlContent = readFileSync(v1SqlPath, 'utf-8');
+      const v2SqlContent = readFileSync(v2SqlPath, 'utf-8');
+
+      const v1ExpectedHash = createHash('sha256').update(v1SqlContent).digest('hex');
+      const v2ExpectedHash = createHash('sha256').update(v2SqlContent).digest('hex');
+      const v1ExpectedTimestamp = v1Entry.when;
+      const v2ExpectedTimestamp = v2Entry.when;
+
+      // Step 2: Build v1-only migration fixture from committed artifacts
       const v1MetaDir = resolve(v1FixtureDir, 'meta');
       mkdirSync(v1MetaDir, { recursive: true });
-
-      // Write the v1 migration SQL
-      writeFileSync(resolve(v1FixtureDir, `${v1Entry.tag}.sql`), v1MigrationSQL);
-
-      // Write the v1-only journal (only the first entry)
+      writeFileSync(resolve(v1FixtureDir, `${v1Entry.tag}.sql`), v1SqlContent);
       const v1Journal = {
         version: journal.version,
         dialect: journal.dialect,
@@ -346,61 +356,72 @@ describe('Drizzle Migrations', () => {
       };
       writeFileSync(resolve(v1FixtureDir, 'meta', '_journal.json'), JSON.stringify(v1Journal, null, 2));
 
-      // Step 2: Apply v1 migration using Drizzle migrator (lets Drizzle create the ledger entry)
-      const conn1 = openDatabase(path);
-      const drizzleDb1 = drizzle(conn1.db);
-      await migrate(drizzleDb1, { migrationsFolder: v1FixtureDir });
-      closeDatabase(conn1.db);
+      // Step 3: Apply v1 migration using Drizzle migrator (lets Drizzle create the ledger entry)
+      let conn1: ReturnType<typeof openDatabase> | undefined;
+      try {
+        conn1 = openDatabase(path);
+        const drizzleDb1 = drizzle(conn1.db);
+        await migrate(drizzleDb1, { migrationsFolder: v1FixtureDir });
+      } finally {
+        if (conn1) closeDatabase(conn1.db);
+      }
 
-      // Step 3: Verify v1 schema and insert test data
-      const db1 = new Database(path);
-      let columns1 = db1.prepare("PRAGMA table_info(app_meta)").all() as { name: string }[];
-      const columnNames1 = columns1.map(c => c.name);
-      assert.ok(!columnNames1.includes('description'), 'v1 schema should not have description column');
+      // Step 4: Verify v1 schema and insert test data
+      let db1: Database.Database | undefined;
+      try {
+        db1 = new Database(path);
+        const columns1 = db1.prepare("PRAGMA table_info(app_meta)").all() as { name: string }[];
+        const columnNames1 = columns1.map(c => c.name);
+        assert.ok(!columnNames1.includes('description'), 'v1 schema should not have description column');
 
-      // Insert test data in v1
-      db1.prepare("INSERT INTO app_meta (key, value, updated_at) VALUES (?, ?, ?)").run('test-key', 'test-value', Date.now());
-      const row1 = db1.prepare("SELECT * FROM app_meta WHERE key = ?").get('test-key');
-      assert.ok(row1, 'Test row should exist in v1');
-      db1.close();
+        // Insert test data in v1
+        db1.prepare("INSERT INTO app_meta (key, value, updated_at) VALUES (?, ?, ?)").run('test-key', 'test-value', Date.now());
+        const row1 = db1.prepare("SELECT * FROM app_meta WHERE key = ?").get('test-key');
+        assert.ok(row1, 'Test row should exist in v1');
+      } finally {
+        if (db1) db1.close();
+      }
 
-      // Step 4: Apply full migrations (v1 + v2) - Drizzle should skip v1 and apply only v2
-      const conn2 = openDatabase(path);
-      const drizzleDb2 = drizzle(conn2.db);
-      await migrate(drizzleDb2, { migrationsFolder: resolve(process.cwd(), 'migrations') });
-      closeDatabase(conn2.db);
+      // Step 5: Apply full migrations (v1 + v2) - Drizzle should skip v1 and apply only v2
+      let conn2: ReturnType<typeof openDatabase> | undefined;
+      try {
+        conn2 = openDatabase(path);
+        const drizzleDb2 = drizzle(conn2.db);
+        await migrate(drizzleDb2, { migrationsFolder: resolve(process.cwd(), 'migrations') });
+      } finally {
+        if (conn2) closeDatabase(conn2.db);
+      }
 
-      // Step 5: Verify v2 schema (has description column)
-      const db2 = new Database(path);
-      let columns2 = db2.prepare("PRAGMA table_info(app_meta)").all() as { name: string }[];
-      const columnNames2 = columns2.map(c => c.name);
-      assert.ok(columnNames2.includes('description'), 'v2 schema should have description column');
+      // Step 6: Verify v2 schema, data preserved, and migration tracking
+      let db2: Database.Database | undefined;
+      try {
+        db2 = new Database(path);
+        const columns2 = db2.prepare("PRAGMA table_info(app_meta)").all() as { name: string }[];
+        const columnNames2 = columns2.map(c => c.name);
+        assert.ok(columnNames2.includes('description'), 'v2 schema should have description column');
 
-      // Step 6: Verify existing data preserved
-      const row2 = db2.prepare("SELECT * FROM app_meta WHERE key = ?").get('test-key');
-      assert.ok(row2, 'Test row should still exist after upgrade');
-      assert.equal(row2.value, 'test-value', 'Value should be preserved');
+        // Verify existing data preserved
+        const row2 = db2.prepare("SELECT * FROM app_meta WHERE key = ?").get('test-key');
+        assert.ok(row2, 'Test row should still exist after upgrade');
+        assert.equal(row2.value, 'test-value', 'Value should be preserved');
 
-      // Step 7: Verify migration tracking has exactly two entries with correct hashes/timestamps
-      const migrations = db2.prepare('SELECT * FROM __drizzle_migrations ORDER BY created_at').all() as {
-        hash: string;
-        created_at: number;
-      }[];
-      assert.equal(migrations.length, 2, 'Should have exactly 2 migrations tracked');
+        // Verify migration tracking has exactly two entries with correct hashes/timestamps
+        const migrations = db2.prepare('SELECT * FROM __drizzle_migrations ORDER BY created_at').all() as {
+          hash: string;
+          created_at: number;
+        }[];
+        assert.equal(migrations.length, 2, 'Should have exactly 2 migrations tracked');
 
-      // Verify v1 migration hash and timestamp match committed artifact
-      const v1ExpectedHash = '7782bbc169e5a629ed53b2149800eaf85b0af702ff881536aab79004be77cc30';
-      const v1ExpectedTimestamp = 1794370402769;
-      assert.equal(migrations[0].hash, v1ExpectedHash, 'v1 migration hash should match committed artifact');
-      assert.equal(migrations[0].created_at, v1ExpectedTimestamp, 'v1 migration timestamp should match committed artifact');
+        // Verify v1 migration hash and timestamp match dynamically derived values
+        assert.equal(migrations[0].hash, v1ExpectedHash, 'v1 migration hash should match dynamically derived hash');
+        assert.equal(migrations[0].created_at, v1ExpectedTimestamp, 'v1 migration timestamp should match journal');
 
-      // Verify v2 migration hash and timestamp match committed artifact
-      const v2ExpectedHash = 'e43353e29903d7bf778a64112bc7c6287badced66783cbffe172d184216659cc';
-      const v2ExpectedTimestamp = 1794370884131;
-      assert.equal(migrations[1].hash, v2ExpectedHash, 'v2 migration hash should match committed artifact');
-      assert.equal(migrations[1].created_at, v2ExpectedTimestamp, 'v2 migration timestamp should match committed artifact');
-
-      db2.close();
+        // Verify v2 migration hash and timestamp match dynamically derived values
+        assert.equal(migrations[1].hash, v2ExpectedHash, 'v2 migration hash should match dynamically derived hash');
+        assert.equal(migrations[1].created_at, v2ExpectedTimestamp, 'v2 migration timestamp should match journal');
+      } finally {
+        if (db2) db2.close();
+      }
     } finally {
       // Clean up only the unique temp directory created for this test
       try {

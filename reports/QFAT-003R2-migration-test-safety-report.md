@@ -105,7 +105,7 @@ This task resolves the remaining GPT audit findings from QFAT-003R by:
 ### 4.2 Test Results (14 tests, 14 pass)
 
 ```
-▶ SQLite Connection (8 tests)
+▶ SQLite Connection (9 tests)
   ✔ opens file-backed database and verifies PRAGMAs
   ✔ enables and verifies foreign key enforcement
   ✔ transaction commit persists data
@@ -116,7 +116,7 @@ This task resolves the remaining GPT audit findings from QFAT-003R by:
   ✔ close and reopen preserves data
   ✔ integrity_check returns ok
 
-▶ Drizzle Migrations (6 tests)
+▶ Drizzle Migrations (5 tests)
   ✔ applies initial migration to fresh database
   ✔ re-running migrations is safe and idempotent
   ✔ migration tracking table records applied migrations
@@ -270,3 +270,15 @@ This report is ready for GPT/owner audit. The migration upgrade test is now full
 The GitHub compare confirms exactly one implementation commit ahead of the stated base and the three files listed above. The report's local command results are recorded as agent evidence; this GitHub audit does not independently rerun those commands. Windows remains NOT RUN. GitHub Actions remains DEFERRED BY OWNER and is not a defect.
 
 **Disposition:** Do not proceed to Windows validation or API work yet. Complete the focused follow-up task `QFAT-003R2A`, rerun the Linux test suite, publish a corrected report, and return for GPT audit. Historical report content is preserved; this audit note supersedes unsupported PASS claims above.
+
+---
+
+## 13. Cross-reference to QFAT-003R2A follow-up
+
+The blocking findings identified in the GPT post-publication audit (§12) have been addressed in the follow-up task **QFAT-003R2A** (`tasks/QFAT-003R2A-migration-assertions-and-handle-safety.md`):
+
+- **Dynamic hash/timestamp derivation** — Migration hashes are now computed via `createHash('sha256').update(sqlContent).digest('hex')` from the committed SQL files using journal tags. Timestamps are read directly from the journal entries. No hardcoded literals remain.
+- **Guaranteed handle closure** — Every `openDatabase()` connection and every direct `new Database(path)` handle is wrapped in `try/finally` with `closeDatabase()` / `db.close()` in the finally block. This ensures handles close on both success and assertion/migration failure, before fixture cleanup.
+- **Cleanup order** — All handles close first, then the unique migration fixture directory is removed, then the database fixture cleanup runs. If temp directory creation fails after the database fixture is created, the database fixture cleanup still executes.
+
+The corrected implementation is documented in **`reports/QFAT-003R2A-migration-assertions-and-handle-safety-report.md`** with commit `TBD`.
