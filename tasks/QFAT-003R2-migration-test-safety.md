@@ -31,8 +31,9 @@ Resolve the outstanding GPT audit findings without expanding product scope:
 1. Make the v1→v2 migration test fully isolated and non-destructive.
 2. Remove or correctly convert the leftover standalone `migration-verify.test.ts`.
 3. Prove migration hash/journal values are derived from committed artifacts rather than unexplained literals.
-4. Re-run Linux backend tests and ensure GitHub Actions CI executes successfully.
-5. Publish a factual report. Do not claim Windows validation.
+4. Re-run and document the required Linux tests locally.
+5. Remove the not-yet-authorized GitHub Actions workflow so pushes do not trigger CI during this development phase.
+6. Publish a factual report. Do not claim Windows validation.
 
 ## 3. Required changes
 
@@ -65,17 +66,14 @@ Inspect `apps/server/test/migration-verify.test.ts`.
 - Update test counts in reports to match actual output.
 - Remove unused imports and dead helpers in touched test files only.
 
-### 3.3 CI execution
+### 3.3 GitHub Actions deferred
 
-The workflow `.github/workflows/ci.yml` exists, but GPT audit found no workflow runs or combined status checks for the QFAT-003R commit.
+Owner decision (2026-11-11): GitHub Actions/CI is deferred until the project is ready for real-world use. GitHub is currently the source repository and documentation host; it is not the test execution environment.
 
-- Inspect the workflow for correctness.
-- Push this correction to `main` so the push trigger executes.
-- Verify the actual GitHub Actions run for the new commit, including both backend and root jobs.
-- Record run URL/ID, final conclusion, and per-job results in the report.
-- The production audit gate `npm audit --omit=dev` must pass.
-- Full-scope audit may remain informational only for the documented ADR-001 advisory.
-- Do not state CI passed based solely on the workflow file existing.
+- Delete `.github/workflows/ci.yml` in this task because it was introduced prematurely and currently has push/PR triggers.
+- Do not configure, trigger, or verify GitHub Actions.
+- Record CI as `DEFERRED BY OWNER`, not as a failure or finding.
+- All required verification in this task must run locally on Linux and be supported by exact commands, outputs, and exit codes.
 
 ### 3.4 Report corrections
 
@@ -89,7 +87,7 @@ Create `reports/QFAT-003R2-migration-test-safety-report.md` with:
 - Migration artifact-derived tag/timestamp/hash evidence.
 - Exact test command, test names/counts, and exit code.
 - `git diff --check`, `git status`, and final changed-file list.
-- GitHub Actions run URL/ID and backend/root job outcomes.
+- GitHub Actions status: DEFERRED BY OWNER; confirm `.github/workflows/ci.yml` is absent.
 - Linux OS, architecture, Node, npm versions.
 - Windows explicitly marked NOT RUN.
 - Any remaining limitations.
@@ -114,7 +112,7 @@ Create `reports/QFAT-003R2-migration-test-safety-report.md` with:
 | AC-05 | Upgrade preserves data and applies v2 exactly once | Test output and assertions |
 | AC-06 | Standalone test is removed or converted to node:test | Git diff and npm test output |
 | AC-07 | Backend typecheck/tests and production audit pass | Exact commands and exit codes |
-| AC-08 | GitHub Actions backend and root jobs actually pass | Run URL/ID and job results |
+| AC-08 | GitHub Actions remains deferred; premature workflow removed | Git diff confirms `.github/workflows/ci.yml` deletion |
 | AC-09 | No unrelated changes or user data cleanup | Diff/status review |
 | AC-10 | Report accurately records results and Windows NOT RUN | Published report |
 
@@ -131,7 +129,7 @@ Run and record:
 7. Root `npm run typecheck`
 8. Root `npm run build`
 9. `git diff --check`
-10. Verify CI run after push.
+10. Verify `.github/workflows/ci.yml` is absent and no CI run is required.
 
 Do not report a command as executed unless it was actually run. Do not claim Windows PASS.
 
@@ -140,7 +138,7 @@ Do not report a command as executed unless it was actually run. Do not claim Win
 - Target branch: `main`
 - Commit message: `fix(server): isolate migration upgrade test fixtures`
 - Push and verify the remote commit.
-- Stop after report publication and CI verification.
+- Stop after report publication and local verification.
 - Chat handoff contains only branch, commit message, full SHA, report path.
 
 **Decision boundary:** This task is only a test-safety/CI-evidence correction. It does not authorize the next API task. Windows validation remains a separate task after GPT audits this result.
