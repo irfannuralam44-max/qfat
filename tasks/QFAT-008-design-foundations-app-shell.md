@@ -1,6 +1,6 @@
 # Task QFAT-008 — Design Foundations and Application Shell
 
-- **Status:** READY FOR OWNER REVIEW — NOT AUTHORIZED FOR IMPLEMENTATION
+- **Status:** OWNER-AUTHORIZED FOR IMPLEMENTATION — 2026-11-11
 - **Task type:** Frontend foundation + responsive application shell
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
@@ -11,6 +11,7 @@
 - **Network-access authority:** `docs/PRD-QFAT-BETA-ACCESS-ADDENDUM.md`
 - **Architecture authority:** `docs/AI-DEVELOPMENT-WORKFLOW.md`, `AGENTS.md`
 - **Predecessor:** QFAT-007 accepted by owner on 2026-11-11
+- **Owner authorization:** Explicitly authorized to implement QFAT-008 on 2026-11-11. This authorization applies only to the scope in this task.
 - **Workflow:** GitHub-first; one OpenCode agent serially; GPT audit and owner approval gate
 
 ## 1. Objective
@@ -24,7 +25,7 @@ Turn the current single-screen health-check frontend into the first real QFAT ap
 
 This is the first UI implementation phase. It must establish reusable structure without pretending that accounts, media, jobs, or publishing features already exist.
 
-The task is deliberately limited to foundations and the application shell. The Create Content workflow is a separate next phase and is not included here.
+The task is deliberately limited to foundations and the application shell. The Create Content workflow is a separate next phase and is not included here. The current owner-approved PRD also defines separate YouTube and Facebook editors for that later phase; Facebook video and single-image posts share the same metadata form. Do not implement or prototype those editors in QFAT-008.
 
 ## 2. Current repository facts
 
