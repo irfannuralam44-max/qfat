@@ -103,6 +103,21 @@ After successful remote verification, the chat response must contain only:
 
 No detailed summary, test log, changed-file list, or report body in chat. GPT reads the report and code directly from GitHub.
 
+### Phase G — GPT post-publication audit and documentation maintenance
+
+After the agent has pushed and verified its report, GPT owns the post-publication audit. This phase is performed by GPT/architect, not sent back to the agent merely to fix report metadata.
+
+1. Fetch the report and relevant source files from the pushed GitHub branch.
+2. Verify the report commit, branch HEAD, and remote publication state independently.
+3. Audit factual claims, acceptance evidence, decision counts, citations, and consistency with approved product requirements.
+4. Distinguish historical report-time statements from post-publication facts. A report field such as “push verification pending” may accurately describe the state when the report was authored; it is not by itself evidence of a failed push.
+5. If post-publication metadata should be completed or corrected (for example, verified push state, final remote commit, or report status), GPT updates the Markdown report directly in a follow-up documentation-only commit and verifies that commit on the remote branch.
+6. Do not ask the agent to repeat completed implementation or validation work solely to repair post-push documentation metadata.
+7. If GPT finds a substantive implementation, test, or evidence defect, record it clearly and create a new scoped agent task only when agent work is actually required.
+8. Preserve the original report and its historical context; add a dated/clearly labeled post-publication audit note rather than rewriting history or pretending a later fact was known at report time.
+
+GPT's post-publication documentation commit must be separately identified from the agent's task commit. Do not attempt to embed a commit's own full SHA in the content of that same commit; it would change the commit SHA.
+
 ## 4. Git safety rules
 
 - The target branch is selected by the task specification.
