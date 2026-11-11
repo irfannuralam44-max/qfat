@@ -6,7 +6,7 @@
 - **Target branch:** `main`
 - **Base SHA:** `0ff1f2ce8eb3d1d5293c8ac338f1334856d54d82`
 - **Implementation commit message:** `feat(web): add private-network QFAT status entry point`
-- **Implementation commit SHA:** Pending commit at report authoring; will be recorded in post-commit metadata.
+- **Implementation commit SHA:** `e28254dff9713fe9275edb0e8a6eaf00e18a098d`
 - **Execution environment:** Linux x86_64 (`Linux 7.0.0-42-generic`), Node.js `v24.22.2`, npm `11.19.0`, Firefox `160.0`.
 
 ## Scope
@@ -83,7 +83,7 @@ All commands were run locally on the Linux PC. No GitHub Actions or CI was creat
 | `ss -ltnp '( sport = :5173 or sport = :3001 )'` | PASS | Showed Vite on `0.0.0.0:5173` and Fastify on `127.0.0.1:3001`. |
 | Firefox headless desktop screenshot | PASS | Rendered page at 1280×900; screenshot captured the initial loading state. |
 | Firefox headless narrow-viewport screenshot | PASS | Rendered page at 390×844; screenshot captured the initial loading state. This is viewport rendering, not a physical phone test. |
-| `git diff --check` | Pending | Run before commit. |
+| `git diff --check HEAD^ HEAD` | PASS | Checked the complete implementation commit diff; exit code 0. |
 
 The Vite host behavior evidence came from source inspection of the installed package at `node_modules/vite/dist/node/chunks/node.js` and the observed HTTP results. No permissive host wildcard was configured.
 
@@ -107,8 +107,8 @@ The Vite host behavior evidence came from source inspection of the installed pac
 - **Remote:** `origin` (`https://github.com/irfannuralam44-max/qfat.git`)
 - **Branch:** `main`
 - **Commit message:** `feat(web): add private-network QFAT status entry point`
-- **Implementation commit SHA:** Pending at report authoring; will be recorded in post-commit metadata.
-- **Push / remote verification:** Pending publication.
+- **Implementation commit SHA:** `e28254dff9713fe9275edb0e8a6eaf00e18a098d`
+- **Implementation push / remote verification:** Pending publication at report metadata authoring. The report metadata follow-up commit is intentionally not self-referenced; the final branch-head SHA and remote verification are provided in the required handoff.
 - **Report:** `reports/QFAT-006-private-network-web-entrypoint-report.md`
 
 ## Handoff
