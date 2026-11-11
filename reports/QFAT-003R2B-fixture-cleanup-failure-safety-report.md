@@ -4,7 +4,7 @@
 - **Task:** `tasks/QFAT-003R2B-fixture-cleanup-failure-safety.md`
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
-- **Base commit:** `b4c6b80` (origin/main after fast-forward sync)
+- **Task/base commit:** `b4c6b80ecb6cd74e7cfca6102cf50deb90fbf082` (QFAT-003R2B task publication; implementation parent)
 - **Audit base (QFAT-003R2A implementation):** `0df07e6d040fa62b244615732df1a20dcce18598`
 - **Related prior report:** `reports/QFAT-003R2A-migration-assertions-and-handle-safety-report.md`
 - **Report path:** `reports/QFAT-003R2B-fixture-cleanup-failure-safety-report.md`
@@ -227,13 +227,14 @@ Exit code: 1 (expected — dev-only, per ADR-001)
 
 ## 6. Files Changed and Git Publication
 
-### 6.1 Implementation Commit
+### 6.1 QFAT-003R2B Implementation Commit
 
-- **Commit:** `e076ec6d0359e2f443bb321f25eeb95989b3e9cf` (QFAT-003R2A implementation)
-- **Base for this correction:** `b4c6b80` (origin/main after fast-forward sync)
-- **Files changed in this correction:** 1 (`apps/server/test/connection.test.ts`)
-- **Files changed in QFAT-003R2A implementation commit (`0df07e6`):** 2 (`apps/server/test/connection.test.ts`, `reports/QFAT-003R2-migration-test-safety-report.md`)
-- **Broader compare range (audit base `a3d614d` → current):** 4 paths — test file, QFAT-003R2A report, QFAT-003R2 report, QFAT-003R2A task file
+- **Implementation commit:** `54b5d795faf1031acbf1b2e3a299989a325f41ef`
+- **Parent/base commit:** `b4c6b80ecb6cd74e7cfca6102cf50deb90fbf082`
+- **Files changed in this implementation commit:** 3 paths — `apps/server/test/connection.test.ts`, `reports/QFAT-003R2A-migration-assertions-and-handle-safety-report.md`, and this report.
+- **Broader compare range (`f39a2a82c2fc201d985335ee53cf0338a714fddc` → this implementation):** 4 paths; this includes the QFAT-003R2B task file published in the preceding task commit, as well as the three implementation-commit paths.
+
+The prior QFAT-003R2A implementation commit `0df07e6d040fa62b244615732df1a20dcce18598` is historical context only; it is not the QFAT-003R2B implementation commit.
 
 ### 6.2 Corrected QFAT-003R2A Report
 
@@ -284,12 +285,11 @@ The blocking AC-06 from QFAT-003R2A GPT audit has been addressed with source-lev
 
 - **Remote:** `origin` → `https://github.com/irfannuralam44-max/qfat.git`
 - **Branch:** `main`
-- **Base commit:** `b4c6b80` (origin/main after fast-forward sync)
-- **Implementation commit:** `e076ec6d0359e2f443bb321f25eeb95989b3e9cf` (QFAT-003R2A)
-- **This correction commit:** (to be recorded after commit)
-- **Files changed:** 2 (test file + updated QFAT-003R2A report)
+- **Task/base commit:** `b4c6b80ecb6cd74e7cfca6102cf50deb90fbf082`
+- **Implementation commit:** `54b5d795faf1031acbf1b2e3a299989a325f41ef`
+- **Files changed in implementation commit:** 3 (test source, QFAT-003R2A report, QFAT-003R2B report)
 - **Commit message:** `fix(server): guarantee fixture cleanup on temp setup failure`
-- **Push verification:** [To be completed after commit and push]
+- **Push verification:** Verified; the exact commit is present on GitHub `main`.
 
 ---
 
@@ -307,3 +307,31 @@ This report is ready for GPT/owner audit. The blocking AC-06 from the QFAT-003R2
 
 ---
 *End of QFAT-003R2B Fixture Cleanup Failure Safety Report*
+
+---
+
+## 12. GPT Post-Publication Audit — 2026-11-11
+
+**Disposition: PASS WITH FINDINGS — QFAT-003R2B accepted at source/report audit level.**
+
+### Confirmed
+
+1. The migration-upgrade test creates the DB fixture before entering the protected block, initializes `v1FixtureDir` as undefined, and invokes `mkdtempSync()` inside the outer `try`. If it throws, control enters `finally`; the temp-directory removal is skipped and `cleanup()` still executes.
+2. Temp-directory removal uses only the exact returned path and is conditional on successful creation.
+3. The four database handles (`conn1`, `db1`, `conn2`, `db2`) retain their individual `try/finally` close paths. Their scopes complete before the outer cleanup block.
+4. If temp-directory removal throws, its local catch allows database fixture cleanup to continue. The fixture cleanup function itself catches filesystem cleanup errors.
+5. Dynamic SQL hash and journal timestamp derivation from QFAT-003R2A remain intact.
+6. The task explicitly allowed source-level control-flow proof if a deterministic `mkdtempSync()` failure injection would add disproportionate complexity. The report accurately identifies that no runtime failure-injection test was performed.
+7. GitHub Actions remain DEFERRED BY OWNER; Windows remains NOT RUN.
+
+### Corrected publication metadata
+
+The implementation commit is `54b5d795faf1031acbf1b2e3a299989a325f41ef`, parent `b4c6b80ecb6cd74e7cfca6102cf50deb90fbf082`. Its compare contains three paths: the test source, the QFAT-003R2A report update, and this QFAT-003R2B report. The preceding task-publication commit accounts for the fourth path in the broader compare range from `f39a2a82c2fc201d985335ee53cf0338a714fddc`.
+
+### Findings / limits
+
+- No deterministic runtime test forces `mkdtempSync()` to throw; acceptance relies on the task-permitted source-level control-flow proof.
+- The local Linux command outcomes are agent-reported evidence; this GitHub audit did not independently execute them.
+- Windows validation and GitHub Actions remain intentionally deferred.
+
+**Decision:** QFAT-003R2B is accepted with findings. This does not by itself authorize Windows validation or API implementation. The next platform validation is a separate owner-approved task.
