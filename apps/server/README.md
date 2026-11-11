@@ -83,10 +83,10 @@ The server handles `SIGINT` (Ctrl+C) and `SIGTERM`:
 npm test
 ```
 
-Runs the full test suite (23 tests):
+Runs the full test suite (29 tests):
 - SQLite connection and migration tests (14 existing)
 - Health server endpoint, loopback binding, graceful shutdown (3)
-- Port validation: valid, default, empty, alphabetic, numeric suffix, decimal, zero, negative, 65536, leading zeros, whitespace (10)
+- Port validation: valid, default, empty, alphabetic, numeric suffix, decimal, zero, negative, 65536, leading zeros, whitespace (12)
 
 ## Dependencies
 
