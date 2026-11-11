@@ -318,10 +318,14 @@ describe('Drizzle Migrations', () => {
     const fixture = createTestDb();
     const { path, cleanup } = fixture;
 
-    // Create a unique temporary directory for the v1-only migration fixture
-    const v1FixtureDir = mkdtempSync(resolve(tmpdir(), 'qfat-v1-fixture-'));
+    // Initialize temp directory path as undefined
+    let v1FixtureDir: string | undefined;
 
     try {
+      // Step 0: Create the temporary directory for the v1-only migration fixture
+      // This is now inside the try block so cleanup() runs even if mkdtempSync throws
+      v1FixtureDir = mkdtempSync(resolve(tmpdir(), 'qfat-v1-fixture-'));
+
       // Step 1: Read committed migration artifacts
       const journalPath = resolve(process.cwd(), 'migrations', 'meta', '_journal.json');
       const journal = JSON.parse(readFileSync(journalPath, 'utf-8'));
@@ -423,12 +427,15 @@ describe('Drizzle Migrations', () => {
         if (db2) db2.close();
       }
     } finally {
-      // Clean up only the unique temp directory created for this test
-      try {
-        rmSync(v1FixtureDir, { recursive: true, force: true });
-      } catch {
-        // Ignore cleanup errors
+      // Clean up the migration temp directory only if it was created
+      if (v1FixtureDir) {
+        try {
+          rmSync(v1FixtureDir, { recursive: true, force: true });
+        } catch {
+          // Ignore cleanup errors
+        }
       }
+      // Database fixture cleanup always runs
       cleanup();
     }
   });

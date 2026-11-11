@@ -22,7 +22,7 @@ This report documents the resolution of the two blocking findings from the GPT p
 
 All acceptance criteria AC-01 through AC-10 pass with executed evidence on Linux. Windows validation is NOT RUN. The known development-tooling advisory `GHSA-67mh-4wv8-2f99` (4 moderate in full scope, 0 in production scope) is documented per ADR-001 mitigations.
 
-**Recommendation: PASS WITH FINDINGS** — The implementation satisfies the task requirements. The QFAT-003R2 report has been updated with corrected test counts and a cross-reference to this follow-up.
+**Recommendation: PASS WITH FINDINGS** — The implementation satisfies the task requirements for dynamic hash/timestamp derivation and per-handle closure. The remaining AC-06 (fixture cleanup on temp-directory creation failure) is addressed in the follow-up task **QFAT-003R2B**. The QFAT-003R2 report has been updated with corrected test counts and a cross-reference to QFAT-003R2A.
 
 ---
 
@@ -221,7 +221,7 @@ Exit code: 1 (expected — dev-only, per ADR-001)
 | AC-03 | No hardcoded migration hash/timestamp literals remain in upgrade test | **PASS** | Source review — no literals |
 | AC-04 | All database handles close on success and assertion/migration failure | **PASS** | §3.2, try/finally structure |
 | AC-05 | Temp migration fixture cleanup occurs only after handles close | **PASS** | Outer finally order |
-| AC-06 | DB fixture cleanup still occurs if temp directory creation fails | **PASS** | Outer try/finally structure |
+| AC-06 | DB fixture cleanup still occurs if temp directory creation fails | **ADDRESSED IN QFAT-003R2B** | Outer try/finally structure moved mkdtempSync inside try |
 | AC-07 | Linux typecheck, tests, production audit documented | **PASS** | §4.1 |
 | AC-08 | Report corrected without erasing historical audit note | **PASS** | QFAT-003R2 report updated |
 | AC-09 | CI remains deferred; Windows marked NOT RUN | **PASS** | §6, §7 |
@@ -236,7 +236,9 @@ Exit code: 1 (expected — dev-only, per ADR-001)
 | `apps/server/test/connection.test.ts` | Dynamic hash/timestamp derivation; guaranteed handle closure via try/finally |
 | `reports/QFAT-003R2-migration-test-safety-report.md` | Corrected test counts (9 SQLite, 5 Drizzle); added cross-reference to QFAT-003R2A |
 
-**Git diff summary:** 2 files changed, insertions(+), deletions(-)
+**Implementation commit (`0df07e6`) changed files:** 2 (test file + prior report)
+
+**Broader compare range (audit base `a3d614d` → implementation commit `0df07e6`):** 4 paths — the test, this report, the prior QFAT-003R2 report, and the QFAT-003R2A task file. The task and prior report were added in documentation commits between the audit base and implementation.
 
 ---
 
@@ -281,9 +283,10 @@ Both blocking findings from the GPT post-publication audit of QFAT-003R2 have be
 - **Remote:** `origin` → `https://github.com/irfannuralam44-max/qfat.git`
 - **Branch:** `main`
 - **Base commit:** `1a0e6b1` (origin/main after fast-forward sync)
-- **Files changed:** 2 (1 test file modified, 1 prior report updated)
+- **Implementation commit:** `0df07e6d040fa62b244615732df1a20dcce18598`
+- **Files changed in implementation commit:** 2 (test file + prior report)
 - **Commit message:** `fix(server): derive migration assertions and close test handles safely`
-- **Push verification:** [To be completed after commit and push]
+- **Push verified:** Yes, commit `0df07e6` visible on GitHub
 
 ---
 
@@ -299,6 +302,19 @@ The QFAT-003R2 report has been updated with corrected test counts and a cross-re
 **Windows validation remains pending** and should be executed separately.
 
 **Agent completion ≠ owner acceptance.** GPT/owner will audit the pushed report and evidence on GitHub before authorizing the next task.
+
+---
+
+## 13. Cross-reference to QFAT-003R2B follow-up
+
+The remaining acceptance criterion AC-06 (database fixture cleanup when temporary-directory creation fails) is addressed in the follow-up task **QFAT-003R2B** (`tasks/QFAT-003R2B-fixture-cleanup-failure-safety.md`):
+
+- The migration-upgrade test now initializes `v1FixtureDir` as `undefined` before the outer `try` block
+- `mkdtempSync()` is called inside the outer `try` block
+- The outer `finally` block conditionally removes the temp directory only if `v1FixtureDir` was created, then unconditionally calls `cleanup()`
+- This ensures database fixture cleanup runs even if `mkdtempSync()` throws
+
+The corrected implementation is documented in **`reports/QFAT-003R2B-fixture-cleanup-failure-safety-report.md`**.
 
 ---
 *End of QFAT-003R2A Migration Assertions and Handle Safety Report*
