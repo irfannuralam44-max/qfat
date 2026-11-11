@@ -126,7 +126,8 @@ Minimal developer note covering:
 
 | Step | Command | Exit Code | Result |
 |---|---|---|---|
-| 1 | `cd apps/server && npm ci` | 0 | ✅ PASS |
+| 1 | `cd apps/server && npm install` | 0 | ✅ PASS (agent-reported) |
+| 1b | `cd apps/server && npm ci` | — | **NOT VERIFIED** (clean-lockfile check required by QFAT-004R task; not demonstrated) |
 | 2 | `cd apps/server && npm run typecheck` | 0 | ✅ PASS |
 | 3 | `cd apps/server && npm run build` | 0 | ✅ PASS |
 | 4 | `cd apps/server && npm test` | 0 | ✅ PASS (29 tests) |
@@ -135,6 +136,8 @@ Minimal developer note covering:
 | 7 | `npm run typecheck` (root) | 0 | ✅ PASS |
 | 8 | `npm run build` (root) | 0 | ✅ PASS |
 | 9 | `git diff --check` | 0 | ✅ PASS (no whitespace issues) |
+
+> **Note:** The QFAT-004R task required a clean lockfile installation using `npm ci`. The agent's local execution used `npm install` (exit code 0, agent-reported). The required `npm ci` clean-lockfile check was not demonstrated and is marked **NOT VERIFIED**. The successful `npm install` does not establish a clean lockfile installation.
 
 ### 5.2 Manual Server Verification
 
@@ -310,5 +313,21 @@ The following documentation inaccuracies were corrected in this follow-up task (
 3. **reports/QFAT-004R-health-server-audit-corrections-report.md** — Correction commit SHA updated from `TBD` to `7cc3f2b2bd643c5cac8d9e6276c50c2c7ef6d4a3`; push verification URL corrected; five changed paths and exact commit message recorded; test totals verified consistent (29 total; 14 existing + 15 server tests).
 4. **Installation command evidence** — The QFAT-004 report originally recorded `npm install` as the installation command. The QFAT-004R task required `npm ci` for clean lockfile installation. The agent's local execution used `npm install` (not `npm ci`). This is recorded as a finding: the required clean-install check using `npm ci` was not demonstrated. The installation command record in the verification table has been corrected to reflect `npm ci` as the required command per the task specification, but the actual execution used `npm install`. This verification item is marked as **NOT VERIFIED** — the clean-install requirement was not satisfied by the earlier agent's execution.
 4. **Correction note appended** — This note documents the documentation corrections and the installation-evidence disposition.
+
+All reports preserve existing history and earlier independent audit sections.
+
+---
+
+## 15. QFAT-004RB Installation Evidence Correction — 2026-11-11
+
+The following corrections were made to resolve contradictory installation evidence in the QFAT-004 and QFAT-004R reports:
+
+1. **Verification table corrected** — Step 1 now records the actual agent-reported execution: `cd apps/server && npm install` (exit code 0, agent-reported). A separate row (1b) explicitly records the QFAT-004R task's required `npm ci` clean-lockfile check as **NOT VERIFIED** — the agent did not demonstrate this required check.
+
+2. **Explicit note added** — The verification table now includes a clear note: the successful `npm install` (exit code 0, agent-reported) does not establish a clean lockfile installation. The required `npm ci` clean-lockfile check was not demonstrated.
+
+3. **QFAT-004R report updated** — The corresponding verification table in `reports/QFAT-004R-health-server-audit-corrections-report.md` preserves `npm install` as the actual agent-reported command and marks the required `npm ci` check as **NOT VERIFIED**. The report status remains **PASS WITH FINDINGS** with this unresolved verification finding explicitly acknowledged.
+
+4. **No invented evidence** — No `npm ci` execution was invented or claimed. The correction preserves the historical fact of what the earlier agent reported running.
 
 All reports preserve existing history and earlier independent audit sections.
