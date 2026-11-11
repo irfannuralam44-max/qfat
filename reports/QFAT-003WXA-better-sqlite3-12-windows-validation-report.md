@@ -356,3 +356,21 @@ No source, test, schema, migration, script, `.npmrc`, or other configuration cha
 This report is ready for GPT/owner audit. It is **not** owner acceptance and does not authorize API implementation, live account connections, uploads, or any next stage.
 
 The Windows clean-install objective is met for both Node 22 and Node 24 using ordinary `npm ci` with no Python/MSVC, by adopting the owner-approved `better-sqlite3@12.11.1`. Residual findings (deprecated `prebuild-install`, install-time GitHub release download, SQLite 3.53.2 vs 3.53.4) and the separate ADR-001 documentation update are left for GPT/owner review. A separate Linux validation task is required before final cross-platform acceptance.
+
+---
+
+## 14. GPT source audit — 2026-11-11
+
+**Audit disposition: WINDOWS VALIDATION REPORT ACCEPTED AS AN ACCURATE AGENT-REPORTED RECORD; WINDOWS VALIDATION ACCEPTED WITH FINDINGS FOR THIS TASK ONLY. FINAL CROSS-PLATFORM ACCEPTANCE IS PENDING LINUX VALIDATION.**
+
+- Audited implementation commit: `9a83b01985c973d92412b2861c6d6f00d1382f39`.
+- OpenCode handoff metadata matches the GitHub commit: branch `main`, commit message `fix(server): adopt better-sqlite3 12.11.1 for Windows clean installs`, and this report path.
+- The implementation commit is exactly one commit ahead of synchronized task base `4b02aac3e62eeb3f26e1a12d82a716bebc9afa3e`, with no behind commits.
+- GitHub diff is limited to the backend manifest, backend lockfile, and this report. The manifest changes only the exact `better-sqlite3` pin from `13.0.3` to `12.11.1`; the lockfile updates the matching package and its expected `prebuild-install` dependency closure. No unrelated direct dependency, script, source, schema, or migration change was found.
+- The report records both required Windows runtime matrices, standard `npm ci` (without `--ignore-scripts`), native SQLite probes, typecheck, 14/14 tests including the v1-to-v2 migration test, production audit, and unsuppressed full audit. The full audit's exit 1 is transparently attributed to the already documented `GHSA-67mh-4wv8-2f99` development-tooling advisory; the report claims no new advisory in the new runtime dependency chain.
+- The `prebuild-install@7.1.3` deprecation, GitHub-release binary download dependency/fallback-to-`node-gyp` risk, and SQLite engine patch-version change to 3.53.2 are appropriately disclosed as findings. These are material trade-offs, not hidden or misrepresented as zero-risk.
+- The report correctly states Linux execution was NOT RUN and makes no Linux pass claim. The existing ADR-001 has intentionally not been edited in this task.
+
+**Evidence boundary:** This is a GitHub source/report audit. GPT did not execute the Windows commands and does not independently certify the agent's local test execution; the machine results remain agent-reported evidence. The source audit confirms the committed scope and that the report is internally consistent with the observed GitHub diff. A separate Linux-only validation task and its audit remain mandatory before the dependency decision can be accepted as cross-platform. Only after that gate should ADR-001 be updated in a separate documentation-only commit.
+
+**Owner gate:** Agent PASS WITH FINDINGS is not owner acceptance. This audit accepts the Windows validation record for the narrow QFAT-003WXA task, subject to the stated findings and pending Linux validation. It does not authorize platform API integration, credentials, uploads, CI activation, or any broader implementation stage.
