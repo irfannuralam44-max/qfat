@@ -1,6 +1,6 @@
 # Task QFAT-009 — Create Content and Metadata Editors
 
-- **Status:** READY FOR OWNER REVIEW — NOT AUTHORIZED FOR IMPLEMENTATION
+- **Status:** OWNER-AUTHORIZED FOR IMPLEMENTATION — 2026-11-12
 - **Task type:** Frontend product workflow / metadata editor
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
@@ -10,7 +10,7 @@
 - **Product authority:** `docs/PRD-QFAT-MVP.md`
 - **Design foundation:** QFAT-008 app shell, design tokens, and current frontend source
 - **Predecessor:** QFAT-008 accepted by owner on 2026-11-12
-- **Owner authorization:** Pending. Do not implement until the owner explicitly approves this task.
+- **Owner authorization:** Owner explicitly approved QFAT-009 in chat on 2026-11-12. Authorization applies only to the scope in this task.
 - **Workflow:** GitHub-first; one OpenCode agent serially; GPT audit and owner approval gate
 
 ## 1. Objective
