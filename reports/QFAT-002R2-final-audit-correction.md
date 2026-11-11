@@ -126,27 +126,27 @@ QFAT-002R Section 1 (Summary table, row "Credential storage fallback") and Secti
 
 | Operation | Endpoint | Required Permissions (Verified) | Source |
 |---|---|---|---|
-| **Get list of Pages** | `GET /me/accounts` | `pages_show_list` + `pages_read_engagement` | Graph API v27.0 Page reference "Requirements" |
-| **Read Page info** | `GET /{page-id}` | `pages_read_engagement` + Page access token | Graph API v27.0 Page reference |
-| **Publish photo to Page** | `POST /{page-id}/photos` | Page access token + `pages_manage_posts` + `pages_read_engagement` | Graph API v27.0 Page Photos reference "Requirements" |
-| **Publish video to Page** | `POST /{page-id}/videos` | Page access token + `pages_manage_posts` + `pages_read_engagement` | Graph API v27.0 Page Videos reference |
-| **Publish Reel to Page** | `POST /{page-id}/video_reels` | Page access token + `pages_manage_posts` + `pages_read_engagement` | Graph API v27.0 Reels reference |
+| **Get list of Pages** | `GET /me/accounts` | `pages_show_list` and any additional permissions: **NOT INDEPENDENTLY VERIFIED** | Official reference inaccessible during this audit |
+| **Read Page info** | `GET /{page-id}` | `pages_read_engagement` and Page token requirement: **NOT INDEPENDENTLY VERIFIED** | Official reference inaccessible during this audit |
+| **Publish photo to Page** | `POST /{page-id}/photos` | `pages_manage_posts`, `pages_read_engagement`, and Page token combination: **NOT INDEPENDENTLY VERIFIED** | Official reference inaccessible during this audit |
+| **Publish video to Page** | `POST /{page-id}/videos` | Required permissions and Page token combination: **NOT INDEPENDENTLY VERIFIED** | Official reference inaccessible during this audit |
+| **Publish Reel to Page** | `POST /{page-id}/video_reels` | Required permissions and Page token combination: **NOT INDEPENDENTLY VERIFIED** | Official reference inaccessible during this audit |
 
 ### 5.2 Claims in Prior Reports vs Verification
 
 | Claim | QFAT-002 | QFAT-002R | Verification Status |
 |---|---|---|---|
-| Endpoint `POST /{page-id}/photos` | ✅ Stated | ✅ Stated | **VERIFIED** (Graph API v27.0) |
-| Method `multipart/form-data` | ✅ Stated | ✅ Stated | **VERIFIED** |
-| Permission `pages_manage_posts` | ✅ Stated | ✅ Stated (for publishing) | **VERIFIED** |
-| Permission `pages_read_engagement` | ✅ Stated | ✅ Stated | **VERIFIED** |
-| Permission `pages_show_list` | ❌ Not mentioned | ✅ Added (for MODERATE) | **VERIFIED** (required for page enumeration) |
-| File size limit: 100 MB | ✅ "per Meta docs" | ❌ "NOT explicitly documented" | **UNVERIFIED** — Not in accessible v27.0 reference |
-| Formats: JPEG, PNG, GIF, BMP, TIFF, WebP | ✅ "per Meta docs" | ❌ "NOT explicitly documented" | **UNVERIFIED** — Reference says "image file" only |
-| App Review required for `pages_manage_posts` | ✅ Stated | ✅ Stated | **VERIFIED** (standard Meta policy) |
-| Error code 240 (desktop app restriction) | ❌ Not mentioned | ✅ Added | **VERIFIED** (Graph API v27.0 Photos reference) |
+| Endpoint `POST /{page-id}/photos` | ✅ Stated | ✅ Stated | **NOT INDEPENDENTLY VERIFIED** in this audit |
+| Method `multipart/form-data` | ✅ Stated | ✅ Stated | **NOT INDEPENDENTLY VERIFIED** in this audit |
+| Permission `pages_manage_posts` | ✅ Stated | ✅ Stated (for publishing) | **NOT INDEPENDENTLY VERIFIED** for exact operation/version mapping |
+| Permission `pages_read_engagement` | ✅ Stated | ✅ Stated | **NOT INDEPENDENTLY VERIFIED** for exact operation/version mapping |
+| Permission `pages_show_list` | ❌ Not mentioned | ✅ Added (for MODERATE) | **NOT INDEPENDENTLY VERIFIED** for `/me/accounts` and app access level |
+| File size limit: 100 MB | ✅ "per Meta docs" | ❌ "NOT explicitly documented" | **UNVERIFIED** |
+| Formats: JPEG, PNG, GIF, BMP, TIFF, WebP | ✅ "per Meta docs" | ❌ "NOT explicitly documented" | **UNVERIFIED** |
+| App Review required for `pages_manage_posts` | ✅ Stated | ✅ Stated | **NOT INDEPENDENTLY VERIFIED**; depends on app mode/access level/use case |
+| Error code 240 (desktop app restriction) | ❌ Not mentioned | ✅ Added | **NOT INDEPENDENTLY VERIFIED** in this audit |
 
-### 5.3 Official Documentation URLs (Accessed 2026-11-11)
+### 5.3 Candidate Official Documentation URLs (Not Independently Accessed)
 
 - Page Photos endpoint: https://developers.facebook.com/docs/graph-api/reference/v27.0/page/photos/
 - Page Videos endpoint: https://developers.facebook.com/docs/graph-api/reference/v27.0/page/videos/
@@ -156,12 +156,11 @@ QFAT-002R Section 1 (Summary table, row "Credential storage fallback") and Secti
 - Graph API v27.0 Changelog: https://developers.facebook.com/docs/graph-api/changelog/version27.0
 - Graph API v27.0 Release Blog: https://developers.facebook.com/blog/post/2026/11/04/introducing-graph-api-v27-and-marketing-api-v27
 
-### 5.4 Required Correction
+### 5.4 Verification Boundary and Required Follow-up
 
-All claims about **file size limit (100 MB)** and **exhaustive format list (JPEG/PNG/GIF/BMP/TIFF/WebP)** must be marked **UNVERIFIED** or **NEEDS CONFIRMATION**. Implementation must:
-- Enforce conservative limit (e.g., 50 MB) and handle error 324 (invalid/missing image)
-- Validate via MIME magic bytes, accept common image MIME types
-- Not hardcode unverified limits into user-facing copy
+The official Meta URLs above are candidate references recorded by the agent; they were **not independently retrievable in this audit session**. Therefore this report must not label endpoint behavior, request encoding, permission mappings, App Review requirements, or error codes as VERIFIED solely because a URL is listed. Treat all such details as **UNVERIFIED** until the relevant versioned Meta pages can be inspected or a controlled app test confirms them.
+
+The 100 MB limit and exhaustive image-format list remain **UNVERIFIED**. Do not hardcode either into user-facing copy or validation logic as an asserted Meta platform limit. Before implementation, verify each operation separately (Page enumeration, Page lookup, single-photo publishing, video publishing, Reels publishing), record the exact endpoint, token type, permission set, app access level/review requirement, request fields, and source date. If official documentation remains inaccessible, explicitly retain the uncertainty and request owner-approved test credentials/environment rather than infer requirements.
 
 ---
 
@@ -198,7 +197,7 @@ All claims about **file size limit (100 MB)** and **exhaustive format list (JPEG
 | 5 | Fail-closed as pending decision | Not explicit (fallback recommended) | Listed as PENDING owner approval | **ERROR** — PRD requirement, not pending |
 | 6 | FB photo size limit 100 MB | "per Meta docs" (unverified) | "NOT explicitly documented" | **UNVERIFIED** — mark as such |
 | 7 | FB photo format list | "per Meta docs" (unverified) | "NOT explicitly documented" | **UNVERIFIED** — mark as such |
-| 8 | `pages_show_list` permission | Missing | Added for page enumeration | **VERIFIED REQUIRED** |
+| 8 | `pages_show_list` permission | Missing | Added for page enumeration | **NOT INDEPENDENTLY VERIFIED** in this audit |
 | 9 | Executive condition count | 5 | Claims 3, table has 8 | **INCONSISTENT** — canonical list needed |
 | 10 | Decision table count | 10 | 8 | **8 is correct** (2 removed) |
 | 11 | Graph API v27.0 release | Claimed 2026-11-04 | Verified with URLs | **CONFIRMED VERIFIED** |
@@ -228,9 +227,9 @@ All claims about **file size limit (100 MB)** and **exhaustive format list (JPEG
 
 **Counts:**
 - Decided in PRD (no owner action): 4 (items 10–13)
-- Technical recommendations pending validation: 2 (items 1–2)
-- Implementation details pending owner approval: 3 (items 3, 9)
-- Product/scope decisions pending owner: 4 (items 4–8)
+- Technical recommendations pending validation: 3 (items 1, 2, and 4)
+- Implementation details pending owner approval: 2 (items 3 and 9)
+- Product/scope, UX, and storage decisions pending owner: 4 (items 5–8)
 - **Total canonical decisions: 13** (4 decided, 9 pending)
 
 ---
@@ -344,3 +343,12 @@ This report is ready for GPT/owner audit. The assessment concludes:
 
 ---
 *End of QFAT-002R2 Final Architecture Audit Correction*
+
+## 14. Post-publication audit refinement
+
+This section was added after the initial QFAT-002R2 publication. It corrects two issues found during the subsequent GPT review:
+
+1. **Decision category arithmetic:** pending items 1, 2, and 4 are technical recommendations (3); items 3 and 9 are implementation details (2); items 5–8 are product/scope, UX, and storage decisions (4). The total remains 9 pending and 4 PRD-decided.
+2. **Meta evidence standard:** the listed Meta URLs could not be independently accessed during this review. The previous VERIFIED labels for endpoint/request behavior, permissions, App Review, and error code 240 were too strong. They are now explicitly marked NOT INDEPENDENTLY VERIFIED/UNVERIFIED. No permission mapping or Graph API version should be treated as locked based solely on the prior report's URL list.
+
+This refinement does not change the PRD, implementation code, or owner-approved product scope. It narrows the claims to the evidence actually available.
