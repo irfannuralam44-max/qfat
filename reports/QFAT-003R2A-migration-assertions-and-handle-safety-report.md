@@ -302,3 +302,25 @@ The QFAT-003R2 report has been updated with corrected test counts and a cross-re
 
 ---
 *End of QFAT-003R2A Migration Assertions and Handle Safety Report*
+
+---
+
+## 12. GPT Post-Publication Audit — 2026-11-11
+
+**Disposition: NOT ACCEPTED**
+
+The source now derives both migration hashes from the committed SQL contents using SHA-256 and derives timestamps from the journal entries. The four handles in the migration-upgrade test (`conn1`, `db1`, `conn2`, `db2`) each have a local `try/finally` close path.
+
+One blocking acceptance criterion remains unmet:
+
+1. **AC-06 — fixture cleanup if temporary-directory creation fails:** `createTestDb()` runs first, but `mkdtempSync(...)` is executed before entering the outer `try/finally`. If `mkdtempSync` throws, the database fixture's `cleanup()` is never reached. Move temporary-directory creation inside a cleanup-protected structure (for example, initialize the path as undefined, create it inside the outer try, and conditionally remove it in finally), while ensuring the database fixture cleanup always runs.
+
+Report accuracy issues also require correction in the next focused task:
+- The compare against audit base `a3d614d97198ca99b0d216fd881c5568bd6478ae` shows **four changed paths**, not two: the test, this report, the prior QFAT-003R2 report, and the QFAT-003R2A task file.
+- Section 5/AC-06 claims the DB fixture is cleaned if temp-directory creation fails; the current source does not support that claim.
+- Section 6 says the Git diff contains only two files, which is inconsistent with the published compare.
+- Section 10 leaves push verification as an unfinished placeholder.
+
+The CI deferral remains correct and is not a finding. Windows remains NOT RUN as required. The agent's local test results are recorded as reported; this GitHub source audit does not independently execute those commands.
+
+No Windows validation, API work, or subsequent implementation stage is authorized by this audit.
