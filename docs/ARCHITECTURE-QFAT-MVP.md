@@ -4,7 +4,7 @@
 - **Status:** PROPOSED — pending QFAT-002 technical validation and owner approval
 - **Product requirements:** [PRD-QFAT-MVP](./PRD-QFAT-MVP.md)
 - **Repository:** `irfannuralam44-max/qfat`
-- **Last updated:** 2026-11-10
+- **Last updated:** 2026-11-11
 
 ## 1. Architecture goals
 
@@ -26,7 +26,7 @@ Vite dev server (development only)
   |
   | API requests to loopback backend
   v
-QFAT Node.js backend (separate process)
+QFAT Node.js >=22 backend (separate process)
   |-- HTTP API and local-origin protection
   |-- OAuth callback handlers
   |-- Media intake / staging
@@ -56,7 +56,7 @@ In development, Vite serves the frontend and proxies `/api` and `/events` to the
 | Routing | React Router 6 | Agreed product direction |
 | Icons | Lucide React | Agreed product direction |
 | Charts | Recharts, only where useful | Agreed product direction |
-| API server | Fastify (Node.js >=20 + TypeScript) | Proposal; validate plugin/security needs in QFAT-002 |
+| API server | Fastify (Node.js >=22 + TypeScript) | Proposal; validate plugin/security needs in QFAT-002 |
 | API contract | JSON REST + shared Zod schemas | Proposal; typed validation at both boundaries |
 | Live updates | Server-Sent Events (SSE) | PRD preference; simple one-way job progress |
 | Database | SQLite | Product direction agreed; library/migration tool pending |
