@@ -4,7 +4,7 @@
 - **Status:** OWNER-APPROVED PRODUCT DIRECTION / READY FOR TECHNICAL BREAKDOWN
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target release:** MVP (local-first web application)
-- **Last updated:** 2026-11-10
+- **Last updated:** 2026-11-11
 - **Supersedes:** Conflicting legacy product assumptions in the imported Spoolcast CLI documentation for the MVP scope only.
 
 ## 1. Product summary
@@ -232,7 +232,7 @@ Use the FATTECH 2.0 frontend stack as a technical/design foundation, while creat
 The MVP consists of two separately runnable local processes:
 
 - **Frontend:** React + Vite static/client application served to the browser.
-- **Backend:** Node.js >= 20 + TypeScript HTTP API and upload worker.
+- **Backend:** Node.js >= 22 + TypeScript HTTP API and upload worker.
 
 The backend must be independently startable and must own:
 - OAuth flows and credential access.
