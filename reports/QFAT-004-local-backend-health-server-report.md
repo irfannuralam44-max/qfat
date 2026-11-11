@@ -14,7 +14,7 @@
 
 ## 1. Executive Summary
 
-A minimal local backend health server has been implemented under `apps/server/` using Fastify 5.12.8. The server exposes a single health-check endpoint (`GET /api/v1/health`) on loopback (`127.0.0.1`) with graceful shutdown support. All required local verification checks pass.
+A minimal local backend health server has been implemented under `apps/server/` using Fastify 5.12.8. The server exposes a single health-check endpoint (`GET /api/v1/health`) on loopback (`127.0.0.1`) with graceful shutdown support. The local checks listed below are agent-reported; the task-required clean-lockfile installation using `npm ci` remains **NOT VERIFIED**.
 
 **Recommendation: PASS WITH FINDINGS** — The implementation satisfies the task requirements. The Fastify dependency introduces a production-audit-clean dependency chain (version 5.12.8). The existing ADR-001 dev-only advisory `GHSA-67mh-4wv8-2f99` (4 moderate) persists in the full audit scope as expected.
 
@@ -200,7 +200,7 @@ Exit code: 1 (expected — dev-only, per ADR-001)
 | Component | Status | Details |
 |---|---|---|
 | GitHub Actions | **DEFERRED BY OWNER** | Per owner decision; no workflow created |
-| Local verification | **PASS** | All required commands executed on Linux |
+| Local verification | **PASS WITH FINDINGS** | Listed local checks are agent-reported; required `npm ci` clean-lockfile installation remains **NOT VERIFIED** |
 
 ---
 
