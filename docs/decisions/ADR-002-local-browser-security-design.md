@@ -40,9 +40,9 @@ A synchronizer token is preferred because server-side session binding clearly de
 
 ### 3. Cookie attributes and transport
 
-The MVP proposal uses HTTP loopback; HTTPS is not designed or implemented. Use one host-only session cookie (omit `Domain`) with `HttpOnly; Secure=false; SameSite=Strict; Path=/; Max-Age=1800`. In development, the browser receives the cookie for `localhost`; in production, for `127.0.0.1`. Do not assume the hosts share cookies or are the same site.
+The MVP proposal uses HTTP loopback; HTTPS is not designed or implemented. The `Set-Cookie` header must omit the `Secure` attribute entirely; `Secure=false` is not a valid cookie attribute. Use one host-only session cookie (omit `Domain`) with `HttpOnly; SameSite=Strict; Path=/; Max-Age=1800`. In development, the browser receives the cookie for `localhost`; in production, for `127.0.0.1`. Do not assume the hosts share cookies or are the same site.
 
-`SameSite` is evaluated using the browser-facing request context. In development, the browser talks to its own Vite origin; the upstream proxy address is not the browser-facing site. HTTP loopback with `Secure=false` is a narrow MVP trade-off, not a general production-safe cookie configuration. Keep loopback binding and the other checks; revisit before any non-loopback deployment. Browser acceptance and behavior are **UNVERIFIED**.
+`SameSite` is evaluated using the browser-facing request context. In development, the browser talks to its own Vite origin; the upstream proxy address is not the browser-facing site. Omitting `Secure` is a narrow HTTP-loopback MVP trade-off, not a general production-safe cookie configuration. Keep loopback binding and the other checks; revisit cookie transport before any non-loopback deployment. Browser acceptance and behavior are **UNVERIFIED**.
 
 ### 4. Multipart and CORS
 
@@ -107,3 +107,8 @@ The following corrections were made to resolve the issues identified in the QFAT
 ## QFAT-005R2 post-audit correction — 2026-11-11
 
 Corrected the Vite browser-facing/upstream authority model and defined a proxy trust contract; replaced naive double-submit with a session-bound synchronizer-token proposal; made cookie attributes, HTTP loopback scope, SameSite context, multipart behavior, and Origin/Host limits consistent; recalculated the report's decision categories to eight technical recommendations, three implementation parameters, two grouped PRD entries, two unverified assumptions, and one optional evaluation; and removed unsupported execution/verification claims. ADR-002 remains **PROPOSED**. Explicit owner approval is required before implementation.
+
+
+## QFAT-005R3 post-audit correction — 2026-11-11
+
+Corrected the cookie attribute notation: the HTTP-loopback proposal omits the `Secure` attribute entirely; `Secure=false` is not written into a `Set-Cookie` header. ADR-002 remains **PROPOSED**. No implementation or browser validation is claimed; explicit owner approval is still required.

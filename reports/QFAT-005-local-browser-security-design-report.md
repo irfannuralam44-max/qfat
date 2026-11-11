@@ -55,13 +55,13 @@ Never trust attacker-provided `Host`, `Forwarded`, `X-Forwarded-Host`, or `X-Ori
 
 ### 4.1 HTTP loopback cookie scope
 
-The MVP topology is HTTP loopback; HTTPS is not designed or implemented. Proposed cookies therefore use `Secure=false` consistently, with `HttpOnly; SameSite=Strict; Path=/` and no `Domain`. This is a narrowly scoped HTTP-loopback exception, not a generally production-safe cookie configuration. HTTP does not provide transport encryption, and local processes or browser vulnerabilities may observe or interfere with traffic. Keep the listener on loopback, require exact origin/proxy checks and session-bound CSRF proof, and revisit cookie transport before any non-loopback or HTTPS deployment. Do not claim browsers accept or send these cookies identically; behavior is **UNVERIFIED**.
+The MVP topology is HTTP loopback; HTTPS is not designed or implemented. The proposed `Set-Cookie` header therefore **omits the `Secure` attribute entirely**; do not write `Secure=false` in a cookie header. The cookie remains `HttpOnly; SameSite=Strict; Path=/` with no `Domain`. This is a narrowly scoped HTTP-loopback exception, not a generally production-safe cookie configuration. HTTP does not provide transport encryption, and local processes or browser vulnerabilities may observe or interfere with traffic. Keep the listener on loopback, require exact origin/proxy checks and session-bound CSRF proof, and revisit cookie transport before any non-loopback or HTTPS deployment. Do not claim browsers accept or send these cookies identically; behavior is **UNVERIFIED**.
 
 `SameSite` is evaluated in the browser-facing context, not by comparing the Vite upstream address. In development, the browser-facing UI and API both use `http://localhost:5173`, so requests are same-origin there; the proxy hop to `127.0.0.1` is server-side. In production they both use `http://127.0.0.1:3001`. `localhost` and `127.0.0.1` are distinct hosts and must not be described as sharing cookies or necessarily being the same site.
 
 | Cookie | Proposed attributes (every environment) | Browser-facing host |
 |---|---|---|
-| `qfat_sid` | `HttpOnly; Secure=false; SameSite=Strict; Path=/; Max-Age=1800`; omit `Domain` | `localhost` in dev; `127.0.0.1` in production |
+| `qfat_sid` | `HttpOnly; SameSite=Strict; Path=/; Max-Age=1800`; omit both `Secure` and `Domain` attributes | `localhost` in dev; `127.0.0.1` in production |
 
 ### 4.2 CSRF approaches compared
 
@@ -198,3 +198,8 @@ All reports preserve existing history and earlier independent audit sections.
 | `docs/ARCHITECTURE-QFAT-MVP.md` | Proposed local browser/backend topology |
 | `reports/QFAT-002R2-final-audit-correction.md` | Pending decision #9 and decision categorization |
 | QFAT-005 and QFAT-005R task files | Original design and correction scope; neither ran application scenarios |
+
+
+## QFAT-005R3 post-audit correction — 2026-11-11
+
+Corrected the cookie attribute notation: the HTTP-loopback proposal omits the `Secure` attribute entirely; `Secure=false` is not written into a `Set-Cookie` header. Updated the cookie summary and example consistently. No implementation or browser behavior is claimed; ADR-002 remains **PROPOSED** and requires explicit owner approval.
