@@ -1,6 +1,6 @@
 # ADR-001 — SQLite Driver and Migration Strategy
 
-- **Status:** PROPOSED — pending owner approval and Linux/Windows validation
+- **Status:** PROPOSED — Node.js runtime change approved; driver/migration choice pending Linux/Windows validation and separate owner acceptance
 - **Decision area:** QFAT-002 canonical decision items 1 and 4 (SQLite library/migrations; related runtime compatibility)
 - **Date:** 2026-11-11
 - **Repository:** `irfannuralam44-max/qfat`
@@ -10,7 +10,7 @@
 
 The QFAT MVP uses a local SQLite database for account metadata, media metadata, publishing jobs, per-destination state, upload checkpoints, and sanitized operational history. The database must work on the owner's Linux and Windows PCs.
 
-The current PRD and architecture proposal specify Node.js >=20, SQLite, TypeScript, and leave the SQLite driver and migration strategy open. The imported upstream `package.json` also declares Node.js >=20. The database must not store platform credentials or media payloads.
+The original PRD and imported upstream `package.json` declared Node.js >=20. The owner has explicitly approved raising the QFAT backend minimum to Node.js >=22. The SQLite driver and migration strategy remain subject to technical validation and separate acceptance. The database must not store platform credentials or media payloads.
 
 The workload is local and write-oriented but modest: short transactional state updates, job queries, and checkpoint persistence. Large media transfer must remain file/stream based and must never be stored as SQLite BLOBs.
 
@@ -59,7 +59,7 @@ Do **not** use `drizzle-kit push` as the production/runtime migration mechanism.
 
 The existing PRD and imported package metadata say Node.js >=20. Current `better-sqlite3` package metadata requires Node.js >=22. This makes the proposed driver incompatible with the current declared minimum unless the runtime requirement is raised.
 
-**Recommendation:** revise the QFAT backend minimum to Node.js 22 or newer, with Node.js 24 LTS as the preferred development/verification runtime. The exact minimum patch version and supported LTS policy must be checked before implementation. Do not quietly change the PRD or `package.json` as part of this proposal.
+**Owner decision (2026-11-11): APPROVED.** QFAT backend minimum is Node.js >=22. Use Node.js 24 LTS as the preferred development/verification runtime. Before implementation, verify the exact Node 22 minimum supported by the selected driver release and record the tested Node 22 and Node 24 versions. The imported upstream package metadata is not automatically changed; the QFAT backend runtime contract supersedes it.
 
 The built-in `node:sqlite` module is not recommended as the MVP default at this time: current Node documentation labels it Release Candidate, and the Node 22 documentation still marks it as active development. Reconsider it only after it reaches an appropriate stability level and QFAT explicitly raises/sets its runtime baseline.
 
@@ -110,9 +110,9 @@ Owner approval is requested for:
 
 1. `better-sqlite3` as the SQLite driver.
 2. Drizzle ORM + Drizzle Kit generated SQL migrations.
-3. Raising QFAT's backend Node.js minimum from >=20 to >=22 (prefer Node 24 LTS for development and CI), subject to a final compatibility check.
+3. ~~Raising QFAT's backend Node.js minimum from >=20 to >=22~~ **APPROVED by owner on 2026-11-11** (Node.js 24 LTS preferred for development/CI).
 
-Until approved and validated, this ADR remains PROPOSED. No implementation work is authorized.
+The Node.js >=22 runtime change is approved and recorded in the PRD/architecture. The `better-sqlite3` + Drizzle recommendation remains PROPOSED until Linux/Windows validation passes and the owner separately accepts the driver/migration choice. No implementation work is authorized by this ADR.
 
 ## 9. References
 
