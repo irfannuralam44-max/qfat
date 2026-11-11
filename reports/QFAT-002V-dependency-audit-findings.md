@@ -516,3 +516,32 @@ This report is ready for **GPT/owner audit** on GitHub. It is an audit-only deli
 ---
 
 *End of QFAT-002V Dependency Audit Findings Report*
+
+
+---
+
+## 15. GPT Post-publication Audit — 2026-11-11
+
+**Audit result: PASS WITH FINDINGS — report evidence accepted for technical review; candidate stack remains PROPOSED.**
+
+GPT independently verified the published report on `main` and compared the agent commit against its synchronized base:
+
+- Agent commit: `4f47170558dd14d5e74a4dddd8b4aa69897649a1`.
+- Base: `2d8f97a76d39be881d80d738af4fd7f76bd2c486`.
+- Remote comparison: ahead by 1, behind by 0.
+- Changed paths: exactly this report, added; no unrelated file changes.
+- Report is present on the remote branch.
+
+### Audit findings
+
+1. The report closes the earlier advisory-identification gap: the four npm findings are one GHSA propagated through four dependency nodes. The vulnerable package/version and transitive path are identified, and the report distinguishes the clean production dependency closure from the development-tooling tree.
+2. The QFAT-shaped `npm audit --omit=dev` result, dependency explanation, CLI/runtime module-resolution probes, and separate override fixture provide a coherent evidence chain for the stated exposure assessment. The CommonJS-only trace limitation is disclosed rather than hidden.
+3. The report correctly rejects npm's suggested `drizzle-kit@0.18.1` downgrade as a remediation and distinguishes the stable 0.31 line from the 1.0 pre-release line.
+4. The audit was executed on Windows 10 x64 with Node 24/npm 11 only. Node 22 audit and a second OS/npm audit were not run; this is explicitly disclosed. This limits the breadth of the registry-audit reproduction but does not invalidate the captured Node 24 result.
+5. The report's temporary raw audit artifacts are summarized rather than published in the repository. The advisory ID, npm source ID, ranges, affected nodes, exit codes, and a representative JSON excerpt are present. No claim is made that GPT independently reran the fixture or reproduced the tests.
+
+### Decision boundary
+
+The evidence is accepted as sufficient to resolve the original four-finding investigation for this candidate version set. The recommendation is **ACCEPT WITH MITIGATION**, not unconditional acceptance. If the owner later accepts this candidate, implementation planning must explicitly include (at minimum) keeping `drizzle-kit`, `tsx`, and `typescript` in `devDependencies`, plus a CI production-scope audit gate and a dated full-scope exception for `GHSA-67mh-4wv8-2f99`. The optional npm override remains a separately tested but unsupported mitigation and is **not** selected or authorized here.
+
+**ADR-001 remains PROPOSED.** This audit does not approve the SQLite driver/migration stack, apply an override, change dependencies, or authorize QFAT implementation. A separate explicit owner decision is still required.
