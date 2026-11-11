@@ -113,7 +113,7 @@ if (Test-Path $dir) { "EXISTS" } else { New-Item -ItemType Directory -Path $dir 
 ```
 
 - Existence was checked before creation (the branch that would have reported `EXISTS` did not trigger).
-- Created: `C:\Users\irfan\AppData\Local\Temp\qfat-sqlite-validation-20261111-102816`
+- Created: `%TEMP%\qfat-sqlite-validation-20261111-102816`
 - All work happened inside this directory, **outside** the QFAT repository.
 
 ---
@@ -204,12 +204,12 @@ process.arch          = x64
 node version          = v24.16.0
 modules ABI (NODE_MODULE_VERSION) = 137
 v8                    = 13.6.233.17-node.49
-getPrebuildPath()     = C:\Users\irfan\AppData\Local\Temp\qfat-sqlite-validation-20261111-102816\node_modules\better-sqlite3\prebuilds\win32-x64.node
+getPrebuildPath()     = %TEMP%\qfat-sqlite-validation-20261111-102816\node_modules\better-sqlite3\prebuilds\win32-x64.node
 prebuild exists       = true
 prebuild size (bytes) = 1989632
 sqlite_version()      = 3.53.4
 loaded native modules = ["C:\\Users\\irfan\\AppData\\Local\\Temp\\qfat-sqlite-validation-20261111-102816\\node_modules\\better-sqlite3\\prebuilds\\win32-x64.node"]
-  realpath            = C:\Users\irfan\AppData\Local\Temp\qfat-sqlite-validation-20261111-102816\node_modules\better-sqlite3\prebuilds\win32-x64.node
+  realpath            = %TEMP%\qfat-sqlite-validation-20261111-102816\node_modules\better-sqlite3\prebuilds\win32-x64.node
   basename            = win32-x64.node
 node_modules build/ dir exists = false
 BINDING_SELECTION: PASS
@@ -261,8 +261,8 @@ The fixture intentionally uses a directory name containing a space (`db fixtures
 Node 24 output:
 
 ```
-dbPath = C:\Users\irfan\AppData\Local\Temp\qfat-sqlite-validation-20261111-102816\db fixtures\qfat test.db
-CWD    = C:\Users\irfan\AppData\Local\Temp\qfat-sqlite-validation-20261111-102816
+dbPath = %TEMP%\qfat-sqlite-validation-20261111-102816\db fixtures\qfat test.db
+CWD    = %TEMP%\qfat-sqlite-validation-20261111-102816
 [PASS] open file-backed database + version :: driver=better-sqlite3@13.0.3 sqlite=3.53.4
 [PASS] PRAGMA foreign_keys = ON :: foreign_keys=1
 [PASS] invalid FK insert is rejected :: SQLITE_CONSTRAINT_FOREIGNKEY: FOREIGN KEY constraint failed
@@ -516,7 +516,7 @@ Recorded failure detail:
 
 ## 11. Repository Unchanged (AC-09)
 
-Before writing this report, inside `C:\Users\irfan\documents\qfat`:
+Before writing this report, inside `%USERPROFILE%\documents\qfat`:
 
 ```
 $ git status --short --branch
@@ -669,7 +669,7 @@ const a = await aPromise;                              // both children awaited,
 Cleanup applies only to this task's fixture directory:
 
 ```powershell
-Remove-Item -LiteralPath "C:\Users\irfan\AppData\Local\Temp\qfat-sqlite-validation-20261111-102816" -Recurse -Force
+Remove-Item -LiteralPath "%TEMP%\qfat-sqlite-validation-20261111-102816" -Recurse -Force
 ```
 
 Status: performed after evidence collection and report preparation. No file outside that directory (and the task's own report) was removed. The QFAT repository and any user data were untouched.
@@ -717,5 +717,46 @@ All checks above were **executed**, not inferred. No result in this report is fa
 This report is ready for **GPT/owner audit** on GitHub. It contains developer self-executed validation evidence for the owner's Windows 10 machine only. **Agent PASS is not owner acceptance.** Adoption of `better-sqlite3` + Drizzle and any implementation work remain separate owner decisions after GPT audits both this report and `reports/QFAT-002S-sqlite-driver-validation.md` and updates ADR-001 if appropriate.
 
 ---
+
+
+---
+
+## 19. GPT post-publication audit — 2026-11-11
+
+This section was appended by GPT after fetching the published report from `main`. It preserves the agent's original test record and distinguishes post-publication verification from facts recorded during execution.
+
+### 19.1 Publication verification
+
+- Agent report commit: `ecf1aa69202d1404ff317987fd7db40d6cb83425`.
+- The GitHub compare from task commit `54e106bac5ae1417f5d870e7e5f0b9a99f138c15` to the agent commit reports exactly one commit ahead, zero behind, and exactly one added file: this report.
+- The added file is `reports/QFAT-002W-windows-sqlite-validation.md`; no application source, package manifest, lockfile, or other repository file was changed by the agent task commit.
+- The report was fetched successfully from the remote `main` branch.
+
+### 19.2 Technical audit
+
+GPT reviewed the report's environment record, runtime matrix, install and native-binding evidence, SQLite assertions, Drizzle migration procedure, lock-contention scenarios, acceptance matrix, and stated limitations.
+
+- The reported Windows 10 Pro 22H2 x64 test coverage is internally consistent with the task: Node 22.23.4 portable runtime and Node 24.16.0 system runtime were both actually executed.
+- The report distinguishes Windows x64 evidence from untested Windows 11 and ARM64 configurations. No broader Windows support claim is accepted from this run.
+- The lock test's ready-file signal is emitted only after Process A has acquired its `BEGIN IMMEDIATE` write lock; Process B is started after that signal. The two reported outcomes are therefore meaningfully separated rather than inferred from configuration alone.
+- The Windows v1-to-v2 upgrade uses a v1-only migration folder, the runtime migrator, and verifies preservation of an existing row. This is stronger end-to-end upgrade evidence than merely inserting a migration-ledger row manually.
+- The Linux report QFAT-002S remains the evidence for Linux. Its upgrade fixture manually seeds the v1 schema and migration ledger before applying v2; this distinction is retained when interpreting the combined evidence.
+- GPT has reviewed the report and GitHub publication metadata, but has not independently rerun the agent's temporary test scripts. The scripts were intentionally kept outside the repository and the report states that the temporary fixture was removed after evidence collection.
+
+### 19.3 Findings retained for later decision
+
+1. Windows validation is specific to Windows 10 Pro 22H2 x64. Windows 11 and Windows ARM64 remain untested; run additional validation only if those configurations become explicit product targets.
+2. The Node 22 result used a checksum-verified portable official runtime. This is valid runtime execution evidence and did not alter the system installation; a normal developer/CI runtime pin remains an operational follow-up.
+3. Both platform reports mention four moderate npm audit findings in the Drizzle Kit/esbuild development-tool dependency chain and deprecated `@esbuild-kit` packages. The reports do not include the complete advisory IDs or raw audit output. Before locking the dependency set for implementation, capture the exact advisories and dependency paths, determine whether the findings remain present in the then-current package versions, and decide whether an update or documented exception is appropriate.
+4. Windows reports `EBUSY` when attempting to delete an open database file and observes busy-timeout overshoot. These are valid implementation constraints: close database handles before file operations and treat `SQLITE_BUSY` as an actionable error rather than a precise latency promise.
+
+### 19.4 Audit conclusion
+
+**QFAT-002W: AUDIT PASS WITH FINDINGS.** The report provides credible, task-aligned executed evidence for the tested Windows 10 x64 configuration on Node 22 and Node 24. No substantive contradiction or repository-scope violation was found in the report.
+
+**Combined QFAT-002S + QFAT-002W: technically viable candidate, pending owner decision.** The evidence supports continuing with `better-sqlite3@13.0.3`, Drizzle ORM `0.45.4`, and Drizzle Kit `0.31.11` as the proposed stack for Linux x64 and Windows 10 x64. It does not establish support for untested Windows variants or architectures, resolve the npm audit findings, or authorize dependency adoption.
+
+ADR-001 remains **PROPOSED** until the owner explicitly accepts the driver and migration choice. No implementation authorization is created by this audit.
+
 
 *End of QFAT-002W Windows SQLite Validation Report*
