@@ -5,7 +5,7 @@
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
 - **Starting HEAD:** `b5ebb35b87cca8ad9ed6343b93bbf4ff9070a457`
-- **Final implementation commit SHA:** To be recorded in post-commit report metadata.
+- **Final implementation commit SHA:** `07a96906147ae8b615d80730415bfb44243d0f3e`
 - **Environment:** Linux `x86_64`, Node.js `v24.22.2`, npm `11.19.0`.
 
 ## Summary
@@ -61,9 +61,9 @@ All npm commands below were run from `apps/web/` unless otherwise stated.
 | `npm ls postcss --all` (after remediation) | 0 | One deduplicated `postcss@8.5.32`; no vulnerable version remains. |
 | `npm run typecheck` | 0 | Frontend and Vite config typechecks pass. |
 | `npm run build` | 0 | Typecheck and Vite production build pass. |
-| `git diff --check` | Pending | Run before commit. |
+| `git diff --cached --check` | 0 | Checked the staged dependency and report changes before commit. |
 
-No tests were added or run; this task is limited to dependency review and remediation. No CI/GitHub Actions, backend checks, root CLI changes, network changes, or publishing operations were performed.
+No tests were added or run; this task is limited to dependency review and remediation. No CI/GitHub Actions, backend checks, root CLI changes, firewall/host-binding/proxy/Tailscale changes, or publishing operations were performed.
 
 ## Risks and limitations
 
@@ -75,9 +75,9 @@ No tests were added or run; this task is limited to dependency review and remedi
 
 - **Remote:** `origin` (`https://github.com/irfannuralam44-max/qfat.git`)
 - **Branch:** `main`
-- **Commit message:** To be recorded after commit.
-- **Commit SHA:** To be recorded in post-commit report metadata.
-- **Push and remote verification:** Pending publication.
+- **Implementation commit message:** `fix(web): remediate PostCSS dependency advisory`
+- **Implementation commit SHA:** `07a96906147ae8b615d80730415bfb44243d0f3e`
+- **Push and remote verification:** Pending publication at report metadata authoring. A separate report-only follow-up records the implementation SHA; the report commit's own SHA is provided by the required handoff rather than embedded in itself.
 - **Report path:** `reports/QFAT-007-frontend-dependency-audit-report.md`
 
 ## Handoff
