@@ -1,6 +1,6 @@
 # ADR-001 — SQLite Driver and Migration Strategy
 
-- **Status:** PROPOSED — Node.js runtime change approved; driver/migration choice pending Linux/Windows validation and separate owner acceptance
+- **Status:** ACCEPTED WITH MITIGATION — owner approved the driver/migration choice on 2026-11-11
 - **Decision area:** QFAT-002 canonical decision items 1 and 4 (SQLite library/migrations; related runtime compatibility)
 - **Date:** 2026-11-11
 - **Repository:** `irfannuralam44-max/qfat`
@@ -10,13 +10,13 @@
 
 The QFAT MVP uses a local SQLite database for account metadata, media metadata, publishing jobs, per-destination state, upload checkpoints, and sanitized operational history. The database must work on the owner's Linux and Windows PCs.
 
-The original PRD and imported upstream `package.json` declared Node.js >=20. The owner has explicitly approved raising the QFAT backend minimum to Node.js >=22. The SQLite driver and migration strategy remain subject to technical validation and separate acceptance. The database must not store platform credentials or media payloads.
+The original PRD and imported upstream `package.json` declared Node.js >=20. The owner has explicitly approved raising the QFAT backend minimum to Node.js >=22. The SQLite driver and migration strategy have been validated on the tested Linux and Windows environments and explicitly accepted by the owner, subject to the dependency-audit mitigations recorded below. The database must not store platform credentials or media payloads.
 
 The workload is local and write-oriented but modest: short transactional state updates, job queries, and checkpoint persistence. Large media transfer must remain file/stream based and must never be stored as SQLite BLOBs.
 
-## 2. Recommendation
+## 2. Accepted decision
 
-Adopt the following stack for the MVP, subject to owner approval and cross-platform install tests:
+**Owner decision (2026-11-11): ACCEPTED WITH MITIGATION.** Adopt the following stack for the QFAT MVP:
 
 - **Driver:** `better-sqlite3`
 - **Typed query/schema layer:** Drizzle ORM's `better-sqlite3` driver
@@ -89,9 +89,9 @@ Regardless of the final driver:
 - Backups must account for SQLite WAL sidecar files; do not copy only the main database file while it is live.
 - Add tests for transaction rollback, foreign keys, migrations, concurrent access/locking, and restart recovery.
 
-## 7. Validation required before acceptance
+## 7. Validation evidence completed
 
-A single serial validation task should:
+The following validation work was completed before owner acceptance:
 
 1. Confirm the actual Node.js runtime versions available on the owner's Linux and Windows PCs.
 2. Install the selected driver on both systems from a clean checkout using the intended Node version.
@@ -102,9 +102,17 @@ A single serial validation task should:
 7. Record OS, architecture, Node, npm, driver, ORM, and migration-tool versions.
 8. Compare the install/build friction and support evidence against the rejected alternatives if the selected driver cannot be installed cleanly.
 
-Do not connect real platform accounts, run uploads, alter the user's application database, or add production dependencies during this validation.
+Validation reports:
 
-## 8. Approval requested
+- `reports/QFAT-002S-sqlite-driver-validation.md` — Linux validation; PASS WITH FINDINGS.
+- `reports/QFAT-002W-windows-sqlite-validation.md` — Windows 10 x64, Node 22 and Node 24; PASS WITH FINDINGS.
+- `reports/QFAT-002V-dependency-audit-findings.md` — dependency audit; PASS WITH FINDINGS, recommendation ACCEPT WITH MITIGATION.
+
+**Coverage boundary:** Linux validation was executed on the reported Node 24 environment; Windows validation covered Node 22 and Node 24. Windows 11, ARM64, and broader sustained contention/large-WAL scenarios were not established by these reports. These are not silently treated as tested.
+
+No real platform accounts, uploads, user database, or production dependency installation were used in the validation.
+
+## 8. Owner approval and conditions
 
 Owner approval is requested for:
 
@@ -112,7 +120,15 @@ Owner approval is requested for:
 2. Drizzle ORM + Drizzle Kit generated SQL migrations.
 3. ~~Raising QFAT's backend Node.js minimum from >=20 to >=22~~ **APPROVED by owner on 2026-11-11** (Node.js 24 LTS preferred for development/CI).
 
-The Node.js >=22 runtime change is approved and recorded in the PRD/architecture. The `better-sqlite3` + Drizzle recommendation remains PROPOSED until Linux/Windows validation passes and the owner separately accepts the driver/migration choice. No implementation work is authorized by this ADR.
+The Node.js >=22 runtime change and the `better-sqlite3` + Drizzle driver/migration choice are approved by the owner. This approval authorizes the selected technology stack for QFAT MVP planning and implementation, subject to the following mandatory dependency-audit mitigations:
+
+1. Keep `drizzle-kit`, `tsx`, and `typescript` in `devDependencies`; do not include them in the production/runtime dependency closure.
+2. Add a CI gate running `npm audit --omit=dev` and fail the gate on any production-scope vulnerability.
+3. Record the full-scope development-tooling advisory `GHSA-67mh-4wv8-2f99` as a dated, explicit exception while it remains present in the selected stable Drizzle Kit dependency tree. The current audit found one advisory propagated to four npm nodes, with the vulnerable `esbuild@0.18.20` copy in a deprecated, apparently unused tooling chain.
+4. Do not run `npm audit fix --force` or downgrade Drizzle Kit to `0.18.1` as a purported fix; the audit found that downgrade breaking and still vulnerable.
+5. Re-evaluate the exception when a stable Drizzle Kit release removes the deprecated `@esbuild-kit` chain. The exploratory npm override is not selected or authorized by this decision.
+
+This is explicit owner acceptance of the database stack and authorizes subsequent implementation tasks within the existing QFAT stage gates. It does not authorize live platform account connections, real uploads, credential use, or scope beyond the MVP.
 
 ## 9. References
 
@@ -126,4 +142,4 @@ The Node.js >=22 runtime change is approved and recorded in the PRD/architecture
 
 ---
 
-**Decision rule:** A technically recommended library is not considered accepted until the owner approves the runtime consequence and the Linux/Windows validation report passes. Agent PASS is not owner acceptance.
+**Decision record:** The owner explicitly accepted this stack on 2026-11-11 after review of the Linux, Windows, and dependency-audit reports. The acceptance is conditional on the mitigations in §8; future implementation tasks remain subject to their own scope and verification gates.
