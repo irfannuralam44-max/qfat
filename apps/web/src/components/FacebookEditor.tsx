@@ -1,0 +1,91 @@
+import { useState } from 'react';
+import { Textarea, RadioGroup, type RadioOption } from './FieldPrimitives';
+
+export interface FacebookMetadata {
+  caption: string;
+  mediaIntent: 'video' | 'reel' | 'image';
+}
+
+export interface FacebookEditorProps {
+  initialMetadata?: Partial<FacebookMetadata>;
+  onChange: (metadata: FacebookMetadata) => void;
+  disabled?: boolean;
+}
+
+const FACEBOOK_CAPTION_MAX = 63206;
+
+const mediaIntentOptions: RadioOption[] = [
+  { value: 'video', label: 'Video', description: 'Standard Facebook Page video post' },
+  { value: 'reel', label: 'Reels', description: 'Vertical short-form (9:16), 3–90 seconds, up to 1080×1920' },
+  { value: 'image', label: 'Single image', description: 'Single photo post with caption' },
+];
+
+export function FacebookEditor({ initialMetadata = {}, onChange, disabled = false }: FacebookEditorProps) {
+  const [caption, setCaption] = useState(initialMetadata.caption || '');
+  const [mediaIntent, setMediaIntent] = useState<'video' | 'reel' | 'image'>(initialMetadata.mediaIntent || 'video');
+
+  const validateCaption = (value: string) => {
+    if (value.length > FACEBOOK_CAPTION_MAX) return `Caption must be ${FACEBOOK_CAPTION_MAX} characters or fewer`;
+    return undefined;
+  };
+
+  const handleCaptionChange = (value: string) => {
+    setCaption(value);
+    onChange({ caption: value, mediaIntent });
+  };
+
+  const handleMediaIntentChange = (value: 'video' | 'reel' | 'image') => {
+    setMediaIntent(value);
+    onChange({ caption, mediaIntent: value });
+  };
+
+  const captionError = validateCaption(caption);
+
+  const isValid = !captionError && caption.trim().length > 0;
+
+  return (
+    <div className="editor-section facebook-editor">
+      <div className="editor-header">
+        <div className="platform-badge platform-badge--facebook">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+          </svg>
+          <span>Facebook</span>
+        </div>
+        <div className="validation-status" aria-live="polite">
+          {isValid ? (
+            <span className="validation-status--valid">Ready to review</span>
+          ) : (
+            <span className="validation-status--invalid">Complete required fields</span>
+          )}
+        </div>
+      </div>
+
+      <div className="editor-fields">
+        <RadioGroup
+          label="Media intent"
+          value={mediaIntent}
+          onChange={handleMediaIntentChange}
+          options={mediaIntentOptions}
+          orientation="horizontal"
+          helperText="Video and Reels use the same caption field. Single image posts share this metadata form."
+          disabled={disabled}
+        />
+
+        <Textarea
+          label="Caption / Message"
+          value={caption}
+          onChange={handleCaptionChange}
+          placeholder="Write your caption..."
+          rows={5}
+          maxLength={FACEBOOK_CAPTION_MAX}
+          showCharCount
+          error={captionError}
+          helperText={mediaIntent === 'reel' ? 'This caption becomes the Reel description.' : mediaIntent === 'image' ? 'This caption accompanies your photo.' : 'Supports line breaks, mentions, and hashtags.'}
+          required
+          disabled={disabled}
+        />
+      </div>
+    </div>
+  );
+}
