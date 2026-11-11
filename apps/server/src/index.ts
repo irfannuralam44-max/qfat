@@ -8,6 +8,13 @@ function getPort(): number {
   if (envPort === undefined) {
     return DEFAULT_PORT;
   }
+  if (envPort === '') {
+    throw new Error('Invalid PORT: empty string. Must be an integer between 1 and 65535.');
+  }
+  // Strict validation: only complete decimal integer representation
+  if (!/^[0-9]+$/.test(envPort)) {
+    throw new Error(`Invalid PORT: "${envPort}". Must be a complete decimal integer between 1 and 65535.`);
+  }
   const parsed = Number.parseInt(envPort, 10);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
     throw new Error(`Invalid PORT: "${envPort}". Must be an integer between 1 and 65535.`);

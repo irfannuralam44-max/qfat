@@ -4,7 +4,9 @@
 - **Task:** `tasks/QFAT-004-local-backend-health-server.md`
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
-- **Base commit:** `05c0840` (origin/main after fast-forward sync)
+- **Base commit:** `05c0840ceb51364fd14937c935e14b26c16c7d35` (origin/main after fast-forward sync)
+- **Implementation commit:** `9354b61c730f6260d0f4bc43505b26e74f072c61`
+- **Correction commit:** `TBD` (QFAT-004R corrections)
 - **Report path:** `reports/QFAT-004-local-backend-health-server-report.md`
 - **Implementation date:** 2026-11-11
 
@@ -45,6 +47,8 @@ A minimal local backend health server has been implemented under `apps/server/` 
 
 ## 3. Files Changed
 
+### Implementation commit `9354b61c730f6260d0f4bc43505b26e74f072c61` (4 paths changed)
+
 | File | Change |
 |---|---|
 | `apps/server/package.json` | Added `fastify@5.12.8` dependency; added `start` and `dev` scripts |
@@ -52,7 +56,17 @@ A minimal local backend health server has been implemented under `apps/server/` 
 | `apps/server/src/index.ts` | New: Main entry point with Fastify server, health route, port validation, graceful shutdown |
 | `apps/server/test/health.test.ts` | New: 9 focused tests (health endpoint, loopback binding, clean shutdown, port validation) |
 
-**Git diff summary:** 4 files changed (2 modified, 2 new)
+**Implementation commit changed 4 paths; the report itself is the 5th path in the commit.**
+
+### Correction commit `TBD` (QFAT-004R)
+
+| File | Change |
+|---|---|
+| `apps/server/src/index.ts` | Stricter `getPort()` validation (rejects partial numeric strings, decimals, empty) |
+| `apps/server/test/health.test.ts` | Ephemeral port (OS-assigned); 12 regression tests for port validation |
+| `apps/server/README.md` | New: Minimal developer instructions |
+| `reports/QFAT-004-local-backend-health-server-report.md` | Updated metadata, test counts, AC IDs, push verification |
+| `reports/QFAT-004R-health-server-audit-corrections-report.md` | New correction report |
 
 ---
 
@@ -63,7 +77,7 @@ A minimal local backend health server has been implemented under `apps/server/` 
 - **Framework:** Fastify 5.12.8
 - **Host binding:** `127.0.0.1` only (never `0.0.0.0`)
 - **Default port:** 3001 (configurable via `PORT` environment variable)
-- **Port validation:** Integer 1–65535, throws descriptive error on invalid values
+- **Port validation:** Strict — accepts only complete decimal integer strings (regex `^[0-9]+$`), value 1–65535; rejects empty, partial numeric strings (e.g., `3001abc`), decimals (e.g., `3001.5`), whitespace, negative, zero, >65535
 - **Route:** `GET /api/v1/health` → `{ "status": "ok", "timestamp": "ISO-8601" }`
 - **Graceful shutdown:** `SIGINT`/`SIGTERM` handlers stop accepting new requests and close the server cleanly
 - **Exports:** `buildServer`, `start`, `getPort`, `HOST`, `DEFAULT_PORT` for testability
@@ -85,9 +99,22 @@ A minimal local backend health server has been implemented under `apps/server/` 
 | SQLite Connection | 9 | Existing foundation tests (unchanged) |
 | Drizzle Migrations | 5 | Existing foundation tests (unchanged) |
 | **Health Server** | **3** | **Health endpoint returns 200 + JSON; binds to loopback; clean shutdown** |
-| **Port Validation** | **6** | **Valid env port, default port, invalid string, out-of-range (0, 65536), negative** |
+| **Port Validation** | **12** | **Valid env port, default port, empty string, alphabetic, numeric suffix, decimal, zero, 65536, negative, leading zeros, leading/trailing whitespace** |
 
-**Total: 23 tests, 23 pass, 0 fail**
+**Total: 29 tests, 29 pass, 0 fail**
+
+Health Server tests use OS-assigned ephemeral port (port 0) and read the actual bound port from the server address — no fixed test port.
+
+### 4.4 Developer Instructions (`apps/server/README.md`)
+
+Minimal developer note covering:
+- Prerequisites (Node.js 24 LTS preferred, >= 22)
+- Install from lockfile (`npm ci` from `apps/server/`)
+- Development (`npm run dev`) and production (`npm run build && npm start`) commands
+- Default loopback address and port (127.0.0.1:3001)
+- `GET /api/v1/health` usage and expected response
+- Graceful shutdown behavior
+- Test command
 
 ---
 
@@ -100,7 +127,7 @@ A minimal local backend health server has been implemented under `apps/server/` 
 | 1 | `cd apps/server && npm install` | 0 | ✅ PASS |
 | 2 | `cd apps/server && npm run typecheck` | 0 | ✅ PASS |
 | 3 | `cd apps/server && npm run build` | 0 | ✅ PASS |
-| 4 | `cd apps/server && npm test` | 0 | ✅ PASS (23 tests) |
+| 4 | `cd apps/server && npm test` | 0 | ✅ PASS (29 tests) |
 | 5 | `cd apps/server && npm run audit:prod` | 0 | ✅ PASS (0 vulnerabilities) |
 | 6 | `cd apps/server && npm run audit:full` | 1 | Expected (4 moderate, dev-only) |
 | 7 | `npm run typecheck` (root) | 0 | ✅ PASS |
@@ -116,6 +143,9 @@ A minimal local backend health server has been implemented under `apps/server/` 
 | Custom PORT override | `PORT=4001 timeout 5 node dist/index.js` | ✅ Listens on `http://127.0.0.1:4001` |
 | Loopback binding | `ss -tlnp | grep 3001` | ✅ Binds to `127.0.0.1:3001` only |
 | Graceful shutdown (SIGTERM) | `kill -TERM <pid>` | ✅ Logs shutdown message, exits cleanly |
+| Invalid PORT `3001abc` | `PORT=3001abc node dist/index.js` | ✅ Exits with "Invalid PORT" error |
+| Invalid PORT `3001.5` | `PORT=3001.5 node dist/index.js` | ✅ Exits with "Invalid PORT" error |
+| Invalid PORT `""` (empty) | `PORT="" node dist/index.js` | ✅ Exits with "Invalid PORT: empty string" error |
 
 ### 5.3 Audit Results
 
@@ -144,10 +174,10 @@ Exit code: 1 (expected — dev-only, per ADR-001)
 | AC-04 | Response excludes secrets, env vars, paths, accounts | **PASS** | Returns only `status` + `timestamp` |
 | AC-05 | Binds to `127.0.0.1` only, validated port with env override | **PASS** | `ss` output + PORT test |
 | AC-06 | Graceful shutdown on `SIGINT`/`SIGTERM` | **PASS** | Manual kill test |
-| AC-05 | Start/build scripts added | **PASS** | `start`, `dev` scripts |
-| AC-08 | Focused tests: health route, loopback, invalid port, clean shutdown | **PASS** | 9 new tests pass |
+| AC-07 | Start/build scripts added | **PASS** | `start`, `dev` scripts |
+| AC-08 | Focused tests: health route, loopback, invalid port, clean shutdown | **PASS** | 15 new tests pass (3 health + 12 port) |
 | AC-09 | Tests isolated, no real DB/user data | **PASS** | Uses temp DB fixture |
-| AC-10 | Minimal developer instructions | **PASS** | Scripts documented |
+| AC-10 | Minimal developer instructions | **PASS** | `apps/server/README.md` |
 
 ---
 
@@ -187,11 +217,17 @@ All acceptance criteria AC-01 through AC-10 pass with executed evidence on Linux
 
 ## 10. Git Publication Details
 
+### Implementation commit `9354b61c730f6260d0f4bc43505b26e74f072c61`
 - **Remote:** `origin` → `https://github.com/irfannuralam44-max/qfat.git`
 - **Branch:** `main`
-- **Base commit:** `05c0840` (origin/main after fast-forward sync)
+- **Base commit:** `05c0840ceb51364fd14937c935e14b26c16c7d35`
 - **Files changed:** 4 (2 modified, 2 new)
 - **Commit message:** `feat(server): add minimal Fastify health server`
+- **Push verification:** ✅ Verified on GitHub at `https://github.com/irfannuralam44-max/qfat/commit/9354b61c730f6260d0f4bc43505b26e74f072c61`
+
+### Correction commit `TBD` (QFAT-004R)
+- **Files changed:** 5
+- **Commit message:** `fix(server): QFAT-004R audit corrections — strict port validation, ephemeral test port, README`
 - **Push verification:** [To be completed after commit and push]
 
 ---
@@ -201,10 +237,12 @@ All acceptance criteria AC-01 through AC-10 pass with executed evidence on Linux
 This report is ready for GPT/owner audit. The minimal Fastify health server is functional and meets all task requirements:
 
 - Single health endpoint on loopback
-- Validated port configuration with env override
+- **Strict** validated port configuration with env override (rejects partial/decimal/empty)
 - Graceful shutdown
 - Clean production audit (Fastify 5.12.8)
-- All 23 tests pass (14 existing + 9 new)
+- All 29 tests pass (14 existing + 15 new)
+- **Ephemeral test port** — no hardcoded test port
+- Developer instructions in `apps/server/README.md`
 
 **Windows validation remains pending** and should be executed separately if needed.
 
@@ -244,3 +282,20 @@ This report is ready for GPT/owner audit. The minimal Fastify health server is f
 - No claim is made here that GPT ran the Linux tests, server, curl, socket inspection, or npm audit.
 
 **Next action:** perform only the corrections above in a new, narrowly scoped Linux task/commit; do not expand into frontend, database, authentication, or platform integration work.
+
+---
+
+## 13. QFAT-004R Correction Note — 2026-11-11
+
+The five findings from the independent GPT source audit (§12) have been addressed in the follow-up correction commit (QFAT-004R):
+
+1. **Strict port validation** — `getPort()` now uses regex `^[0-9]+$` to reject partial numeric strings (`3001abc`), decimals (`3001.5`), empty strings, whitespace, while accepting leading zeros (`03001` → 3001). Added 12 regression tests covering all cases.
+2. **Ephemeral test port** — Health Server tests now use port 0 (OS-assigned) and read the actual bound port from `server.server.address()`. No fixed test port remains.
+3. **Developer instructions** — Added `apps/server/README.md` with concise startup/health instructions.
+4. **Report metadata corrected** — Baseline SHA, implementation commit SHA, changed-path counts, push verification, and AC IDs all corrected.
+5. **AC IDs fixed** — Duplicate `AC-05` resolved; all 10 criteria now have unique, sequential IDs.
+
+The corrected implementation is documented in `reports/QFAT-004R-health-server-audit-corrections-report.md`.
+
+---
+*End of QFAT-004 Local Backend Health Server Implementation Report*
