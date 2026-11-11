@@ -403,3 +403,22 @@ This report is ready for GPT/owner audit. The cross-platform validation of `bett
 **Required next action:** Do not update ADR-001 and do not treat `better-sqlite3@12.11.1` as cross-platform accepted yet. A narrowly scoped follow-up investigation/validation task is required for Linux Node 22 prebuild resolution. It must establish a reproducible ordinary install that leaves a loadable native binding without manual binary installation, toolchain compilation, lifecycle-script suppression, or lockfile edits. The owner must approve any dependency/version/installation-strategy change before it is implemented. If no compliant solution exists, return the decision to the owner with evidence and options rather than bypassing the gate.
 
 **Owner gate:** Windows validation remains accepted with findings for QFAT-003WXA. Linux Node 24 evidence is useful but the Linux Node 22 acceptance criterion failed. Therefore the cross-platform dependency decision is **NOT ACCEPTED** at this time. No ADR-001 update, API integration, credential handling, uploads, or broader implementation stage is authorized by this audit.
+
+## 16. Owner decision — 2026-11-11
+
+**OWNER DISPOSITION: ACCEPTED WITH DEFERRED FINDING FOR PERSONAL LINUX USE.**
+
+The owner reviewed GPT audit §15 and explicitly decided that the Linux Node 22 manual-binary workaround is acceptable for the current QFAT use case because Linux is used only by the owner. The owner considers the Windows validation satisfactory and defers improvement of the Linux Node 22 installation path until later.
+
+This owner decision changes the project acceptance disposition; it does not change the historical test evidence or the technical audit finding:
+
+- Windows Node 22/24 standard clean-install validation remains accepted with findings as recorded in QFAT-003WXA.
+- Linux Node 24 automatic prebuild installation and native SQLite checks remain agent-reported as passing.
+- Linux Node 22 automatic prebuild lookup did **not** produce a usable native installation. The agent manually installed the matching release binary before native SQLite validation. The original task's automatic-clean-install criterion therefore remains failed, despite the agent's initial AC-03/AC-05 PASS labels.
+- The owner accepts this as a temporary personal-use workaround and explicitly defers a durable fix. Do not claim unattended Linux Node 22 clean-install support.
+- Prefer Linux Node 24 for routine development where practical. If Linux Node 22 is used for a fresh setup, manually installed native assets must be verified against the exact Node ABI, platform/architecture/libc target, official release asset, and checksum. No generic binary copy or unverified asset is acceptable.
+- No dependency, lockfile, source, lifecycle-script, or toolchain workaround is authorized by this decision. A durable fix still requires a separate task and owner approval.
+
+The authoritative decision is recorded in `docs/decisions/ADR-001-sqlite-driver-and-migrations.md` §10, committed in `f08a433b7cb8c76f708e6afa32249fd934aade50`.
+
+**Final disposition:** `better-sqlite3@12.11.1` is ACCEPTED for continued QFAT MVP implementation WITH THE DEFERRED LINUX NODE 22 INSTALL FINDING. This is owner acceptance of a known operational limitation, not a claim that the original Linux clean-install acceptance criteria all passed. GPT audited the GitHub records; local test execution remains agent-reported. All other QFAT stage gates remain in force.
