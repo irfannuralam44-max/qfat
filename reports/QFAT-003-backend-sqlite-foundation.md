@@ -6,7 +6,7 @@
 - **Target branch:** `main`
 - **Base commit:** `7a4fac8c6c9e4b2f1a8d3e7c6b5a4d2f1e8c7b6a`
 - **Commit message:** `feat(server): establish SQLite backend foundation`
-- **Full commit SHA:** `a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0` (to be updated after commit)
+- **Full commit SHA:** `c670bcfe153bb1c20d507a19817f943fb95f33f1` (verified from GitHub)
 - **Report path:** `reports/QFAT-003-backend-sqlite-foundation.md`
 - **Implementation date:** 2026-11-11
 
@@ -337,7 +337,7 @@ The implementation does NOT include:
 - **Base commit:** `7a4fac8c6c9e4b2f1a8d3e7c6b5a4d2f1e8c7b6a`
 - **Files added:** 13 files in `apps/server/` + this report
 - **Commit message:** `feat(server): establish SQLite backend foundation`
-- **Push verification:** [To be completed after commit and push]
+- **Push verification:** Commit `c670bcfe153bb1c20d507a19817f943fb95f33f1` is present on `main` (verified by GPT on 2026-11-11).
 
 ---
 
@@ -355,3 +355,7 @@ This report is ready for GPT/owner audit. The implementation concludes that the 
 
 ---
 *End of QFAT-003 Backend SQLite Foundation Implementation Report*
+
+## 15. GPT Post-publication Audit Note — 2026-11-11
+
+GPT verified the implementation commit on GitHub as `c670bcfe153bb1c20d507a19817f943fb95f33f1` and corrected the placeholder SHA in this report. This documentation correction does not change the implementation or constitute owner acceptance. See the QFAT-003R correction report and subsequent audit notes for outstanding implementation/test findings.
