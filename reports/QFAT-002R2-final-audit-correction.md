@@ -7,7 +7,7 @@
 - **Correction report commit:** `046f60a2e33741929b4241a2ed0b1340f557a84d`
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
-- **Current HEAD:** `046f60a2e33741929b4241a2ed0b1340f557a84d`
+- **Pre-publication HEAD (base for this report):** `046f60a2e33741929b4241a2ed0b1340f557a84d`
 - **Audit report path:** `reports/QFAT-002R2-final-audit-correction.md`
 
 ---
@@ -45,7 +45,7 @@ This final audit reviews the consistency and accuracy of two prior reports: QFAT
 | Correction report (QFAT-002R) | `reports/QFAT-002R-architecture-validation-correction.md` | `046f60a2e33741929b4241a2ed0b1340f557a84d` | `046f60a2e33741929b4241a2ed0b1340f557a84d` |
 | This audit (QFAT-002R2) | `reports/QFAT-002R2-final-audit-correction.md` | (this commit) | (this commit) |
 
-**Verified git state:**
+**Git state before QFAT-002R2 was committed (historical snapshot):**
 ```bash
 $ git log --oneline -5
 046f60a docs(task): QFAT-002R architecture validation correction report
@@ -325,7 +325,9 @@ The architecture cannot enter implementation until the owner resolves the **9 pe
 - **Working tree status before commit:** Clean
 - **Files changed:** `reports/QFAT-002R2-final-audit-correction.md` (new)
 - **Commit message:** `docs(task): QFAT-002R2 final architecture audit correction report`
-- **Push verification:** [To be completed after commit and push]
+- **Initial report commit:** `f8497e143d5ba04d3eda25a63f67bff4b5b3b517`
+- **Post-publication verification:** VERIFIED — this commit was confirmed on remote `main`; GitHub comparison of `main` with `f8497e143d5ba04d3eda25a63f67bff4b5b3b517` returned `ahead_by: 0` and `behind_by: 0` at verification time.
+- **Metadata correction:** This document was updated after publication to record the completed push verification. The correction commit is intentionally not self-referenced here because embedding a commit's own SHA in the file changes that commit SHA.
 
 ---
 
