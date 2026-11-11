@@ -18,11 +18,9 @@ The frontend will reuse the established FATTECH 2.0 frontend foundation: React, 
 ## 2. Problem and goals
 
 ### Problem
-
 The current imported Spoolcast project is a Node.js CLI built around queue folders and JSON manifests. It provides useful YouTube and Facebook upload protocol code, but it does not provide a visual workflow for selecting media, managing multiple connected accounts, choosing destinations, or monitoring jobs. Its existing scheduled-publishing assumptions, plaintext token storage, and some upload recovery behavior are not suitable as-is for the QFAT MVP.
 
 ### Product goals
-
 1. Provide a usable visual workflow for publishing video content to YouTube and Facebook.
 2. Support multiple YouTube channels and multiple Facebook Pages without an arbitrary account limit.
 3. Let the operator choose one or more destinations for each publishing job.
@@ -33,7 +31,6 @@ The current imported Spoolcast project is a Node.js CLI built around queue folde
 8. Establish framework-independent backend boundaries so a future Tauri 2 desktop shell or Rust backend can be considered without rewriting product logic.
 
 ### Non-goals
-
 - Public cloud hosting, multi-tenant SaaS, team collaboration, roles, or remote user accounts.
 - Electron or Tauri packaging in the MVP.
 - Rust rewrite in the MVP.
@@ -49,15 +46,13 @@ The current imported Spoolcast project is a Node.js CLI built around queue folde
 ## 3. Target user and primary use case
 
 ### Primary user
-
 A single operator who manages one or more YouTube channels and Facebook Pages and wants to publish media from a local computer without manually repeating the same upload workflow across accounts.
 
 ### Primary user journey
-
 1. Start the local QFAT backend and open the web UI in a browser.
 2. Connect one or more YouTube channels and Facebook Pages.
 3. Select a local video or image.
-4. Enter or review metadata appropriate to the media and selected platforms.
+4. Enter or review metadata in the editor for the intended platform.
 5. Select one or more eligible destinations.
 6. Review the publishing summary and confirm immediate publishing.
 7. Observe upload progress independently for every destination.
@@ -67,9 +62,7 @@ A single operator who manages one or more YouTube channels and Facebook Pages an
 ## 4. MVP scope and functional requirements
 
 ### 4.1 Dashboard / Overview
-
 The dashboard must provide an operational summary, not vanity analytics.
-
 - Show counts for queued/running, completed, failed, and needs-attention jobs.
 - Show recent publishing activity.
 - Show connected-account counts grouped by platform.
@@ -77,7 +70,6 @@ The dashboard must provide an operational summary, not vanity analytics.
 - Display empty states and actionable errors when no accounts or jobs exist.
 
 ### 4.2 Account management
-
 - Connect multiple YouTube channels using Google's supported OAuth flow.
 - Connect multiple Facebook Pages using the approved Meta authorization flow and Page permissions.
 - Display platform, channel/Page name, account alias or identifier, connection status, and last-known authorization state.
@@ -123,26 +115,33 @@ MVP media types:
 
 ### 4.4 Metadata editor
 
-For video publishing:
+QFAT must provide **separate platform editors**. Do not combine YouTube and Facebook metadata into one shared form or a single cross-platform editor.
+
+**YouTube Editor**
 - Title.
-- Description/caption.
-- Tags where supported by the selected platform.
-- Video format intent: standard video or short-form where relevant; allow platform-specific format selection when needed.
-- Platform-specific overrides for fields whose behavior differs between destinations.
+- Description.
+- Tags where supported.
+- Video format intent: standard video or Shorts.
+- YouTube channel destination selection.
+- Platform-specific validation and a destination-specific preview/summary before confirmation where practical.
 
-For Facebook single-image publishing:
+**Facebook Editor**
 - Caption/message.
-- Exactly one image asset for the MVP.
+- Facebook Page destination selection.
+- Media selection supports video, Reels, or exactly one image in the MVP.
+- The metadata fields and form structure are the same for Facebook video and Facebook single-image posts. Changing the media type must not create a separate image-only metadata form.
+- Media-specific file validation, eligible publishing format, and preview may change according to the selected media type.
 
-Rules:
-- Validate required fields per platform before submission.
-- Do not invent or auto-generate metadata.
+**Shared editor rules**
+- Switching platform means switching to that platform's editor; metadata fields must not be silently mixed across platforms.
+- Validate required fields and platform constraints before submission.
 - Preserve user-entered Unicode and line breaks.
 - Show a destination-specific preview/summary before confirmation where practical.
+- Do not invent, auto-generate, or silently rewrite metadata.
 - CSV import and AI metadata generation are explicitly outside MVP scope.
+- Facebook album/multiple-image posts are post-MVP and must not appear as an MVP media option.
 
 ### 4.5 Destination selection and publishing
-
 - A video job may target one or more connected YouTube channels and/or Facebook Pages.
 - A single-image job may target one or more connected Facebook Pages only.
 - Each selected destination is represented as an independent destination job with its own status, progress, remote ID, error, and retry/reconciliation state.
@@ -158,7 +157,6 @@ Rules:
 - A completed destination is not re-uploaded when another destination fails.
 
 ### 4.6 Upload queue and progress
-
 - Show queued, preparing, uploading, finalizing, completed, failed, cancelled, and needs-reconciliation states as applicable.
 - Show per-destination progress when the platform protocol provides measurable progress.
 - If exact progress is unavailable, show a truthful indeterminate state rather than fabricated percentages.
@@ -168,7 +166,6 @@ Rules:
 - The UI must recover the latest job state from the backend after a browser refresh or reconnect; it must not depend on having observed every SSE event.
 
 ### 4.7 Job history, retry, and recovery
-
 - Persist job and per-destination state in SQLite.
 - Persist remote platform IDs and upload-session checkpoints as soon as they are safely available.
 - Record timestamps and sanitized error details.
@@ -180,7 +177,6 @@ Rules:
 - Define media retention/cleanup behavior in implementation design; do not delete source media automatically in the MVP without an explicit user-facing policy.
 
 ### 4.8 Settings
-
 MVP settings are limited to:
 - Application-managed media/staging directory and available disk-space indication.
 - Theme preference (dark/light/system) if straightforward to persist locally.
@@ -192,9 +188,7 @@ Do not expose raw API credentials or arbitrary backend environment variables in 
 ## 5. UX and visual direction
 
 ### Design foundation
-
 Use the FATTECH 2.0 frontend stack as a technical/design foundation, while creating QFAT-specific tokens, layout, and visual identity.
-
 - React 18 + Vite 5.
 - TypeScript.
 - Tailwind CSS 3.4.
@@ -206,7 +200,6 @@ Use the FATTECH 2.0 frontend stack as a technical/design foundation, while creat
 - Do not add a component library such as shadcn/ui automatically; first evaluate whether the existing FATTECH component patterns can be reused without pulling in an unnecessary dependency.
 
 ### Visual direction
-
 - Dark-first operational dashboard, with a complete light theme.
 - Compact, clear sidebar navigation.
 - Neutral dark surfaces with a restrained indigo/blue accent; platform brand colors may identify YouTube and Facebook destinations.
@@ -216,11 +209,10 @@ Use the FATTECH 2.0 frontend stack as a technical/design foundation, while creat
 - Avoid decorative charts that do not help the operator make a publishing decision.
 
 ### Required pages
-
 1. Overview
 2. Accounts
 3. Media Library / Select Media
-4. Create Publish Job
+4. Create Content — with separate YouTube Editor and Facebook Editor
 5. Queue / Active Uploads
 6. History / Job Details
 7. Settings
@@ -228,9 +220,7 @@ Use the FATTECH 2.0 frontend stack as a technical/design foundation, while creat
 ## 6. Technical product constraints
 
 ### 6.1 Runtime architecture
-
 The MVP consists of two separately runnable local processes:
-
 - **Frontend:** React + Vite static/client application served to the browser.
 - **Backend:** Node.js >= 22 + TypeScript HTTP API and upload worker.
 
@@ -245,7 +235,6 @@ The backend must be independently startable and must own:
 The frontend must not import platform adapter modules, access token files, or execute arbitrary shell commands.
 
 ### 6.2 API and event boundaries
-
 - Use versioned, documented JSON HTTP endpoints for commands and queries.
 - Use SSE for job/destination progress events.
 - Define shared request/response/event schemas in a contracts module/package.
@@ -280,7 +269,6 @@ interface DestinationProgressEvent {
 ```
 
 ### 6.3 Suggested repository organization
-
 The exact folder layout may be adjusted by the architecture task, but preserve clear process and domain boundaries:
 
 ```text
@@ -300,7 +288,6 @@ packages/
 Do not reorganize the imported upstream source tree in the PRD implementation itself. A dedicated implementation task must decide how to migrate existing `src/` modules into the target structure while preserving attribution and behavior.
 
 ### 6.4 Persistence
-
 - SQLite is the proposed local database for accounts metadata, media metadata, jobs, destination jobs, and upload checkpoints.
 - Platform secrets must not be stored as plaintext in SQLite or ordinary JSON files.
 - Define a credential-provider abstraction and select an appropriate secure storage implementation for Linux and Windows before implementing OAuth persistence.
@@ -309,9 +296,7 @@ Do not reorganize the imported upstream source tree in the PRD implementation it
 - Preserve job history and destination-level idempotency across backend restarts.
 
 ### 6.5 Upload adapter requirements
-
 Adapt the imported Spoolcast modules; do not embed CLI behavior in the web application.
-
 - YouTube: stream the media file; report structured progress; persist the primary video ID immediately after successful creation; keep optional follow-up operations separate so their failure cannot trigger a duplicate primary upload.
 - Facebook Page video: preserve the three-phase resumable upload protocol; use bounded chunks; persist session identifiers and acknowledged offsets; validate finish responses.
 - Facebook Reels: keep the Reels protocol separate from long-form video; replace whole-file `readFileSync` behavior with bounded-memory transfer; honor server acknowledgements and persist checkpoints.
@@ -319,14 +304,12 @@ Adapt the imported Spoolcast modules; do not embed CLI behavior in the web appli
 - All adapters: accept injected credentials, cancellation, progress reporting, and typed errors; never write directly to the job database/ledger. The orchestration layer owns state transitions.
 
 ### 6.6 Publishing semantics
-
 - Publish immediately by default after explicit user confirmation.
 - Do not carry over the upstream scheduled-publishing requirements into the MVP.
 - Respect platform privacy/default publishing settings and account permissions; if the platform requires a choice or does not allow the requested state, present the constraint before dispatch.
 - Centralize and verify the supported Meta Graph API version at implementation time. Do not rely solely on the upstream hardcoded version.
 
 ## 7. Security, privacy, and reliability
-
 - Bind the local API to loopback by default; do not expose it to the LAN or public internet in the MVP.
 - Protect state-changing API endpoints against cross-site request forgery and unauthorized browser origins. Validate the expected frontend origin and use a local session/anti-CSRF mechanism where appropriate.
 - Do not treat loopback networking alone as an authentication boundary.
@@ -340,9 +323,7 @@ Adapt the imported Spoolcast modules; do not embed CLI behavior in the web appli
 - Preserve the upstream MIT license and attribution.
 
 ## 8. Cross-platform development and verification
-
 The MVP must be testable on the owner's separate Linux and Windows PCs.
-
 - Keep paths, temporary files, process startup, SQLite access, and secure credential integration cross-platform.
 - Use environment/configuration validation at backend startup with actionable diagnostics.
 - Provide documented development commands for installing dependencies, starting frontend/backend, running typecheck, tests, and production builds.
@@ -353,9 +334,7 @@ The MVP must be testable on the owner's separate Linux and Windows PCs.
 - Do not claim cross-platform support based solely on a successful build on one OS.
 
 ## 9. MVP release acceptance criteria
-
 The MVP is ready for owner review when all of the following are true:
-
 1. The local web application starts reliably and can be opened in a supported browser.
 2. Frontend and backend run as separate processes with documented startup commands.
 3. The operator can connect and manage multiple YouTube channels and Facebook Pages.
@@ -374,9 +353,7 @@ The MVP is ready for owner review when all of the following are true:
 16. No live production upload is required to pass automated CI.
 
 ## 10. Post-MVP roadmap (not authorized by this PRD)
-
 Potential follow-up capabilities, each requiring a separate scope and acceptance criteria:
-
 - Facebook album/multi-image publishing.
 - Tauri 2 desktop packaging using the same web frontend and Node.js backend as a Sidecar.
 - Gradual migration of selected backend services from Node.js to Rust after the desktop version is stable.
@@ -385,9 +362,7 @@ Potential follow-up capabilities, each requiring a separate scope and acceptance
 - CSV import/export and AI metadata only if the owner later changes the current scope decision.
 
 ## 11. Open implementation decisions
-
 The product direction is established, but these technical choices must be resolved in a dedicated architecture task before implementation:
-
 1. Exact HTTP server framework and API route conventions for the Node.js backend.
 2. Exact SQLite library, migration strategy, and database location.
 3. Linux and Windows credential-provider implementation and failure behavior.
@@ -408,7 +383,7 @@ These are implementation design decisions, not permission to expand the MVP prod
 | Styling | Tailwind CSS 3.4, based on FATTECH 2.0 foundation |
 | Routing | React Router 6 |
 | Icons / charts | Lucide React / Recharts |
-| Backend | Separate Node.js >= 20 + TypeScript process |
+| Backend | Separate Node.js >= 22 + TypeScript process |
 | Database | SQLite |
 | Live progress | SSE preferred |
 | Publishing | Immediate after explicit confirmation |
@@ -416,6 +391,7 @@ These are implementation design decisions, not permission to expand the MVP prod
 | Video destinations | YouTube video/Shorts; Facebook video/Reels |
 | Image support | Facebook single-image post in MVP |
 | Album support | Post-MVP |
+| Metadata editor | Separate YouTube and Facebook editors; Facebook video and single-image use the same metadata form |
 | Desktop shell | Not in MVP; Tauri 2 is a possible later phase |
 | Rust | Not in MVP; gradual future migration only |
 | CSV / AI metadata | Out of scope for current MVP |
