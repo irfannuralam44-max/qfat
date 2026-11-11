@@ -1,6 +1,6 @@
 # ADR-001 — SQLite Driver and Migration Strategy
 
-- **Status:** ACCEPTED WITH MITIGATION — owner approved the driver/migration choice on 2026-11-11
+- **Status:** ACCEPTED WITH MITIGATION — owner approved the driver/migration choice on 2026-11-11; `better-sqlite3@12.11.1` accepted on 2026-11-11 with a deferred Linux Node 22 install finding
 - **Decision area:** QFAT-002 canonical decision items 1 and 4 (SQLite library/migrations; related runtime compatibility)
 - **Date:** 2026-11-11
 - **Repository:** `irfannuralam44-max/qfat`
@@ -18,7 +18,7 @@ The workload is local and write-oriented but modest: short transactional state u
 
 **Owner decision (2026-11-11): ACCEPTED WITH MITIGATION.** Adopt the following stack for the QFAT MVP:
 
-- **Driver:** `better-sqlite3`
+- **Driver:** `better-sqlite3@12.11.1` (exact QFAT MVP pin; subject to the platform-specific validation notes in §10)
 - **Typed query/schema layer:** Drizzle ORM's `better-sqlite3` driver
 - **Migration authoring:** Drizzle Kit `generate`, producing committed SQL migration files
 - **Migration execution:** Drizzle's runtime migrator during controlled backend startup
@@ -143,3 +143,28 @@ This is explicit owner acceptance of the database stack and authorizes subsequen
 ---
 
 **Decision record:** The owner explicitly accepted this stack on 2026-11-11 after review of the Linux, Windows, and dependency-audit reports. The acceptance is conditional on the mitigations in §8; future implementation tasks remain subject to their own scope and verification gates.
+
+
+## 10. Exact driver release and platform-specific install acceptance
+
+**Owner decision (2026-11-11): ACCEPTED WITH DEFERRED LINUX FINDING.** Following the QFAT-003WXA Windows validation and QFAT-003WXAL Linux validation report, the owner explicitly accepts `better-sqlite3@12.11.1` as the QFAT MVP driver and accepts proceeding without resolving the Linux Node 22 prebuild lookup issue immediately.
+
+The evidence and operating boundaries are:
+
+- **Windows 10 Pro 22H2 x64:** The QFAT-003WXA report records standard `npm ci` success and a working native binding on Node.js 22.23.4 and 24.16.0, without Python/MSVC or native compilation. GPT's source audit accepted the Windows report as an accurate blocked-investigation follow-up and accepted the Windows validation record with findings. See `reports/QFAT-003WXA-better-sqlite3-12-windows-validation-report.md` and its audit note.
+- **Linux Mint 22.3 x86_64, Node.js 24.22.2:** The QFAT-003WXAL agent report records automatic prebuild installation and successful native SQLite checks.
+- **Linux Mint 22.3 x86_64, Node.js 22.23.4:** The automatic `prebuild-install@7.1.3` lookup did not locate the ABI 127 binary. The agent then manually installed a checksum-verified binary from the project's GitHub release and performed the native SQLite checks. This does **not** establish a fully automatic, ordinary clean-install path on Linux Node 22. The GPT audit correctly rejected the original task's AC-03/AC-05 PASS claims for this runtime because manual binary installation was prohibited by that task.
+- **Owner's operational decision:** The owner states Linux is used only by the owner, accepts this manual-binary workaround as a temporary operational exception, and defers a cleaner Linux Node 22 installation solution until later. This is an explicit acceptance of the known limitation, not a claim that the automated prebuild issue is fixed.
+
+### 10.1 Deferred finding and controls
+
+1. Track the Linux Node 22 prebuild lookup/version-matching issue as a known deferred finding. Do not describe Linux Node 22 as verified for unattended, automatic clean installation.
+2. If Linux Node 22 is used for a fresh setup, the native binary may need a manual, checksum-verified installation from the matching official project release asset. Verify the exact Node ABI, Linux architecture/libc target, release asset, and checksum before use. Do not copy a binary from another ABI or platform. The validation report records the observed asset and outcome; it does not yet provide a reusable, maintained installation script/runbook.
+3. Do not silently add a manual binary patch to package lifecycle scripts, alter the lockfile, suppress lifecycle scripts, or install a system toolchain. Any durable installation-strategy or dependency change requires a separately scoped task and owner approval.
+4. Prefer Node.js 24 on Linux for development where practical, since automatic prebuild installation was reported successful there.
+5. Revisit this finding when Linux Node 22 unattended installation becomes necessary, when the prebuild package/dependency chain changes, or before distributing QFAT to other Linux users.
+6. The existing development-only advisory exception and production audit mitigation in §8 remain in force. CI activation remains deferred by the owner and is not a condition to be silently implemented by this ADR update.
+
+**Validation evidence boundary:** Windows and Linux reports are agent-reported machine evidence. GPT audited the GitHub reports and diffs but did not execute local Windows or Linux commands. Linux Node 22's manual binary installation is accepted by the owner as a temporary personal-use exception; it is not accepted as proof of automatic clean-install compatibility.
+
+**Decision effect:** The owner authorizes continued QFAT MVP implementation using the exact `better-sqlite3@12.11.1` pin, subject to this ADR, the existing stage gates, and all other security/data-safety constraints. This acceptance does not authorize real platform credentials, live account connections, uploads, CI activation, or scope beyond the MVP.
