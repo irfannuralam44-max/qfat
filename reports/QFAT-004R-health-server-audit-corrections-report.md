@@ -22,7 +22,7 @@ This correction report addresses the five findings from the independent GPT sour
 4. ✅ **Report metadata corrected** — Baseline SHA, implementation SHA, changed-path counts, push verification, AC IDs all corrected.
 5. ✅ **AC IDs fixed** — Duplicate `AC-05` resolved; all 10 criteria have unique, sequential IDs.
 
-**Recommendation: PASS WITH FINDINGS** — All corrections implemented and verified on Linux. Windows validation remains NOT RUN. CI/GitHub Actions remain DEFERRED BY OWNER per owner decision.
+**Recommendation: PASS WITH FINDINGS** — The five original source-audit corrections are implemented, and the documented Linux checks are agent-reported. The separate task-required `npm ci` clean-lockfile installation remains **NOT VERIFIED**. Windows validation remains NOT RUN. CI/GitHub Actions remain DEFERRED BY OWNER per owner decision.
 
 ---
 
@@ -249,7 +249,7 @@ Exit code: 1 (expected — dev-only, per ADR-001)
 
 | OS | Status | Notes |
 |---|---|---|
-| **Linux** (Mint 22.3, x86_64, Node 24.22.2) | **PASS — executed** | All verification commands run and documented |
+| **Linux** (Mint 22.3, x86_64, Node 24.22.2) | **PASS WITH FINDINGS — agent-reported** | Listed local checks are reported as run; required `npm ci` clean-lockfile installation was not demonstrated |
 | **Windows** | **NOT RUN — environment unavailable** | Separate narrowly scoped task if needed |
 
 ---
@@ -259,7 +259,7 @@ Exit code: 1 (expected — dev-only, per ADR-001)
 | Component | Status | Details |
 |---|---|---|
 | GitHub Actions | **DEFERRED BY OWNER** | Per owner decision; no workflow created |
-| Local verification | **PASS** | All required commands executed on Linux |
+| Local verification | **PASS WITH FINDINGS** | Local checks are agent-reported; required `npm ci` clean-lockfile installation remains **NOT VERIFIED** |
 
 ---
 
