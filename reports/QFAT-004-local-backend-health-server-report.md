@@ -212,3 +212,35 @@ This report is ready for GPT/owner audit. The minimal Fastify health server is f
 
 ---
 *End of QFAT-004 Local Backend Health Server Implementation Report*
+
+---
+
+## 12. Independent GPT Source Audit — 2026-11-11
+
+**Audit disposition: NOT ACCEPTED — CORRECTIONS REQUIRED.** This is a source/report audit of the GitHub commit and does not represent execution of Linux commands by GPT. Local test and runtime results above remain agent-reported.
+
+### Confirmed repository publication
+
+- Reported implementation commit: `9354b61c730f6260d0f4bc43505b26e74f072c61`.
+- Commit is present on `main`.
+- Comparison from task baseline `05c0840ceb51364fd14937c935e14b26c16c7d35`: one commit ahead, zero behind.
+- GitHub records five changed paths: `apps/server/package.json`, `apps/server/package-lock.json`, `apps/server/src/index.ts`, `apps/server/test/health.test.ts`, and this report. The implementation itself therefore changes four paths; the report's “Files changed: 4” is ambiguous/inaccurate as a total commit count.
+- The existing root `README.md` was not changed, and no `apps/server/README.md` exists at this commit. The requested minimal startup/health instructions are missing.
+
+### Required corrections
+
+1. Tighten `getPort()`: `Number.parseInt()` accepts malformed values such as `3001abc` and `1.5` by truncating/parsing a valid prefix. Reject any value that is not an exact integer port in the range 1–65535. Add regression tests for malformed suffixes and decimals (and empty input if treated as invalid).
+2. Remove the fixed test port `3002`. Use an OS-assigned ephemeral port and obtain the actual bound port from the server address so tests do not depend on a port being free.
+3. Add concise, accurate developer instructions for starting the backend and checking `GET /api/v1/health`, without changing unrelated Spoolcast documentation.
+4. Correct this report's metadata: record the full baseline SHA, the full implementation commit SHA, and the exact total changed-path count. Replace the “Push verification: To be completed” placeholder with the verified result.
+5. Correct the acceptance-criteria table's duplicate `AC-05` label and ensure its IDs align with the task's actual criteria.
+
+### Scope and evidence notes
+
+- The server source uses Fastify, registers only `GET /api/v1/health`, and configures `127.0.0.1` as the listen host.
+- The automated loopback test checks the server's bound address, but currently uses a fixed port.
+- The test suite calls `server.close()`; the report's manual SIGTERM check is agent-reported and was not independently executed by GPT.
+- Windows validation remains not run. GitHub Actions/CI remain deferred by owner decision.
+- No claim is made here that GPT ran the Linux tests, server, curl, socket inspection, or npm audit.
+
+**Next action:** perform only the corrections above in a new, narrowly scoped Linux task/commit; do not expand into frontend, database, authentication, or platform integration work.
