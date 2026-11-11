@@ -2,125 +2,82 @@
 
 - **Status:** PROPOSED
 - **Date:** 2026-11-11
-- **Related:** QFAT-005, QFAT-002R2 decision #9
+- **Related:** QFAT-005, QFAT-005R2, QFAT-002R2 decision #9
 - **Supersedes:** None
 
----
+> This ADR is a proposal, not an approved decision. No security controls described here are implemented or validated. Explicit owner approval is required before any implementation task begins.
 
 ## Context
 
-QFAT MVP is a local-first web application with a React/Vite frontend and a separate Node.js Fastify backend bound to `127.0.0.1:3001`. The PRD mandates:
+The PRD defines QFAT as a local-first browser UI with a separate backend. It requires loopback-only binding, no wildcard CORS, CSRF protection for state-changing requests, Origin/Host validation, and no exposure of platform credentials or session secrets to frontend storage or logs. Loopback is not an authentication boundary.
 
-- Loopback binding only (never `0.0.0.0`)
-- No wildcard CORS
-- CSRF protection for state-changing requests
-- No platform credentials, session secrets, or tokens in frontend bundles, localStorage, sessionStorage, URLs, SQLite plaintext, or logs
-- Validate Host and Origin; account for DNS rebinding
-- Fail closed when security initialization fails
+The proposed development browser origin is `http://localhost:5173`; Vite proxies same-origin browser API requests to `http://127.0.0.1:3001`. Production uses the canonical same-origin URL `http://127.0.0.1:3001`. `localhost` and `127.0.0.1` are distinct cookie hosts.
 
-The QFAT-002R2 audit identified decision #9 (session/CSRF mechanism) as pending owner approval. This ADR proposes a complete, coherent design addressing all PRD constraints.
+## Proposed design
 
----
+### 1. Request topology and validation
 
-## Decision
+- Development browser requests target `http://localhost:5173/api/...`; the browser sends `Origin: http://localhost:5173`. Vite proxies to the fixed upstream `http://127.0.0.1:3001`.
+- With `changeOrigin: true`, Vite rewrites the upstream `Host` to `127.0.0.1:3001`. It does not prove the browser Origin, and the backend cannot infer the original browser-facing Host from this rewritten Host.
+- Proxy contract for implementation: Vite and backend bind only to loopback; proxy only the named API/event paths to the fixed backend URL; preserve the browser Origin; strip client-supplied `Forwarded`, `X-Forwarded-Host`, and `X-Original-Host`; do not rely on forwarded/original-host headers. Validate exact Origin and expected upstream Host. Verify the actual behavior when implemented.
+- Production uses the single canonical authority `http://127.0.0.1:3001`; allow only its exact Origin and Host. Do not casually allow `localhost`, arbitrary names/ports, wildcard origins, LAN binding, or arbitrary forwarded-host values.
+- Reject missing, `null`, malformed, multiple, or unexpected Origin values on bootstrap and all state-changing requests; reject missing/unexpected Host and unexpected ports. Origin indicates the browser's claimed initiating origin, not user identity. Host identifies the authority received at the current server/proxy boundary; behind Vite it is the rewritten upstream target. Neither check alone defeats DNS rebinding.
+- If the proxy cannot preserve this contract, do not trust forwarded values as a workaround; redesign to a topology that exposes the browser-facing authority to the backend or otherwise establishes a verifiable trusted proxy boundary.
 
-We adopt the following security design for browser-to-backend communication:
+### 2. Session and CSRF
 
-### 1. Origin and Host Validation
+Propose an opaque server-side session and synchronizer token:
 
-- **Allowed Origins:** `http://localhost:5173` (Vite dev) and `http://127.0.0.1:3001` (production same-origin)
-- **Allowed Hosts:** `127.0.0.1:3001` and `localhost:3001`
-- **Validation:** Fastify `onRequest` hook validates `Host` on all requests; validates `Origin` on state-changing methods (`POST`, `PUT`, `PATCH`, `DELETE`)
-- **DNS rebinding protection:** Both `Origin` and `Host` must be valid; `Origin` alone is insufficient
-- **Missing/null Origin:** Rejected on state-changing requests (403)
-- **Health endpoint (`GET /api/v1/health`):** Exempt from origin/auth checks
+- The backend creates unpredictable session and CSRF values and stores the CSRF proof bound to the session record.
+- The browser receives only the session identifier in a host-only `HttpOnly` cookie; the identifier is never returned in JSON.
+- Bootstrap returns the separate CSRF proof and expiry metadata. The SPA retains the proof only in JavaScript memory and sends `X-CSRF-Token` on state-changing requests.
+- The backend validates the session and compares the submitted proof to the proof bound to that session, using constant-time comparison where applicable. Do not issue a CSRF cookie or use unbound cookie/header equality.
+- Bootstrap must pass exact Origin and proxy checks and be rate-limited. Refresh and destroy require the current session-bound proof and exact Origin; successful refresh rotates session/proof, and destroy invalidates session and clears its cookie.
+- Apply the proof to JSON and multipart mutations. Safe read methods must not mutate state; sensitive reads remain session-authorized.
+- A JavaScript-memory proof is accessible to same-origin script and is not an XSS defense. HttpOnly protects direct access to the session cookie but does not prevent active XSS from using the session.
 
-### 2. CSRF Protection: Double-Submit Cookie
+A synchronizer token is preferred because server-side session binding clearly defeats the naive cookie-tossing weakness. Naive double-submit compares values that an attacker may inject or toss; `SameSite=Strict` does not universally prevent cookie injection. A signed/session-bound double-submit design is a possible alternative but adds key and validation complexity without a clear advantage for this SPA.
 
-- **Mechanism:** Server sets HttpOnly `SameSite=Strict` cookie `qfat_csrf` with 256-bit random token; client receives token value in bootstrap response body, stores in JS memory, sends in `X-CSRF-Token` header on every state-changing request
-- **Cookie attributes:** `HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600`
-- **Header:** `X-CSRF-Token`
-- **Protected methods:** `POST`, `PUT`, `PATCH`, `DELETE` (all routes except health)
-- **Multipart uploads:** Supported without preflight complications
-- **Token rotation:** New token on session creation and every 30 min; 5-min grace period for old token
+### 3. Cookie attributes and transport
 
-### 3. Session Management: HttpOnly Cookie
+The MVP proposal uses HTTP loopback; HTTPS is not designed or implemented. Use one host-only session cookie (omit `Domain`) with `HttpOnly; Secure=false; SameSite=Strict; Path=/; Max-Age=1800`. In development, the browser receives the cookie for `localhost`; in production, for `127.0.0.1`. Do not assume the hosts share cookies or are the same site.
 
-- **Session cookie:** `qfat_sid` (256-bit), `HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=1800` (30 min)
-- **Bootstrap:** `POST /api/v1/session/init` → returns `csrfToken`, `expiresAt`; sets both cookies
-- **Refresh:** `POST /api/v1/session/refresh` (within 5-min grace after expiry) → new session + CSRF tokens
-- **Destroy:** `POST /api/v1/session/destroy` → clears cookies
-- **Bootstrap rate limit:** 5 requests/minute per IP
-- **No secrets in frontend:** HttpOnly cookies never accessible to JavaScript; CSRF token returned once at init, stored in JS memory only
+`SameSite` is evaluated using the browser-facing request context. In development, the browser talks to its own Vite origin; the upstream proxy address is not the browser-facing site. HTTP loopback with `Secure=false` is a narrow MVP trade-off, not a general production-safe cookie configuration. Keep loopback binding and the other checks; revisit before any non-loopback deployment. Browser acceptance and behavior are **UNVERIFIED**.
 
-### 4. Development and Production Topology
+### 4. Multipart and CORS
 
-| Environment | Frontend | Backend | Cookie Domain | Secure Flag |
-|---|---|---|---|---|
-| Development | Vite `:5173` + proxy `/api`,`/events` → `:3001` | Fastify `:3001` | **Omitted** (host-only for `localhost`) | `false` (HTTP loopback) |
-| Production | Backend serves `dist/` at `/` | Fastify `:3001` | **Omitted** (host-only for `127.0.0.1`) | `false` (HTTP loopback) — HTTPS not implemented in MVP |
+A custom header does not inherently break multipart requests. It can trigger CORS preflight for cross-origin browser requests. Here, development browser requests are same-origin with Vite, which proxies upstream, and production is same-origin, so browser-to-backend CORS preflight is avoided. The browser/client library must generate the multipart boundary; do not manually set an incomplete multipart Content-Type. Multipart state changes require the same session, Origin, and CSRF validation.
 
-- No wildcard CORS in either environment
-- Dev uses Vite proxy; production is same-origin
+## Alternatives considered
 
-### 5. Operational Behavior
-
-- **Fail closed:** Session bootstrap failure (CSPRNG, cookie config) → process exit with actionable error
-- **Logging redaction:** `Authorization`, `Cookie`, `X-CSRF-Token`, OAuth params, tokens, signed URLs redacted
-- **Test scenarios:** 18 deterministic offline test scenarios specified for future implementation covering trusted/untrusted Origin/Host, missing/null Origin, CSRF, session expiry/refresh, multipart uploads, SSE, rate limits
-
----
-
-## Alternatives Considered
-
-| Alternative | Rejected Because |
+| Alternative | Assessment |
 |---|---|
-| **Synchronizer token** | Requires token in HTML/JS; higher SPA complexity; token in localStorage/sessionStorage exposes to XSS |
-| **Custom header only (`X-CSRF-Token`)** | Breaks multipart uploads (triggers preflight); token in JS memory only (no HttpOnly protection); no SameSite benefit |
-| **Bearer token in localStorage** | Token in browser storage violates PRD; full XSS exposure |
-| **Origin-only validation** | Insufficient against DNS rebinding; Host must also be validated |
-| **Wildcard CORS** | Violates PRD; exposes to any origin |
-| **No CSRF on multipart** | State-changing upload endpoints would be unprotected |
+| Naive double-submit cookie | Not recommended: unbound equality can be vulnerable to cookie tossing/injection; SameSite alone is insufficient |
+| Signed/session-bound double-submit | Viable with careful MAC/session binding and key lifecycle; more complexity than synchronizer state |
+| Synchronizer token bound to session | Recommended proposal: clear server-side binding; session ID stays HttpOnly; proof remains memory-only in SPA |
+| Bearer token in localStorage | Rejected: persistent browser storage exposes reusable authentication material to XSS and conflicts with PRD intent |
+| Origin-only or Host-only validation | Rejected as insufficient alone; checks cover different, limited facts and must be used with fixed loopback/proxy trust rules |
+| Wildcard CORS or arbitrary forwarded-host trust | Rejected by PRD/security boundary |
 
----
+## Consequences and unresolved decisions
 
-## Consequences
+- Session lifetime, CSRF rotation/grace policy, bootstrap rate limits, response codes, and safe-read Origin policy need owner approval or implementation validation.
+- Vite/Fastify header preservation, cookie forwarding, and browser behavior are **UNVERIFIED**; no Linux or Windows browser testing is claimed.
+- HTTP loopback does not encrypt traffic or authenticate the local user.
+- A same-origin script compromise can use the active session even though it cannot directly read the HttpOnly cookie.
+- QFAT-002R2 decision #9 has a **proposed resolution pending explicit owner approval**; it is not resolved or approved.
 
-### Positive
+## Verification boundary
 
-- **No secrets in frontend/storage** — HttpOnly cookies + JS-memory CSRF token satisfy PRD
-- **Strong CSRF protection** — Double-submit cookie + SameSite=Strict defends against cross-site and DNS rebinding
-- **Multipart support** — No preflight issues; streaming uploads work
-- **Clear dev/prod separation** — Vite proxy in dev; same-origin in production
-- **Deterministic test scenarios** — All 18 scenarios designed for offline validation
+The 18 application scenarios in the design report are **specified, not executed** by QFAT-005 or QFAT-005R. No application, browser, platform, or runtime security validation is claimed. `git diff --check` is a documentation whitespace check only. Implementation acceptance must come from a later explicitly authorized task and its evidence.
 
-### Negative / Risks
+## Owner approval gate
 
-- **Cookie `Secure` on HTTP localhost** — MVP uses `Secure: false` for HTTP loopback; Chrome/Edge may reject `Secure` cookie on HTTP; if HTTPS added later, flag must change
-- **Cookie `Domain` attribute** — Host-only cookies (no `Domain` attribute) used; Windows behavior **UNVERIFIED**
-- **Session in memory only** — Restart loses sessions; acceptable for MVP
-- **Vite proxy cookie forwarding** — Must verify `credentials: 'include'` and proxy config
-- **SameSite=Strict on cross-port (dev)** — `localhost:5173` → `127.0.0.1:3001` is cross-site; `SameSite=Strict` allows same-site (eTLD+1); `localhost` same-site. Verified on Linux Chrome/Edge/Firefox; Windows behavior **UNVERIFIED**
+ADR-002 stays **PROPOSED**. Do not implement sessions, cookies, CSRF, proxy, Origin/Host, or DNS-rebinding controls until the owner explicitly approves this proposal and any outstanding parameters are resolved. This ADR does not authorize QFAT-006 or UI implementation.
 
----
+## Post-publication audit correction — 2026-11-11 (historical)
 
-## Verification
-
-- Test scenarios: 18 scenarios specified for future implementation (not executed in this design task)
-- `git diff --check` passes
-- No source code, dependencies, or PRD modified by this ADR
-- QFAT-002R2 decision #9 addressed with a specific proposal (pending owner approval)
-
----
-
-## Next Steps
-
-1. Owner reviews and approves this ADR
-2. Implementation task (QFAT-006) created with approved design
-3. Windows cookie behavior validated before merge
-4. Integration with Fastify backend in `apps/server/src/index.ts`
-
----
+The earlier QFAT-005R correction record is retained below as history. Its double-submit-cookie recommendation and claims that SameSite prevents cookie injection or that browsers were verified are superseded by the QFAT-005R2 correction above. They are not current design guidance.
 
 ## Post-Publication Audit Correction — 2026-11-11
 
@@ -147,12 +104,6 @@ The following corrections were made to resolve the issues identified in the QFAT
 
 ---
 
-## Next Steps
+## QFAT-005R2 post-audit correction — 2026-11-11
 
-1. Owner reviews and approves this ADR
-2. Implementation task (QFAT-006) created with approved design
-3. Windows cookie behavior validated before merge
-4. Integration with Fastify backend in `apps/server/src/index.ts`
-
----
-*End of ADR-002*
+Corrected the Vite browser-facing/upstream authority model and defined a proxy trust contract; replaced naive double-submit with a session-bound synchronizer-token proposal; made cookie attributes, HTTP loopback scope, SameSite context, multipart behavior, and Origin/Host limits consistent; recalculated the report's decision categories to eight technical recommendations, three implementation parameters, two grouped PRD entries, two unverified assumptions, and one optional evaluation; and removed unsupported execution/verification claims. ADR-002 remains **PROPOSED**. Explicit owner approval is required before implementation.
