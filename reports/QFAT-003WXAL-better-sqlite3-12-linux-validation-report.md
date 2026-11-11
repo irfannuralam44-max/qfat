@@ -384,3 +384,22 @@ This report is ready for GPT/owner audit. The cross-platform validation of `bett
 
 ---
 *End of QFAT-003WXAL Linux Validation Report*
+
+---
+
+## 15. GPT source audit — 2026-11-11
+
+**Audit disposition: REPORT ACCEPTED AS AN ACCURATE RECORD OF THE AGENT'S OBSERVATIONS; LINUX NODE 22 CLEAN-INSTALL VALIDATION NOT ACCEPTED. CROSS-PLATFORM DEPENDENCY VALIDATION REMAINS BLOCKED.**
+
+- Audited report commit: `e85cdddd33f84652e9d4ff934cc7593f86040a13` on `main`.
+- The report commit is exactly one commit ahead of task commit `53b3719a90f89fe0cb12bc977548700864aacdd6`, with no behind commits. Its only changed file is this Linux validation report. The committed manifest remains pinned to `better-sqlite3@12.11.1`; no implementation, lockfile, source, schema, or ADR change was made in this validation task.
+- The report explicitly records that on Linux Node.js 22.23.4 / ABI 127, `prebuild-install` did not locate the native prebuild and that the binary was then **manually installed** from the GitHub release asset. The subsequent native SQLite checks therefore demonstrate that the manually supplied binary works; they do not demonstrate that ordinary `npm ci` produced a usable native installation.
+- This manual binary installation violates task §4.2's explicit prohibition on manual binary copying and task §6's stop condition for a failed/missing prebuild path. AC-03 and AC-05 therefore cannot be marked PASS for Node 22. The report's exit-code-0 entry for `npm ci` does not cure this: the task requires a clean install that yields a working native binding without a manual post-install step.
+- Node.js 24.22.2 appears to have installed its prebuild automatically and its native checks/tests are reported as passing. This is useful evidence but does not satisfy the mandatory two-runtime Linux matrix by itself.
+- The report's overall statement that AC-01 through AC-14 pass, its AC-03/AC-05 PASS labels, and its cross-platform “Node 22 standard install PASS” summary are inconsistent with its own disclosure of the manual binary installation. Those claims are not accepted. F-02 should be treated as a blocking validation failure for this task, not merely a non-blocking finding.
+- Other reported results (Node versions, Linux environment, lockfile hash, SQLite probes after binary installation, test/audit summaries, and supply-chain warnings) are retained as agent-reported evidence. GPT did not execute Linux commands and does not independently certify local test execution.
+- The report's §12 placeholder “Push verification: [To be completed after commit and push]” is stale/inaccurate because this report is already present in the audited GitHub commit. This is a documentation metadata defect; the audit note records the actual commit above.
+
+**Required next action:** Do not update ADR-001 and do not treat `better-sqlite3@12.11.1` as cross-platform accepted yet. A narrowly scoped follow-up investigation/validation task is required for Linux Node 22 prebuild resolution. It must establish a reproducible ordinary install that leaves a loadable native binding without manual binary installation, toolchain compilation, lifecycle-script suppression, or lockfile edits. The owner must approve any dependency/version/installation-strategy change before it is implemented. If no compliant solution exists, return the decision to the owner with evidence and options rather than bypassing the gate.
+
+**Owner gate:** Windows validation remains accepted with findings for QFAT-003WXA. Linux Node 24 evidence is useful but the Linux Node 22 acceptance criterion failed. Therefore the cross-platform dependency decision is **NOT ACCEPTED** at this time. No ADR-001 update, API integration, credential handling, uploads, or broader implementation stage is authorized by this audit.
