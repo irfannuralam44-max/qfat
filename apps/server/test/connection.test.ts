@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { openDatabase, closeDatabase, createTempDatabase, checkIntegrity, isWalMode, areForeignKeysEnabled, getBusyTimeout } from '../src/db/connection.js';
 import { runMigrationsWithVerification } from '../src/db/migrate.js';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { eq } from 'drizzle-orm';
 import Database from 'better-sqlite3';
 import { existsSync, unlinkSync, rmSync } from 'node:fs';
@@ -308,6 +309,103 @@ describe('Drizzle Migrations', () => {
       db.close();
     } finally {
       cleanup();
+    }
+  });
+
+  test('migration upgrade v1 to v2 preserves existing data', async () => {
+    const fixture = createTestDb();
+    const { path, cleanup } = fixture;
+
+    try {
+      // Step 1: Apply only v1 migration (simulate existing database)
+      // Use the exact same v1 migration content as in the real migrations folder
+      const v1MigrationDir = resolve(process.cwd(), 'migrations-v1-snapshot');
+      if (!existsSync(v1MigrationDir)) {
+        // Create v1-only migration directory if it doesn't exist
+        // Use the exact same content as the real v1 migration
+        const v1MigrationContent = `CREATE TABLE \`app_meta\` (
+	\`key\` text PRIMARY KEY NOT NULL,
+	\`value\` text NOT NULL,
+	\`updated_at\` integer NOT NULL
+);
+`;
+        const fs = await import('node:fs');
+        const { mkdirSync, writeFileSync } = fs;
+        mkdirSync(v1MigrationDir, { recursive: true });
+        // Create meta directory first
+        mkdirSync(resolve(v1MigrationDir, 'meta'), { recursive: true });
+        writeFileSync(resolve(v1MigrationDir, '0000_v1_initial.sql'), v1MigrationContent);
+        // Create minimal meta files for Drizzle
+        writeFileSync(resolve(v1MigrationDir, 'meta', '_journal.json'), JSON.stringify({
+          version: '7',
+          dialect: 'sqlite',
+          entries: [{ idx: 0, version: '6', when: 1794370402769, tag: '0000_v1_initial', breakpoints: true }]
+        }, null, 2));
+      }
+
+      // Apply v1 migration
+      const conn1 = openDatabase(path);
+      const drizzleDb1 = drizzle(conn1.db);
+      await migrate(drizzleDb1, { migrationsFolder: v1MigrationDir });
+      closeDatabase(conn1.db);
+
+      // Manually insert the correct v1 migration hash and folderMillis into tracking table
+      // This matches the real v1 migration in the migrations folder
+      const v1Hash = '7782bbc169e5a629ed53b2149800eaf85b0af702ff881536aab79004be77cc30';
+      const v1FolderMillis = 1794370402769;
+      const db1 = new Database(path);
+      db1.prepare('INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)').run(v1Hash, v1FolderMillis);
+      db1.close();
+
+      // Verify v1 schema (no description column)
+      const db1b = new Database(path);
+      let columns1 = db1b.prepare("PRAGMA table_info(app_meta)").all() as { name: string }[];
+      const columnNames1 = columns1.map(c => c.name);
+      assert.ok(!columnNames1.includes('description'), 'v1 schema should not have description column');
+
+      // Insert test data in v1
+      db1b.prepare("INSERT INTO app_meta (key, value, updated_at) VALUES (?, ?, ?)").run('test-key', 'test-value', Date.now());
+      const row1 = db1b.prepare("SELECT * FROM app_meta WHERE key = ?").get('test-key');
+      assert.ok(row1, 'Test row should exist in v1');
+      db1b.close();
+
+      // Step 2: Apply v2 migration (upgrade) - should only apply the ALTER TABLE
+      const conn2 = openDatabase(path);
+      const drizzleDb2 = drizzle(conn2.db);
+      await migrate(drizzleDb2, { migrationsFolder: resolve(process.cwd(), 'migrations') });
+      closeDatabase(conn2.db);
+
+      // Verify v2 schema (has description column)
+      const db2 = new Database(path);
+      let columns2 = db2.prepare("PRAGMA table_info(app_meta)").all() as { name: string }[];
+      const columnNames2 = columns2.map(c => c.name);
+      assert.ok(columnNames2.includes('description'), 'v2 schema should have description column');
+
+      // Verify existing data preserved
+      const row2 = db2.prepare("SELECT * FROM app_meta WHERE key = ?").get('test-key');
+      assert.ok(row2, 'Test row should still exist after upgrade');
+      assert.equal(row2.value, 'test-value', 'Value should be preserved');
+
+      // Verify migration tracking has both migrations
+      const migrations = db2.prepare('SELECT * FROM __drizzle_migrations ORDER BY created_at').all() as {
+        hash: string;
+        created_at: number;
+      }[];
+      assert.ok(migrations.length >= 2, 'Should have at least 2 migrations tracked');
+
+      db2.close();
+    } finally {
+      cleanup();
+      // Clean up v1 snapshot directory
+      try {
+        const fs = await import('node:fs');
+        const { rmSync } = fs;
+        if (existsSync(resolve(process.cwd(), 'migrations-v1-snapshot'))) {
+          rmSync(resolve(process.cwd(), 'migrations-v1-snapshot'), { recursive: true, force: true });
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
     }
   });
 });

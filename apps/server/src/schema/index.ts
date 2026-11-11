@@ -13,6 +13,8 @@ export const appMeta = sqliteTable('app_meta', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  // v2: added for migration upgrade test
+  description: text('description'),
 });
 
 /**

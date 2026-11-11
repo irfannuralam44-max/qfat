@@ -1,9 +1,9 @@
-import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
+import { openDatabase, closeDatabase, DbOpenResult } from './connection.js';
 
 /**
  * Runtime migration runner using Drizzle's migrator.
@@ -11,6 +11,8 @@ import { existsSync } from 'node:fs';
  * Applies all pending migrations from the migrations directory to the
  * target database. Safe to run multiple times — Drizzle tracks applied
  * migrations in the __drizzle_migrations table and skips already-applied ones.
+ *
+ * Uses the shared connection module to ensure consistent PRAGMA configuration.
  *
  * @param dbPath - Path to the SQLite database file.
  * @param migrationsFolder - Path to the migrations directory (default: './migrations' relative to this file).
@@ -29,20 +31,16 @@ export async function runMigrations(
     throw new Error(`Migrations directory not found: ${migrationDir}`);
   }
 
-  const db = new Database(dbPath);
+  // Use shared connection module for consistent PRAGMA setup
+  const conn = openDatabase(dbPath);
 
   try {
-    // Enable required PRAGMAs before migrations run
-    db.pragma('foreign_keys = ON');
-    db.pragma('journal_mode = WAL');
-    db.pragma('busy_timeout = 5000');
-
-    const drizzleDb = drizzle(db);
+    const drizzleDb = drizzle(conn.db);
 
     // Apply migrations
     await migrate(drizzleDb, { migrationsFolder: migrationDir });
   } finally {
-    db.close();
+    closeDatabase(conn.db);
   }
 }
 
@@ -69,13 +67,11 @@ export async function runMigrationsWithVerification(
     throw new Error(`Migrations directory not found: ${migrationDir}`);
   }
 
-  const db = new Database(dbPath);
+  // Use shared connection module for consistent PRAGMA setup
+  const conn = openDatabase(dbPath);
+  const db = conn.db;
 
   try {
-    db.pragma('foreign_keys = ON');
-    db.pragma('journal_mode = WAL');
-    db.pragma('busy_timeout = 5000');
-
     const drizzleDb = drizzle(db);
 
     // Get migration count before
@@ -104,6 +100,6 @@ export async function runMigrationsWithVerification(
       tables: tables.map(t => t.name),
     };
   } finally {
-    db.close();
+    closeDatabase(db);
   }
 }
