@@ -243,3 +243,30 @@ This report is ready for GPT/owner audit. The migration upgrade test is now full
 
 ---
 *End of QFAT-003R2 Migration Test Safety Report*
+
+
+---
+
+## 12. GPT post-publication audit — 2026-11-11
+
+**Audit disposition: NOT ACCEPTED — focused correction required.** The published implementation commit is `e076ec6d0359e2f443bb321f25eeb95989b3e9cf` (branch `main`), based on `806b02bc88059f2767f2be804e2082d53345a1b0`. The commit changes three files: `apps/server/test/connection.test.ts` (modified), `apps/server/test/migration-verify.test.ts` (deleted), and this report (added). The task document is `tasks/QFAT-003R2-migration-test-safety.md`; its latest owner-aligned revision preceded implementation.
+
+### Confirmed improvements
+
+- The fixed project-relative `migrations-v1-snapshot` fixture and its destructive cleanup are gone.
+- The v1-only fixture is created with `mkdtempSync` under `os.tmpdir()` and uses the committed v1 SQL and first journal entry.
+- The v1 migration is applied through Drizzle migrator; manual ledger seeding is gone.
+- The obsolete standalone test file is deleted.
+- `.github/workflows/ci.yml` is absent, consistent with owner decision to defer CI.
+
+### Blocking findings
+
+1. **Migration hashes/timestamps remain hardcoded in the test.** The code embeds literal v1/v2 SHA-256 values and timestamps in `v1ExpectedHash`, `v1ExpectedTimestamp`, `v2ExpectedHash`, and `v2ExpectedTimestamp`. It reads the v1 journal entry for fixture creation, but does not derive both expected hashes/timestamps from the committed SQL files and journal entries. This does not satisfy task §3.1/AC-03 as written.
+2. **Database handles are not guaranteed to close on failure.** The `conn1`, `db1`, `conn2`, and `db2` handles are closed only on the success path. If migration or an assertion throws, the outer `finally` removes the temporary migration directory and calls the database fixture cleanup while one or more SQLite handles may still be open. This violates the explicit requirement to close every handle, including on assertion failure.
+3. **Report claims exceed the code evidence.** It says all database handles close before cleanup and that hashes are computed from SQL, but neither is implemented dynamically. It also says “Git diff shows only test file changes” and reports two files changed, whereas the implementation commit changes three files including this report. The publication section still contains an uncompleted push-verification placeholder. Test group counts are mislabeled: the displayed SQLite list contains 9 tests, not 8; the Drizzle list contains 5 tests, not 6 (14 total is consistent).
+
+### Audit scope and limitations
+
+The GitHub compare confirms exactly one implementation commit ahead of the stated base and the three files listed above. The report's local command results are recorded as agent evidence; this GitHub audit does not independently rerun those commands. Windows remains NOT RUN. GitHub Actions remains DEFERRED BY OWNER and is not a defect.
+
+**Disposition:** Do not proceed to Windows validation or API work yet. Complete the focused follow-up task `QFAT-003R2A`, rerun the Linux test suite, publish a corrected report, and return for GPT audit. Historical report content is preserved; this audit note supersedes unsupported PASS claims above.
