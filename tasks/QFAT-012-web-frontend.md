@@ -39,11 +39,13 @@ The exact remaining frontend deliverable must be confirmed against the current s
 - QFAT-010: browser-local media selection and validation, including Facebook single image.
 - QFAT-011: browser session, CSRF, dynamic Origin/Host, and proxy security foundation. Its automated tests are reported as passing.
 
-### QFAT-011 acceptance gate — unresolved in repository evidence
+### QFAT-011 predecessor gate — owner accepted
 
-The current `reports/QFAT-011-browser-session-csrf-security-report.md` states that physical LAN/Tailscale browser checks and direct backend-port refusal checks were NOT RUN, and explicitly says QFAT-011 is not owner-accepted until those checks are completed.
+The Owner explicitly confirmed in this project conversation that the LAN and Tailscale physical tests requested for QFAT-011 have already been performed, and directed the project to proceed to QFAT-012 (“iya masuk ke qfat 12”). Treat QFAT-011 as **OWNER-ACCEPTED** for the project workflow.
 
-The prior chat contains an Owner direction to proceed to QFAT-012. That direction is relevant Owner context, but the repository report has not been updated with the physical-check evidence or a formal acceptance record. Before implementation, reconcile this difference: record the Owner's acceptance and its evidence, or keep QFAT-012 blocked by the QFAT-011 gate. Do not silently mark QFAT-011 accepted.
+The older QFAT-011 reports still say the physical checks were NOT RUN and QFAT-011 was not accepted at the time those reports were written. Those reports are historical snapshots and must not override the later explicit Owner confirmation. Do not ask the Owner to repeat the LAN/Tailscale tests.
+
+Evidence limitation: the exact device/browser observations and test outputs were not restated in the latest confirmation. Record the acceptance as Owner-confirmed in the continuity/decision record; do not invent detailed test results or rewrite historical test tables as if GPT independently witnessed them. If exact test details are needed for a later audit, ask only for those details when materially necessary.
 
 ## 3. Facts, decisions, assumptions, and open questions
 
@@ -128,14 +130,14 @@ Do not assume an API exists because a page appears in the PRD. Verify route regi
 
 ## 7. Readiness and approval gate
 
-This draft is **NOT READY** because the remaining frontend scope and the QFAT-011 acceptance record require reconciliation.
+This draft is **NOT READY** because the remaining frontend scope must still be derived from the current source and approved design handoff, then reviewed by the Owner. The QFAT-011 predecessor gate is considered owner-accepted as recorded in §2; do not block QFAT-012 on the stale historical report wording.
 
 Before implementation can begin, GPT must:
 
-1. Resolve the open Owner decisions above.
-2. Inspect the current frontend source and current backend API inventory.
+1. Inspect the current frontend source and current backend API inventory.
+2. Retrieve the approved design/Figma handoff and identify the exact remaining screens and flows.
 3. Map each proposed feature to an approved PRD/design requirement and a real API contract where one is required.
-4. Define exact in-scope and out-of-scope behavior.
+4. Define exact in-scope and out-of-scope behavior; distinguish UI-only flows from API-dependent features.
 5. Add measurable acceptance criteria, verification commands/environment, evidence requirements, report path, Git permissions, and stop conditions using GPS `GPT-TASK-TEMPLATE.md`.
 6. Review the task for contradictions, missing requirements, unsupported assumptions, and executor source-access gaps.
 7. Present the completed task to the Owner for explicit authorization.
