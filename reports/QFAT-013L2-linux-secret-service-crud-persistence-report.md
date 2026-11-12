@@ -1469,7 +1469,7 @@ cleanup_all() {
   # FAILURE has precedence over NOT RUN; neither may be reported as SUCCESS.
   if [ "$cleanup_rc" -ne 0 ]; then
     echo "CLEANUP_STATUS: FAILURE (exit_status=$exit_status, cleanup_failures=$CLEANUP_FAILURES)"
-    [ "$exit_status" -ne 0 ] || exit_status=1
+    exit_status=1
   elif [ "$exit_status" -ne 0 ] && [ "$exit_status" -ne 2 ]; then
     echo "CLEANUP_STATUS: FAILURE (test runner exit_status=$exit_status)"
   elif [ ${#NOT_RUN_SUBTESTS[@]} -gt 0 ] || [ "$exit_status" -eq 2 ]; then
@@ -1987,4 +1987,6 @@ Accordingly, AC-08 and AC-12 through AC-14 have been downgraded in the acceptanc
 
 ### Required next verification
 
-The owner-side OpenCode/Linux environment must run the corrected embedded runner in a fresh disposable environment, execute the forced failure scenarios above, record exact commands and actual exit codes, and update this report. Do not touch the owner's normal keyring. Until that evidence is published and independently audited, QFAT-013L2 remains unaccepted and production Secret Service integration/migration remains unauthorized.
+The owner-side OpenCode/Linux environment must run the corrected embedded runner in a fresh disposable environment, execute the forced failure scenarios above, record exact commands and actual exit codes, and update this report. Do not touch the owner's normal keyring. Audit correction publication: commit `49cea3be9eed30b3b85c5cb2457907caa02a5057` on `main`.
+
+Until that evidence is published and independently audited, QFAT-013L2 remains unaccepted and production Secret Service integration/migration remains unauthorized.
