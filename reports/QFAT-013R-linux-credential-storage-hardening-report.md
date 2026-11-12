@@ -103,8 +103,8 @@ fail-closed behavior remains unchanged.
 - Branch: main
 - Implementation commit: `3de74770869309a5d6ef0d2d33ea482b51e17dd3`
 - Follow-up fix commit: N/A
-- Report update commit: Pending
-- Push verification: Pending
+- Report update commit: `6a0e11a053e2560896c5250677a9b50721d0f589`
+- Push verification: `origin/main` confirmed at `6a0e11a053e2560896c5250677a9b50721d0f589` via `git ls-remote origin main` after push; report file present on the remote branch.
 
 ## Handoff
 
