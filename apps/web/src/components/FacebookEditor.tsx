@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Textarea, RadioGroup, type RadioOption } from './FieldPrimitives';
+import { MediaSelector, type MediaFile } from './MediaSelector';
 
 export interface FacebookMetadata {
   caption: string;
   mediaIntent: 'video' | 'reel' | 'image';
+  media: MediaFile | null;
 }
 
 export interface FacebookEditorProps {
@@ -24,10 +26,13 @@ const mediaIntentOptions: RadioOption[] = [
 export function FacebookEditor({ initialMetadata = {}, onChange, disabled = false, resetKey = 0 }: FacebookEditorProps) {
   const [caption, setCaption] = useState(initialMetadata.caption || '');
   const [mediaIntent, setMediaIntent] = useState<'video' | 'reel' | 'image'>(initialMetadata.mediaIntent || 'video');
+  const [media, setMedia] = useState<MediaFile | null>(initialMetadata.media || null);
 
   useEffect(() => {
     setCaption(initialMetadata.caption || '');
     setMediaIntent(initialMetadata.mediaIntent || 'video');
+    // Note: We don't auto-reset media here - the parent CreateContentPage handles
+    // media compatibility when mediaIntent changes
   }, [resetKey, initialMetadata.caption, initialMetadata.mediaIntent]);
 
   const validateCaption = (value: string) => {
@@ -37,17 +42,30 @@ export function FacebookEditor({ initialMetadata = {}, onChange, disabled = fals
 
   const handleCaptionChange = (value: string) => {
     setCaption(value);
-    onChange({ caption: value, mediaIntent });
+    onChange({ caption: value, mediaIntent, media });
   };
 
   const handleMediaIntentChange = (value: 'video' | 'reel' | 'image') => {
     setMediaIntent(value);
-    onChange({ caption, mediaIntent: value });
+    onChange({ caption, mediaIntent: value, media });
+  };
+
+  const handleMediaChange = (newMedia: MediaFile | null) => {
+    setMedia(newMedia);
+    onChange({ caption, mediaIntent, media: newMedia });
   };
 
   const captionError = validateCaption(caption);
 
   const isValid = !captionError && caption.trim().length > 0;
+
+  const isVideoIntent = mediaIntent === 'video' || mediaIntent === 'reel';
+  const mediaType = isVideoIntent ? 'video' : 'image';
+  const accept = isVideoIntent ? '.mp4,.mov,video/mp4,video/quicktime' : 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
+  const mediaLabel = isVideoIntent ? 'Video' : 'Image';
+  const helperText = isVideoIntent
+    ? 'Select a video file (.mp4, .mov). Preliminary validation only; server-side validation applies on upload.'
+    : 'Select a single image (JPEG, PNG, WebP). Multiple images not supported in MVP.';
 
   return (
     <div className="editor-section facebook-editor">
@@ -75,6 +93,17 @@ export function FacebookEditor({ initialMetadata = {}, onChange, disabled = fals
           options={mediaIntentOptions}
           orientation="horizontal"
           helperText="Video and Reels use the same caption field. Single image posts share this metadata form."
+          disabled={disabled}
+        />
+
+        <MediaSelector
+          label={mediaLabel}
+          accept={accept}
+          mediaType={mediaType}
+          onChange={handleMediaChange}
+          currentFile={media}
+          helperText={helperText}
+          error={media && isVideoIntent && mediaType === 'image' ? 'Selected file is an image, not a video. Please remove or replace it.' : media && !isVideoIntent && mediaType === 'video' ? 'Selected file is a video, not an image. Please remove or replace it.' : undefined}
           disabled={disabled}
         />
 

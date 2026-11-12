@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { YouTubeEditor, type YouTubeMetadata } from '../components/YouTubeEditor';
 import { FacebookEditor, type FacebookMetadata } from '../components/FacebookEditor';
+import { type MediaFile } from '../components/MediaSelector';
 
 export type Platform = 'youtube' | 'facebook';
 
@@ -9,12 +10,22 @@ const initialYouTubeMetadata: YouTubeMetadata = {
   description: '',
   tags: [],
   contentIntent: 'video',
+  media: null,
 };
 
 const initialFacebookMetadata: FacebookMetadata = {
   caption: '',
   mediaIntent: 'video',
+  media: null,
 };
+
+function isVideoFile(file: MediaFile | null): boolean {
+  return file?.type.startsWith('video/') ?? false;
+}
+
+function isImageFile(file: MediaFile | null): boolean {
+  return file?.type.startsWith('image/') ?? false;
+}
 
 export function CreateContentPage() {
   const [activePlatform, setActivePlatform] = useState<Platform>('youtube');
@@ -34,12 +45,34 @@ export function CreateContentPage() {
     setActivePlatform(platform);
   };
 
+  // Handle media compatibility when Facebook media intent changes
+  useEffect(() => {
+    if (activePlatform !== 'facebook') return;
+
+    const isVideoIntent = facebookMetadata.mediaIntent === 'video' || facebookMetadata.mediaIntent === 'reel';
+    const currentMedia = facebookMetadata.media;
+
+    if (!currentMedia) return;
+
+    const currentIsVideo = isVideoFile(currentMedia);
+    const currentIsImage = isImageFile(currentMedia);
+
+    // If switching to video/Reels but have an image, or switching to image but have a video
+    if ((isVideoIntent && currentIsImage) || (!isVideoIntent && currentIsVideo)) {
+      // Don't auto-clear - let the user see the incompatibility and decide
+      // The MediaSelector will show an error for incompatible files
+    }
+  }, [activePlatform, facebookMetadata.mediaIntent, facebookMetadata.media]);
+
   const hasAnyInput = () => {
     const youtubeHasInput =
       youtubeMetadata.title.trim() !== '' ||
       youtubeMetadata.description.trim() !== '' ||
-      youtubeMetadata.tags.length > 0;
-    const facebookHasInput = facebookMetadata.caption.trim() !== '';
+      youtubeMetadata.tags.length > 0 ||
+      youtubeMetadata.media !== null;
+    const facebookHasInput =
+      facebookMetadata.caption.trim() !== '' ||
+      facebookMetadata.media !== null;
     return youtubeHasInput || facebookHasInput;
   };
 
@@ -75,6 +108,14 @@ export function CreateContentPage() {
                 {youtubeMetadata.tags.map((tag: string) => (
                   <span key={tag} className="preview-tag">#{tag}</span>
                 ))}
+              </div>
+            )}
+            {youtubeMetadata.media && (
+              <div className="preview-media" aria-label="Selected video">
+                <div className="media-placeholder media-placeholder--video" aria-hidden="true">
+                  <span className="media-placeholder-icon">▭</span>
+                  <span>{youtubeMetadata.media.name}</span>
+                </div>
               </div>
             )}
           </div>
@@ -122,6 +163,21 @@ export function CreateContentPage() {
             </div>
           )}
         </div>
+        {facebookMetadata.media && (
+          <div className="preview-media" aria-label={`Selected ${facebookMetadata.mediaIntent === 'image' ? 'image' : 'video'}`}>
+            {facebookMetadata.mediaIntent === 'image' && facebookMetadata.media.previewUrl && (
+              <div className="media-placeholder media-placeholder--image" aria-hidden="true">
+                <img src={facebookMetadata.media.previewUrl} alt={`Preview of ${facebookMetadata.media.name}`} style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: 'var(--radius-md)' }} />
+              </div>
+            )}
+            {(facebookMetadata.mediaIntent === 'video' || facebookMetadata.mediaIntent === 'reel') && (
+              <div className="media-placeholder media-placeholder--video" aria-hidden="true">
+                <span className="media-placeholder-icon">▭</span>
+                <span>{facebookMetadata.media.name}</span>
+              </div>
+            )}
+          </div>
+        )}
         <p className="preview-caption">{facebookMetadata.caption || 'Enter a caption…'}</p>
         <p className="preview-note">Media selection, Page selection, and publishing actions will be available in subsequent phases.</p>
       </div>

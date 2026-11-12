@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { TextInput, Textarea, TagInput, RadioGroup, type RadioOption } from './FieldPrimitives';
+import { MediaSelector, type MediaFile } from './MediaSelector';
 
 export interface YouTubeMetadata {
   title: string;
   description: string;
   tags: string[];
   contentIntent: 'video' | 'short';
+  media: MediaFile | null;
 }
 
 export interface YouTubeEditorProps {
@@ -38,13 +40,15 @@ export function YouTubeEditor({ initialMetadata = {}, onChange, disabled = false
   const [description, setDescription] = useState(initialMetadata.description || '');
   const [tags, setTags] = useState<string[]>(initialMetadata.tags || []);
   const [contentIntent, setContentIntent] = useState<'video' | 'short'>(initialMetadata.contentIntent || 'video');
+  const [media, setMedia] = useState<MediaFile | null>(initialMetadata.media || null);
 
   useEffect(() => {
     setTitle(initialMetadata.title || '');
     setDescription(initialMetadata.description || '');
     setTags(initialMetadata.tags || []);
     setContentIntent(initialMetadata.contentIntent || 'video');
-  }, [resetKey, initialMetadata.title, initialMetadata.description, initialMetadata.tags, initialMetadata.contentIntent]);
+    setMedia(initialMetadata.media || null);
+  }, [resetKey, initialMetadata.title, initialMetadata.description, initialMetadata.tags, initialMetadata.contentIntent, initialMetadata.media]);
 
   const validateTitle = (value: string) => {
     if (!value.trim()) return 'Title is required';
@@ -65,22 +69,27 @@ export function YouTubeEditor({ initialMetadata = {}, onChange, disabled = false
 
   const handleTitleChange = (value: string) => {
     setTitle(value);
-    onChange({ title: value, description, tags, contentIntent });
+    onChange({ title: value, description, tags, contentIntent, media });
   };
 
   const handleDescriptionChange = (value: string) => {
     setDescription(value);
-    onChange({ title, description: value, tags, contentIntent });
+    onChange({ title, description: value, tags, contentIntent, media });
   };
 
   const handleTagsChange = (newTags: string[]) => {
     setTags(newTags);
-    onChange({ title, description, tags: newTags, contentIntent });
+    onChange({ title, description, tags: newTags, contentIntent, media });
   };
 
   const handleContentIntentChange = (value: 'video' | 'short') => {
     setContentIntent(value);
-    onChange({ title, description, tags, contentIntent: value });
+    onChange({ title, description, tags, contentIntent: value, media });
+  };
+
+  const handleMediaChange = (newMedia: MediaFile | null) => {
+    setMedia(newMedia);
+    onChange({ title, description, tags, contentIntent, media: newMedia });
   };
 
   const titleError = validateTitle(title);
@@ -145,6 +154,16 @@ export function YouTubeEditor({ initialMetadata = {}, onChange, disabled = false
           resetKey={resetKey}
           error={tagsError}
           helperText="Descriptive keywords help discovery. Separate with commas or press Enter. Total combined limit: 500 characters."
+          disabled={disabled}
+        />
+
+        <MediaSelector
+          label="Video"
+          accept=".mp4,.mov,video/mp4,video/quicktime"
+          mediaType="video"
+          onChange={handleMediaChange}
+          currentFile={media}
+          helperText="Select a video file (.mp4, .mov). Preliminary validation only; server-side validation applies on upload."
           disabled={disabled}
         />
 
