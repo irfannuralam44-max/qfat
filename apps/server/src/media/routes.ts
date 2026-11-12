@@ -86,9 +86,20 @@ export async function registerMediaRoutes(
       const originalFilename = sanitizeFilename(filename ?? null);
 
       const stream = request.raw;
-      const record = await storeUploadedImageOrVideo(db, mediaDir, stream, originalFilename, request.raw as any);
-
-      return reply.status(201).send(toResponse(record));
+      const abortController = new AbortController();
+      const onAborted = () => abortController.abort();
+      const onClose = () => {
+        if (!request.raw.complete) abortController.abort();
+      };
+      request.raw.once('aborted', onAborted);
+      request.raw.once('close', onClose);
+      try {
+        const record = await storeUploadedImageOrVideo(db, mediaDir, stream, originalFilename, abortController.signal);
+        return reply.status(201).send(toResponse(record));
+      } finally {
+        request.raw.off('aborted', onAborted);
+        request.raw.off('close', onClose);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Upload failed';
       // Map common errors
@@ -98,7 +109,7 @@ export async function registerMediaRoutes(
       if (message.includes('Empty file') || message.includes('Unsupported') || message.includes('unrecognized')) {
         return reply.status(415).send({ error: message });
       }
-      if (message.includes('aborted') || message.includes('aborted')) {
+      if (message.toLowerCase().includes('aborted')) {
         return reply.status(400).send({ error: 'Upload interrupted' });
       }
       return reply.status(500).send({ error: 'Upload failed' });
@@ -115,6 +126,9 @@ export async function registerMediaRoutes(
       return reply.status(204).send();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Delete failed';
+      if (message.includes('not a regular file') || message.includes('symlinked')) {
+        return reply.status(409).send({ error: 'Media object is not a safe regular file' });
+      }
       return reply.status(500).send({ error: 'Delete failed' });
     }
   });

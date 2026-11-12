@@ -146,10 +146,22 @@ export async function storeUploadedImageOrVideo(
   const ws = createWriteStream(tempPath, { flags: 'wx' });
 
   const cleanupTemp = async () => {
+    // Ensure the descriptor is closed before removing the file so an
+    // in-flight open() cannot recreate the temp file after cleanup.
+    if (!ws.closed) {
+      await new Promise<void>((resolveClose) => {
+        ws.once('close', resolveClose);
+        ws.destroy();
+      });
+    }
     try { await unlink(tempPath); } catch { /* ignore */ }
   };
 
   try {
+    await new Promise<void>((resolveOpen, rejectOpen) => {
+      ws.once('open', () => resolveOpen());
+      ws.once('error', rejectOpen);
+    });
     for await (const chunk of stream) {
       if (abortSignal?.aborted) {
         throw new Error('Upload aborted');
@@ -231,7 +243,21 @@ export async function storeUploadedImageOrVideo(
   }
 }
 
-export async function deleteMedia(db: Database, mediaDir: string, id: string): Promise<boolean> {
+export interface DeleteMediaFsOps {
+  rename: typeof rename;
+  unlink: typeof unlink;
+  lstatSync: typeof lstatSync;
+  existsSync: typeof existsSync;
+}
+
+const defaultDeleteFsOps: DeleteMediaFsOps = { rename, unlink, lstatSync, existsSync };
+
+export async function deleteMedia(
+  db: Database,
+  mediaDir: string,
+  id: string,
+  ops: DeleteMediaFsOps = defaultDeleteFsOps,
+): Promise<boolean> {
   const { drizzle } = await import('drizzle-orm/better-sqlite3');
   const { mediaItems } = await import('../schema/index.js');
   const { eq } = await import('drizzle-orm');
@@ -251,7 +277,7 @@ export async function deleteMedia(db: Database, mediaDir: string, id: string): P
   const filePath = resolveMediaPath(mediaDir, row.storageKey);
   const fileStat = (() => {
     try {
-      return lstatSync(filePath);
+      return ops.lstatSync(filePath);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') return null;
@@ -260,6 +286,9 @@ export async function deleteMedia(db: Database, mediaDir: string, id: string): P
   })();
   if (fileStat && fileStat.isSymbolicLink()) {
     throw new Error('Refusing to delete symlinked media file');
+  }
+  if (fileStat && !fileStat.isFile()) {
+    throw new Error('Managed media object is not a regular file');
   }
 
   // Move the managed file into a quarantine/trash directory before touching
@@ -271,12 +300,12 @@ export async function deleteMedia(db: Database, mediaDir: string, id: string): P
     trashPath = resolve(trashDir, row.storageKey);
     let candidate = trashPath;
     let suffix = 0;
-    while (existsSync(candidate)) {
+    while (ops.existsSync(candidate)) {
       suffix += 1;
       candidate = `${trashPath}.${suffix}`;
     }
     trashPath = candidate;
-    await rename(filePath, trashPath);
+    await ops.rename(filePath, trashPath);
     moved = true;
   }
 
@@ -287,7 +316,7 @@ export async function deleteMedia(db: Database, mediaDir: string, id: string): P
     // Roll back the quarantine move so the original file is restored.
     if (moved && trashPath) {
       try {
-        await rename(trashPath, filePath);
+        await ops.rename(trashPath, filePath);
       } catch {
         // Leave the quarantined file for recovery; do not hide the DB error.
       }
@@ -299,7 +328,7 @@ export async function deleteMedia(db: Database, mediaDir: string, id: string): P
   // in trash while the database record is already gone.
   if (moved && trashPath) {
     try {
-      await unlink(trashPath);
+      await ops.unlink(trashPath);
     } catch {
       // Intentionally not fatal: the library record is gone and the copy is
       // quarantined for later cleanup/recovery.

@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { buildServer, resetRateLimit } from '../src/index.js';
 import { createTempDatabase } from '../src/db/connection.js';
-import { resolveMediaPath, ensureMediaRoot, isQuarantineNameFor } from '../src/media/storage.js';
+import { runMigrations } from '../src/db/migrate.js';
+import { resolveMediaPath, ensureMediaRoot, isQuarantineNameFor, deleteMedia, storeUploadedImageOrVideo } from '../src/media/storage.js';
 import { symlinkSync, writeFileSync, mkdirSync, chmodSync, readdirSync, renameSync } from 'node:fs';
 import Database from 'better-sqlite3';
 
@@ -478,18 +479,46 @@ describe('Media delete resilience', () => {
     }
   });
 
-  test('filesystem unlink failure leaves a quarantined copy and does not throw', async () => {
+  test('filesystem unlink failure leaves a quarantined regular file and does not throw', async () => {
     const f = await createMediaFixture('qfat-del-unlink');
     try {
       const record = await f.upload('unlink-fail.png');
-      // Replace the managed file with a directory so unlink() fails with EISDIR.
+      const fs = await import('node:fs');
+      const fsp = await import('node:fs/promises');
+      const db = new Database(f.dbPath);
+      try {
+        const result = await deleteMedia(db, f.mediaDir, record.id, {
+          rename: fsp.rename,
+          unlink: async () => { throw new Error('forced unlink failure'); },
+          lstatSync: fs.lstatSync,
+          existsSync: fs.existsSync,
+        });
+        assert.equal(result, true);
+      } finally {
+        db.close();
+      }
+      const list = await f.list();
+      assert.equal(list.json<{ items: any[] }>().items.length, 0);
+      const trashPath = join(f.mediaDir, '.trash', record.id);
+      assert.equal(existsSync(trashPath), true);
+      assert.equal(fs.lstatSync(trashPath).isFile(), true);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  test('delete rejects a directory or non-regular managed object without quarantining it', async () => {
+    const f = await createMediaFixture('qfat-del-dir');
+    try {
+      const record = await f.upload('dir.png');
       rmSync(join(f.mediaDir, record.id), { force: true });
       mkdirSync(join(f.mediaDir, record.id));
       const res = await f.deleteItem(record.id);
-      assert.equal(res.statusCode, 204);
+      assert.equal(res.statusCode, 409);
       const list = await f.list();
-      assert.equal(list.json<{ items: any[] }>().items.length, 0);
-      assert.equal(existsSync(join(f.mediaDir, '.trash', record.id)), true);
+      assert.equal(list.json<{ items: any[] }>().items.length, 1);
+      assert.equal(existsSync(join(f.mediaDir, record.id)), true);
+      assert.equal(readdirSync(join(f.mediaDir, '.trash')).length, 0);
     } finally {
       await f.cleanup();
     }
@@ -551,6 +580,90 @@ describe('Media delete resilience', () => {
     assert.equal(isQuarantineNameFor(key, `${key}.abc`), false);
     assert.equal(isQuarantineNameFor(key, `${key}-other`), false);
     assert.equal(isQuarantineNameFor(key, '22222222-2222-2222-2222-222222222222'), false);
+  });
+});
+
+describe('Media upload abort', () => {
+  test('abort signal stops ingestion, removes .part, and creates no record', async () => {
+    const dbPath = createTempDatabase('qfat-upload-abort-signal');
+    const mediaDir = mkdtempSync(join(tmpdir(), 'qfat-upload-abort-signal-dir-'));
+    await runMigrations(dbPath);
+    const db = new Database(dbPath);
+    try {
+      const controller = new AbortController();
+      const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+      async function* source() {
+        yield png;
+        controller.abort();
+        yield png;
+      }
+      await assert.rejects(
+        () => storeUploadedImageOrVideo(db, mediaDir, source(), 'aborted.png', controller.signal),
+        /Upload aborted/,
+      );
+      assert.equal(readdirSync(join(mediaDir, '.tmp')).length, 0);
+      const count = db.prepare('SELECT COUNT(*) AS n FROM media_items').get() as { n: number };
+      assert.equal(count.n, 0);
+    } finally {
+      db.close();
+      rmSync(mediaDir, { recursive: true, force: true });
+      try { rmSync(dbPath, { force: true }); } catch {}
+      try { rmSync(`${dbPath}-wal`, { force: true }); } catch {}
+      try { rmSync(`${dbPath}-shm`, { force: true }); } catch {}
+    }
+  });
+
+  test('aborted upload stops the stream, removes .part, and creates no record', async () => {
+    const f = await createMediaFixture('qfat-upload-abort');
+    try {
+      const { Readable } = await import('node:stream');
+      let sent = false;
+      const stream = new Readable({
+        read() {
+          if (!sent) {
+            sent = true;
+            this.push(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]));
+            setImmediate(() => this.destroy(new Error('client aborted')));
+            return;
+          }
+          // Never provide more data; the destroyed stream ends the upload.
+        },
+      });
+      stream.on('error', () => { /* expected abort error */ });
+      let statusCode = 0;
+      try {
+        const res = await f.app.inject({
+          method: 'POST',
+          url: '/api/v1/media',
+          headers: {
+            origin,
+            host: origin.replace('http://', ''),
+            cookie: f.sessionCookie,
+            'x-csrf-token': f.csrfToken,
+            'content-type': 'application/octet-stream',
+            'x-file-name': 'aborted.png',
+          },
+          payload: stream,
+        });
+        statusCode = res.statusCode;
+      } catch {
+        // The injected request may surface the stream error directly.
+        statusCode = 400;
+      }
+      assert.equal(statusCode, 400);
+      // Cleanup runs in the request handler; allow the aborted handler to
+      // finish before asserting that the temp file is gone.
+      const tmpDir = join(f.mediaDir, '.tmp');
+      const deadline = Date.now() + 2000;
+      while (readdirSync(tmpDir).length > 0 && Date.now() < deadline) {
+        await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+      }
+      assert.deepEqual(readdirSync(tmpDir), []);
+      const list = await f.list();
+      assert.equal(list.json<{ items: any[] }>().items.length, 0);
+    } finally {
+      await f.cleanup();
+    }
   });
 });
 
