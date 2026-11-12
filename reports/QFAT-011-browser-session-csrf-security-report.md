@@ -52,7 +52,7 @@ Those source and test gaps have now been corrected directly on `main`. This repo
    - Keeps the proof in module memory only.
    - Uses the standard `Headers` API so caller-supplied header forms are handled safely.
    - Restricts the CSRF helper to state-changing methods (POST, PUT, PATCH, DELETE); GET uses a read-only helper and does not attach CSRF.
-   - Both read and mutation helpers reject non-relative URLs outside `/api/v1`, preventing accidental cross-origin CSRF-token disclosure.
+   - Both read and mutation helpers normalize and reject non-relative URLs and path traversal outside `/api/v1`, preventing accidental cross-origin or out-of-scope CSRF-token disclosure.
    - A 401 causes at most one fresh bootstrap and one retry. A second failure is returned to the caller.
    - Bootstrap failure clears in-memory state and surfaces a recoverable error.
 
@@ -116,6 +116,8 @@ All remediation updates were committed directly to `main` through sequential Git
 - `4c08804aec7f1ab947649c9440f188b3adc08b08` — prevented security client calls outside QFAT API paths.
 - `34aaa4586f0533a67ff874790edca86855536ba0` — rejected malformed duplicate session cookie names.
 - `b587f89a608792ca47d63561aae355a5f98ab70b` — corrected strict authority and IPv4 parser regexes.
+- `ca485b7c0ee60797c1099a280fd87ebe7b2dacf4` — normalized API paths before attaching CSRF proof.
+- `a33fbadbc3c94346a86591cae6e3d2d2a793a017` — added path-traversal rejection regression tests.
 - `26fe6079b66f42f8adc33b2416c80f175c283fbd` — backend security regression tests.
 - `debedec0a5fcee0947a8b882e5a0104632f94543` — exported bounded session store for tests.
 - `997d799e46769db10ab8f4d9ea14c8769bac841d` — frontend client tests.
