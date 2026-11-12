@@ -221,6 +221,11 @@ case "$QFAT_SCENARIO" in
     QFAT_TEST_RM_FAIL=1
     exit 0
     ;;
+  combined-failure)
+    QFAT_NOT_RUN_SUBTESTS+=("forced_not_run")
+    QFAT_TEST_RM_FAIL=1
+    exit 2
+    ;;
 esac
 CHILD
 )
@@ -249,6 +254,7 @@ qfat_test_pid_and_parser() {
   qfat_assert_contains "$guard_output" 'IDENTITY MISMATCH before SIGKILL'
   command kill -0 "$pid" 2>/dev/null || qfat_fail 'SIGKILL guard failed to preserve target process'
   command kill -KILL "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
   unset "QFAT_DISPOSABLE_PIDS[$pid]" QFAT_TEST_IGNORE_TERM_PID QFAT_TEST_FORCE_MISMATCH_BEFORE_KILL_PID
   printf 'PASS F-09: parser fixture, TERM mismatch refusal, pre-KILL mismatch refusal, PID cleanup\n'
 }
@@ -292,7 +298,16 @@ qfat_test_cleanup_failures() {
   [[ -d "$base" ]] || qfat_fail 'directory disappeared despite injected rm failure'
   [[ "$(wc -l < "$marker")" -eq 1 ]] || qfat_fail 'rm-failure cleanup did not run exactly once'
   rm -rf "$base"; rm -f "$out" "$marker"
-  printf 'PASS F-11: real cleanup path reports kill/rm failures, preserves directory, exits 1\n'
+
+  base="$(mktemp -d /tmp/qfat-013l2-combined.XXXXXX)"; out="$(mktemp)"; marker="$(mktemp)"; : > "$marker"
+  if qfat_run_child_scenario combined-failure "$base" "$out" /dev/null "$marker"; then rc=0; else rc=$?; fi
+  [[ "$rc" -eq 1 ]] || qfat_fail "combined cleanup+NOT RUN exit=$rc, expected 1"
+  content="$(cat "$out")"
+  qfat_assert_contains "$content" 'CLEANUP_STATUS: FAILURE'
+  qfat_assert_not_contains "$content" 'CLEANUP_STATUS: NOT_RUN'
+  [[ -d "$base" ]] || qfat_fail 'combined failure did not preserve directory'
+  rm -rf "$base"; rm -f "$out" "$marker"
+  printf 'PASS F-11: real cleanup path reports kill/rm failures, preserves directory, FAILURE outranks NOT RUN\n'
 }
 
 qfat_test_signals() {
