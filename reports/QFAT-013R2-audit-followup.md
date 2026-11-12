@@ -1,6 +1,6 @@
 # QFAT-013R2 — GPT Audit Follow-up
 
-- **Status:** Code and regression-test corrections pushed; local verification required
+- **Status:** Local verification passed; pending GPT audit
 - **Repository:** `irfannuralam44-max/qfat`
 - **Branch:** `main`
 - **Original implementation:** `0fd014089bff54697a2ef6717af2cde4bdc6b64c`
@@ -49,35 +49,39 @@ No cryptographic envelope, AAD, SQLite schema, migration, data-directory securit
 
 ## 4. Verification status
 
-**NOT RUN in the GPT environment.** The GitHub edits are source changes only; no claim is made that TypeScript compilation or tests have passed after these changes.
+Local verification was executed on `main` at HEAD `8d71a30b5253713477d05c9d999107f7b0d7cea6`.
 
-Run locally after pulling `origin/main`:
+Environment:
+- OS: Linux 7.0.0-42-generic x86_64
+- Node.js: v24.22.2
+- npm: 11.19.1
 
-```bash
-git pull --ff-only origin main
-cd apps/server
-npm run typecheck
-npm test
-npm run build
-cd ../..
-git diff --check
-```
+Commands and results:
+- `cd apps/server && npm run typecheck` — PASS (exit 0)
+- `cd apps/server && npm test` — PASS (exit 0): 162 tests, 162 pass, 0 fail, 0 skip
+- `cd apps/server && npm run build` — PASS (exit 0)
+- `cd /mnt/data-ext/project/qfat && git diff --check` — PASS (exit 0)
 
-Expected test coverage includes:
-- Existing-key directory fsync success and failure.
-- Creator directory-fsync failure with zero SQLite rows.
-- Competing-reader directory-fsync failure while creator is paused, with zero SQLite rows.
-- Deterministically forced EEXIST success path.
-- Deterministically forced EEXIST fsync failure with zero SQLite rows.
-- Existing concurrent initialization regression and QFAT-013R data-directory/key-file security tests.
+QFAT-013R2-specific tests verified PASS:
+- `EEXIST loser validates the winner key and fsyncs before returning it`
+- `EEXIST loser fails closed on fsync failure and commits no ciphertext`
+- `competing reader fails closed when its own fsync fails while creator is paused`
+- `concurrent initialization records a directory fsync for every initializer`
+- Existing-key directory fsync success and failure tests
+- Creator directory-fsync failure with zero SQLite rows
 
-Record the actual local command outputs and exit codes before considering QFAT-013R2 accepted. Windows execution remains **NOT RUN — DEFERRED**.
+Regression coverage verified PASS:
+- QFAT-013R data-directory validation, ownership, symlink, and permission tests
+- QFAT-013 envelope, provider, key-file, and migration tests
+- Full backend suite, including security and media tests
+
+Windows execution: **NOT RUN — DEFERRED** (unchanged; no Windows ACL work performed).
 
 ## 5. Acceptance status
 
-The original report's PASS WITH FINDINGS status is superseded for audit purposes by this follow-up note until the updated tests have been executed locally.
+Local runtime verification passed. GPT final acceptance remains pending independent audit.
 
 - Implementation source review: corrected test seams and assertions are present on `main`.
-- Runtime verification: pending local execution.
-- GPT final acceptance: pending local results and subsequent review.
+- Runtime verification: PASS (162/162 tests, typecheck, build, diff check).
+- GPT final acceptance: pending independent audit.
 - Owner acceptance: not granted.
