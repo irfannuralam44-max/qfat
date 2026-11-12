@@ -227,3 +227,15 @@ The following remain Qfat/project-specific and must not be copied blindly to oth
 - Product behavior, security, privacy, and data-handling requirements.
 - Stage gates, API permissions, and acceptance criteria.
 - Packaging, installation, and release rules.
+
+## 10. QFAT UI/design authority — owner decision
+
+Figma has been cancelled for QFAT. It is not a design dependency, required handoff, or approved workflow tool for this project. Agents must not request Figma access, wait for Figma files, invoke Figma workflows, or treat missing Figma artifacts as a blocker unless the Owner explicitly reverses this decision.
+
+Use this authority order for QFAT UI work:
+
+1. Existing QFAT implementation and established UI patterns in the repository.
+2. Owner-approved product requirements in `docs/PRD-QFAT-MVP.md` and applicable approved addenda.
+3. Explicit owner-approved product decisions recorded in repository documentation.
+
+GPT owns source-based UI gap analysis and routine UX decisions within those authorities. Ask the Owner only when a material product/scope trade-off remains unresolved or approved sources conflict. Do not redesign from zero or invent operational behavior/data to fill a UI gap. Record consequential decisions in the relevant task or decision document.
