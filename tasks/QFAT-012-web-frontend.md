@@ -1,155 +1,222 @@
-# QFAT-012 — Web Frontend (Scope Draft)
+# QFAT-012 — Media Intake & Local Library
 
-- **Status:** DRAFT — NEEDS OWNER SCOPE CONFIRMATION; NOT AUTHORIZED FOR IMPLEMENTATION
+- **Status:** READY — OWNER-AUTHORIZED FOR IMPLEMENTATION
 - **Repository:** `irfannuralam44-max/qfat`
-- **Target branch:** `main` (proposed; no implementation branch authorized)
-- **Task type:** IMPLEMENTATION — proposed, not yet READY
+- **Target branch:** `main`
+- **Task type:** IMPLEMENTATION — vertical product slice
 - **Owner:** QFAT project owner
-- **Executor:** OpenCode local agent — proposed
+- **Executor:** OpenCode local agent, one main agent, serial execution
 - **Mode:** HYBRID (GPT task author/auditor; OpenCode implementation)
 - **GPS standard:** `irfannuralam44-max/gps@main`, version 1.2.0
-- **Expected report if approved:** `reports/QFAT-012-web-frontend-report.md`
+- **Expected report:** `reports/QFAT-012-media-intake-local-library-report.md`
+- **Authorization:** Owner approved the Media Intake & Local Library scope in this project conversation on 2026-11-12.
 
-> This document is a scope draft only. It is not an instruction to start implementation. Do not execute until the Owner confirms the scope and the task is promoted to READY / OWNER-AUTHORIZED.
+> This task is authorized for implementation. Implement only the scope below. Do not advance to account connection, platform publishing, or another task after completion.
 
-## 1. Objective — proposed
+## 1. Objective
 
-Continue the QFAT MVP web frontend in accordance with the owner-approved PRD, while preserving the frontend work already delivered in QFAT-008, QFAT-009, and QFAT-010.
+Deliver the first real end-to-end media workflow in QFAT:
 
-The historical QFAT-002 architecture validation plan identifies QFAT-012 as “Web Frontend” (`apps/web/`, React/Vite/Tailwind, pages per PRD). That plan predates the later frontend tasks QFAT-008 through QFAT-010 and must not be treated as a complete current implementation brief.
+1. An operator selects a supported local video or a single image in the browser.
+2. The browser uploads the file to the local QFAT backend using bounded-memory streaming.
+3. The backend validates and stores the media in an application-managed local directory.
+4. The backend persists media metadata in SQLite.
+5. The operator can browse, inspect, and explicitly delete items in a functional Media Library.
 
-The exact remaining frontend deliverable must be derived from the current source, owner-approved PRD, and recorded owner decisions. Figma is cancelled and is not a required design source or dependency.
+The library must display only records and files that actually exist. No mock data, sample rows, simulated upload progress, or fabricated operational status.
 
-## 2. Context and baseline
+This is a vertical slice across the existing web frontend and Node.js backend. It is not a frontend-only task.
 
-- Repository: `irfannuralam44-max/qfat`
-- Branch: `main`
-- Task-draft commit: `0ab65af2372cb6435d7dcc2780b94537025397db`
-- GPS: `irfannuralam44-max/gps@main`, version 1.2.0
-- Product requirements: `docs/PRD-QFAT-MVP.md`
-- Beta access requirements: `docs/PRD-QFAT-BETA-ACCESS-ADDENDUM.md`
-- Architecture proposal: `docs/ARCHITECTURE-QFAT-MVP.md`
-- Repository agent instructions: `AGENTS.md`
-- Repository workflow: `docs/AI-DEVELOPMENT-WORKFLOW.md`
+## 2. Authority and required context
 
-### Verified existing work
-
-- QFAT-008: design foundations, responsive shell, themes, Overview, and truthful health status.
-- QFAT-009: separate YouTube and Facebook metadata editors.
-- QFAT-010: browser-local media selection and validation, including Facebook single image.
-- QFAT-011: browser session, CSRF, dynamic Origin/Host, and proxy security foundation. Its automated tests are reported as passing.
-
-### QFAT-011 predecessor gate — owner accepted
-
-The Owner explicitly confirmed in this project conversation that the LAN and Tailscale physical tests requested for QFAT-011 have already been performed, and directed the project to proceed to QFAT-012 (“iya masuk ke qfat 12”). Treat QFAT-011 as **OWNER-ACCEPTED** for the project workflow.
-
-The older QFAT-011 reports still say the physical checks were NOT RUN and QFAT-011 was not accepted at the time those reports were written. Those reports are historical snapshots and must not override the later explicit Owner confirmation. Do not ask the Owner to repeat the LAN/Tailscale tests.
-
-Evidence limitation: the exact device/browser observations and test outputs were not restated in the latest confirmation. Record the acceptance as Owner-confirmed in the continuity/decision record; do not invent detailed test results or rewrite historical test tables as if GPT independently witnessed them. If exact test details are needed for a later audit, ask only for those details when materially necessary.
-
-## 3. Facts, decisions, assumptions, and open questions
-
-### Facts
-
-- The PRD is the product requirements source of truth.
-- The current frontend already contains meaningful work from QFAT-008, QFAT-009, and QFAT-010.
-- The QFAT-002 architecture report's original QFAT-012 label is historical and predates those frontend tasks.
-- QFAT-011 automated verification is reported PASS. The Owner separately confirmed the LAN and Tailscale physical checks and accepted QFAT-011; the historical report wording remains a snapshot of its authoring time.
-- Current backend capabilities must be established from current source and tests, not inferred from the PRD or architecture proposal.
-
-### Owner decisions already recorded
-
-- QFAT is a local-first web application.
-- YouTube and Facebook have separate metadata editors.
-- Facebook single-image posts are in MVP; albums are post-MVP.
-- Browser access uses the frontend LAN/Tailscale entrypoint; backend remains loopback-only.
-- Figma is cancelled for QFAT. Existing QFAT UI/source patterns, the owner-approved PRD, and recorded owner decisions are the design authority. GPT owns routine UI gap analysis and UX decisions within those boundaries.
-- QFAT-008, QFAT-009, and QFAT-010 have been implemented in their respective approved scopes.
-
-### Assumptions — NOT APPROVED
-
-- That QFAT-012 should implement the remaining PRD frontend pages rather than another functional slice.
-- That all remaining frontend pages can be completed without additional backend APIs.
-- That a frontend-only implementation is the best next increment after QFAT-011.
-
-### Open questions requiring Owner confirmation
-
-1. Should QFAT-012 retain the historical “Web Frontend” stage, with its exact remaining scope derived from the current PRD, designs, source, and API inventory?
-2. Or does the Owner intend to redefine QFAT-012 as a different next functional increment? Any such change must be explicitly approved and reflected in the task title, scope, and roadmap.
-3. CLOSED — QFAT-011 is Owner-accepted. The Owner explicitly confirmed completion of LAN and Tailscale physical checks and directed the project to proceed to QFAT-012. Do not reopen this question or ask for repeat tests.
-
-## 4. Required sources before task finalization
-
-GPT must retrieve the minimum relevant sources from the canonical repositories and verify their current revisions:
-
-### GPS — universal operating standard
-
-- `core/GPT-PROJECT-SOURCE-INDEX.md`
-- `core/GPT-AGENTS.md`
-- `core/GPT-WORKFLOW.md`
-- `core/GPT-CONTEXT-MANAGEMENT.md`
-- `core/GPT-TASK-TEMPLATE.md`
-- `standards/DOCUMENTATION-STANDARD.md`
-- `standards/QUALITY-AND-AUDIT.md`
-- `standards/DECISION-MANAGEMENT.md`
-
-### QFAT — project-specific authority
-
+Read before editing:
 - `AGENTS.md`
 - `docs/AI-DEVELOPMENT-WORKFLOW.md`
-- `docs/PRD-QFAT-MVP.md`
+- `docs/PRD-QFAT-MVP.md` (especially §§4.3, 4.4, 4.8, 6.1–6.4, 7)
 - `docs/PRD-QFAT-BETA-ACCESS-ADDENDUM.md`
-- `docs/ARCHITECTURE-QFAT-MVP.md`
-- `tasks/QFAT-008-design-foundations-app-shell.md` and its report
-- `tasks/QFAT-009-create-content-metadata-editors.md` and its report
-- `tasks/QFAT-010-media-selection-local-validation.md` and its report
-- `tasks/QFAT-011-browser-session-csrf-security.md` and its reports
-- Existing frontend source and UI patterns that establish the current visual/interaction baseline.
-- Owner-approved PRD and recorded product decisions. No Figma handoff is required; Figma is cancelled.
+- `docs/ARCHITECTURE-QFAT-MVP.md` as a proposal/context, not higher authority than the approved PRD or recorded owner decisions
+- Existing QFAT-008, QFAT-009, QFAT-010, and QFAT-011 task/report documents where relevant
+- Existing web app shell, Create Content/MediaSelector components, Fastify server/security routes, SQLite connection/migration/schema modules, and relevant tests.
 
-### Executor access requirement
+Owner-approved product constraints:
+- QFAT is a local-first web application running on the user's PC.
+- Frontend is reachable through the configured LAN/Tailscale browser entrypoint; backend remains bound to `127.0.0.1:3001` behind the frontend proxy.
+- Use relative same-origin API paths.
+- Figma is cancelled. Do not request or depend on Figma.
+- Existing QFAT source/UI patterns, the owner-approved PRD, and recorded owner decisions are the design authority.
+- Facebook single-image media is in MVP; Facebook albums/multiple images are post-MVP.
+- QFAT-011 is Owner-accepted. Do not ask for repeat LAN/Tailscale tests.
+- Preserve the imported Spoolcast source, CLI compatibility, MIT license, and upstream attribution.
 
-GPT's ability to read a GitHub file does not prove OpenCode can access it. Before implementation, OpenCode must report the exact repository, branch, task path, and source paths/revisions it actually read. If any essential source is unavailable, use the GPS traceable self-contained task-packet fallback or stop BLOCKED. Do not claim an executor read a source merely because this document links to it.
+The PRD is the product authority. Existing source is the implementation baseline. If they conflict, report the conflict and follow the approved PRD/recorded owner decision unless a material decision is needed from the Owner.
 
-## 5. Proposed scope boundary — not yet approved
+## 3. In-scope deliverables
 
-The likely work area is `apps/web/`, but no implementation files are authorized yet.
+### 3.1 Backend media intake
 
-Potential work may include only frontend behavior explicitly mapped to approved PRD requirements and supported by real backend contracts. The final task must identify exact pages, user flows, API contracts, affected files, and measurable outcomes after a source-based gap analysis.
+Implement versioned local API endpoints under `/api/v1/media` for:
+- Upload one media file.
+- List persisted media records with stable pagination or a documented bounded result limit.
+- Fetch one media record by opaque ID.
+- Explicitly delete one media item and its managed file, with safe filesystem/database consistency handling.
 
-Do not assume an API exists because a page appears in the PRD. Verify route registration, schemas, and tests in the current backend. Do not fabricate accounts, media, jobs, progress, history, or publishing outcomes.
+Requirements:
+- Integrate with the existing Fastify server and existing security/session/CSRF foundation.
+- State-changing operations must use the existing mutation guard and validate Origin/Host and session/CSRF. Read endpoints must enforce the appropriate same-origin/session policy consistent with existing security design; do not weaken current protections.
+- Use streaming request/file handling with bounded memory. Do not read the entire upload into a single Node.js Buffer or accumulate chunks in memory.
+- Do not trust browser-supplied filename, MIME type, extension, size, or path.
+- Generate opaque server-side media IDs and safe storage filenames. Never use a client path as a filesystem path.
+- Store files only inside an application-managed media directory. Resolve the directory using the existing project configuration conventions or a clearly documented QFAT-specific configuration. The default must be local to the QFAT application data area, not the repository working tree or an arbitrary current working directory.
+- Prevent path traversal and symlink/path escape. Ensure all resolved storage paths remain inside the configured media root.
+- Persist metadata in SQLite using the existing Drizzle schema/migration approach. At minimum record: opaque ID, original display filename (sanitized), detected media type/MIME, byte size, managed storage key/path (never expose an absolute path to the browser), created timestamp, and any integrity metadata needed for safe verification.
+- Use transactional/compensating behavior so a failed database write does not leave an untracked file and a failed file write does not create a successful media record. Document crash/recovery limitations honestly.
+- Return typed, sanitized API errors. Do not expose local absolute paths, stack traces, secrets, or internal filesystem details.
+- Enforce a documented maximum upload size and supported formats. Select limits from existing project requirements and safe implementation constraints; do not invent platform-specific Meta/Google constraints. If the PRD requires platform-specific validation that depends on official current limits, mark it as a follow-up validation rather than inventing values.
+- Validate actual file content where practical (magic bytes/content signatures) in addition to declared MIME/extension. Reject unsupported, empty, malformed, or mismatched files with actionable errors.
+- Do not transcode, alter, compress, or silently rewrite source media.
+- Do not automatically clean up media based on age or account/job status.
 
-## 6. Prohibited actions unless a later approved task explicitly permits them
+### 3.2 Media type and MVP compatibility
 
-- No backend route, database, migration, media intake, or server behavior changes under a frontend-only scope.
-- No OAuth, credentials, live Google/Meta API requests, real uploads, or publishing.
-- No fake/demo/sample records or fake operational status.
-- No scheduling, Facebook album support, or unrelated product expansion.
-- No CI/GitHub Actions, public hosting, router port forwarding, Tailscale-specific integration, PWA claims, Electron, or Tauri.
-- No broad dependency upgrades or unrelated refactors.
-- Preserve all Spoolcast upstream attribution and existing CLI compatibility.
-- Preserve user changes; never reset, clean, stash, overwrite, rebase, amend published commits, or force-push.
+Support:
+- Video files usable as standard video source for YouTube/Facebook workflows.
+- One image file for Facebook single-image workflows.
 
-## 7. Readiness and approval gate
+Do not implement:
+- Multi-image selection or Facebook albums.
+- Platform publishing or OAuth.
+- Video transcoding/editing.
+- Scheduling or queue/job creation.
 
-This draft is **NOT READY** because the remaining frontend scope must still be derived from current source and approved product requirements, then reviewed by the Owner. No Figma handoff is required. The QFAT-011 predecessor gate is considered owner-accepted as recorded in §2; do not block QFAT-012 on the stale historical report wording.
+The media record is platform-neutral. Do not hard-bind a stored file to an account or publishing destination.
 
-Before implementation can begin, GPT must:
+### 3.3 Frontend Media Library
 
-1. Inspect the current frontend source and current backend API inventory.
-2. Use the existing QFAT UI/source patterns, approved PRD, and recorded owner decisions to identify the exact remaining screens and flows. GPT resolves routine UI details; escalate only material unresolved product decisions.
-3. Map each proposed feature to an approved PRD/design requirement and a real API contract where one is required.
-4. Define exact in-scope and out-of-scope behavior; distinguish UI-only flows from API-dependent features.
-5. Add measurable acceptance criteria, verification commands/environment, evidence requirements, report path, Git permissions, and stop conditions using GPS `GPT-TASK-TEMPLATE.md`.
-6. Review the task for contradictions, missing requirements, unsupported assumptions, and executor source-access gaps.
-7. Present the completed task to the Owner for explicit authorization.
+Implement a real Media Library view and navigation entry using existing QFAT layout, tokens, components, accessibility, and responsive conventions.
 
-Only after those steps may the status be changed to `READY — OWNER AUTHORIZED FOR IMPLEMENTATION`.
+The view must:
+- Load records from the backend; never use fixture/sample records.
+- Show a truthful empty state when no media exists.
+- Show loading, upload, success, validation error, network error, and retry states accurately.
+- Allow selecting one file and uploading it.
+- Display the original display name, media kind, formatted size, and created date/time from persisted server data.
+- Allow opening a record's details.
+- Allow explicit deletion with confirmation. On deletion failure, preserve the visible record and show an actionable error.
+- Refresh/reconcile the list from the backend after upload/delete and after route revisit or browser reload.
+- Be usable at desktop and mobile breakpoints and via keyboard.
+- Avoid fake percentage progress. If the selected upload transport provides real byte progress, show it; otherwise use an honest indeterminate uploading state.
 
-## 8. Stop condition
+### 3.4 Integration with existing Create Content flow
 
-Until the Owner confirms the intended QFAT-012 scope and the predecessor gate is reconciled:
+Connect the existing local media selection experience to persisted backend media records only to the extent required for this slice:
+- After successful upload, the media item must be available from the Media Library.
+- Reuse the existing YouTube/Facebook editor separation and preserve Facebook single-image behavior.
+- Do not enable Publish buttons, create destination jobs, or imply that media has been sent to YouTube/Meta.
+- If editor integration would require inventing unsupported publishing behavior, leave the existing editor behavior intact and report the remaining integration boundary.
 
-- Do not send this draft to OpenCode as an implementation instruction.
-- Do not begin coding, create implementation commits, or start QFAT-013.
-- GPT may continue source inspection, task planning, and documentation correction only within the Owner's request.
+## 4. API and data contract
+
+The agent must define and document concrete request/response schemas before wiring the UI. Keep the API small and consistent with current project conventions.
+
+Minimum logical operations:
+- `POST /api/v1/media` — one streamed file upload; return the persisted media record.
+- `GET /api/v1/media` — list persisted media records.
+- `GET /api/v1/media/:mediaId` — get one record.
+- `DELETE /api/v1/media/:mediaId` — explicitly delete one record/file.
+
+Use an opaque ID (UUID or an equally safe random identifier). Browser responses must not expose absolute filesystem paths, raw storage paths, or internal database details.
+
+A successful upload response is allowed only after the file is stored and its metadata is persisted. Define behavior for interrupted uploads and partial failures. Avoid accepting arbitrary content via JSON/base64.
+
+## 5. Explicit exclusions
+
+- No OAuth, account connection, credential storage, Google/Meta API calls, or live publishing.
+- No queue, publishing job, destination job, retry/reconciliation engine, SSE job progress, or publishing history.
+- No Facebook album/multiple-image support.
+- No scheduling/calendar.
+- No fake/demo/sample operational data.
+- No backend exposure beyond loopback; do not change the approved LAN/Tailscale frontend entrypoint.
+- No Tailscale SDK/API/CLI/Serve/Funnel or special Tailscale integration.
+- No public hosting, router port forwarding, firewall automation, Electron, Tauri, or PWA/HTTPS claims.
+- No CI/GitHub Actions creation or execution.
+- No broad dependency upgrades, unrelated refactors, or upstream CLI behavior changes.
+- No automatic media cleanup/retention deletion policy.
+
+## 6. Security, reliability, and data safety
+
+- Preserve the existing browser session and CSRF protections. Never bypass them for convenience.
+- Enforce upload limits while streaming, not only after the file has been fully received.
+- Treat all request headers, multipart fields, filenames, MIME declarations, and file bytes as untrusted.
+- Do not allow arbitrary destination paths, overwrite existing files, or follow attacker-controlled symlinks.
+- Use exclusive file creation and collision-safe generated names.
+- Clean up partial files on request abort, validation failure, storage failure, and database failure.
+- Ensure delete operations cannot remove files outside the managed media root.
+- Avoid logging raw request bodies, local full paths, or user media contents.
+- Do not serve uploaded files from an executable/public static directory. If previews are needed, use a narrowly scoped authenticated media-serving endpoint with safe content headers; otherwise details may show metadata only.
+- Do not introduce a plaintext credential store or change existing security boundaries.
+- Do not overwrite, reset, clean, stash, rebase, amend published commits, or force-push. Preserve pre-existing local changes.
+
+## 7. Acceptance criteria
+
+| ID | Acceptance criterion |
+|---|---|
+| AC-01 | A supported video can be selected in the browser, uploaded to the local backend, and persisted on disk. |
+| AC-02 | A supported single image can be uploaded and persisted for Facebook image-post use. |
+| AC-03 | Upload transfer is streaming/bounded-memory; implementation does not buffer the complete file in memory. |
+| AC-04 | Unsupported, empty, oversized, malformed, or MIME/content-mismatched files are rejected with useful errors and no successful library record. |
+| AC-05 | A successful upload creates exactly one persisted SQLite media record linked to the managed file. |
+| AC-06 | The Media Library lists actual persisted records and survives browser refresh and backend restart. |
+| AC-07 | Media detail returns safe metadata and never exposes absolute storage paths. |
+| AC-08 | Explicit deletion removes the selected record and managed file; failed deletion does not silently lose the record or delete an unrelated file. |
+| AC-09 | Upload and delete mutations enforce the existing Origin/Host, session, and CSRF protections. |
+| AC-10 | Upload interruption/failure cleans partial artifacts and does not report success. |
+| AC-11 | UI empty/loading/success/error states reflect backend outcomes; no sample data or fabricated progress is present. |
+| AC-12 | Existing YouTube/Facebook editor behavior, Facebook single-image selection, app shell, and LAN/Tailscale access remain intact. |
+| AC-13 | No OAuth, external platform API calls, publishing, scheduling, albums, or unrelated features are introduced. |
+| AC-14 | Backend/web typecheck, relevant automated tests, and production builds pass, or failures are recorded accurately with evidence. |
+
+## 8. Verification requirements
+
+Run from the repository root / relevant workspace using the actual scripts present in the repository:
+- Backend: `npm run typecheck`, `npm test`, `npm run build` in `apps/server`.
+- Web: `npm run typecheck`, relevant tests if configured, and `npm run build` in `apps/web`.
+- Run migration tests against temporary test databases; do not use or alter the owner's real application database.
+- Add automated tests for upload success, invalid/empty/oversized input, content mismatch, abort/partial cleanup, path traversal attempts, duplicate filename handling, list/detail/delete, database failure compensation, and CSRF/session rejection.
+- Verify bounded-memory behavior through code-level streaming tests or a controlled large-file test; document the method and limits. Do not claim a memory profile unless actually measured.
+- Verify restart persistence with a temporary database and media directory.
+- Verify existing security tests remain green.
+- Inspect `git diff --check`, `git status`, and staged files before commit.
+- Do not run live platform uploads or use real OAuth credentials.
+- Do not create or run CI/GitHub Actions.
+
+Report exact commands, environment, outcomes, and checks not run. Distinguish agent-reported tests from GPT's independent source audit.
+
+## 9. Files and scope control
+
+Likely areas include:
+- `apps/server/src/` routes, media service/storage, schema, migrations, and tests.
+- `apps/web/src/` API client, Media Library page/components, navigation/routes, and tests.
+- Documentation for the media API, storage configuration, and operational behavior.
+- `reports/QFAT-012-media-intake-local-library-report.md`.
+
+The list is indicative, not permission for broad restructuring. Inspect current paths and follow existing conventions. Do not create a new framework or architecture layer unless needed and justified.
+
+If implementation reveals a material unresolved decision about data location, deletion semantics, file limits, security, or data loss, stop and report BLOCKED rather than guessing.
+
+## 10. Git, report, and handoff
+
+- Target branch: `main`; no new branch is authorized.
+- Before work, verify repository identity, origin, branch, HEAD, and worktree. Preserve all changes. If clean and safe, use `git pull --ff-only origin main`; stop if dirty, diverged, wrong remote, or otherwise unsafe. Never reset/clean/stash/rebase/force.
+- Implement only QFAT-012.
+- Write the full Markdown report at `reports/QFAT-012-media-intake-local-library-report.md`.
+- Commit and push only after reviewing the diff and checks.
+- Verify the pushed commit and report on GitHub.
+- Stop after handoff; do not start QFAT-013 or another scope.
+
+OpenCode final chat handoff must contain exactly these four lines:
+`Branch:`
+`Commit message:`
+`Full SHA:`
+`Report path:`
+
+Agent PASS is not final acceptance. GPT independently audits the pushed commit, diff, report, and source. The Owner decides acceptance and next stage.
