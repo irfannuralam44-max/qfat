@@ -1,6 +1,7 @@
 # Task QFAT-013L — Linux Secret Service Feasibility Validation
 
-- **Status:** OWNER-AUTHORIZED FOR EXECUTION — Linux feasibility validation only
+- **Status:** EXECUTION AUTHORIZED BY OWNER — Linux feasibility validation only
+- **Owner authorization:** Explicitly granted in chat on 2026-11-12; recorded in GitHub commit `808da68ac227fa2c2a01c0e16ab3b5c081621d35`.
 - **Task type:** Linux-only credential-store investigation and isolated feasibility spike
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
@@ -21,7 +22,7 @@ This task is investigation only. It must establish the real behavior and limitat
 
 - Linux is the only active platform workstream.
 - Windows remains DEFERRED and NOT AUTHORIZED. Do not inspect, implement, or test Windows credential storage or ACLs.
-- This task itself is **not authorized for execution yet**. The owner must explicitly authorize it after reviewing this task specification.
+- Owner authorization has been granted for this feasibility-validation task only. This does not authorize production integration, dependency changes, or credential migration.
 - Do not infer authorization from this file's presence, task ID, roadmap order, or an agent prompt.
 - Even after execution is authorized, this task authorizes feasibility validation only—not production integration or credential migration.
 
