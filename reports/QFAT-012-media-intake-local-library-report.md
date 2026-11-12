@@ -127,5 +127,5 @@ Manual smoke test via temporary `QFAT_DATA_DIR` verified upload, list, detail, d
   - `4870ad4ecc04700e11c37eb2e567dc37ba5a71cf`
   - `0cac3492fe6569aa085561a47cd7f2cab5038fe1`
 - Audit-fix commit (delete safety, abort signal, tests): `3c2c43b606d5afee7ead23e051fc222ed487f9d6`
-- Report update commit: the commit that adds this report update (the pushed `main` HEAD after the audit-fix commit; exact SHA reported in the handoff).
-- Push verification: audit-fix commit and report update commit pushed to `origin/main`; `git ls-remote origin main` was checked after push and matched the final `main` HEAD reported in the handoff.
+- Report update commit: `883ffc97487320c6ff3abe465b91bb6109f187a8`
+- Push verification: audit-fix commit, report update commit, and final metadata correction pushed to `origin/main`; `git ls-remote origin main` was checked after push and matched the final `main` HEAD reported in the handoff.
