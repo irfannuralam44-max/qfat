@@ -9,17 +9,11 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: [],
     proxy: {
-      '^/api/v1': {
+      '^/api/v1(?:/|$)': {
         target: 'http://127.0.0.1:3001',
+        // Preserve the browser-facing Host so the backend can compare it
+        // with Origin. Never substitute forwarded headers for this value.
         changeOrigin: false,
-        configure: (proxy, _options) => {
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            const host = req.headers.host;
-            if (host) {
-              proxyReq.setHeader('Host', host);
-            }
-          });
-        },
       },
     },
   },
