@@ -1,6 +1,11 @@
 import Fastify from 'fastify';
 import { registerSecurityRoutes } from './security/routes.js';
 import { sessionStore } from './security/index.js';
+import { openDatabase, closeDatabase, runMigrations } from './db/index.js';
+import { registerMediaRoutes } from './media/routes.js';
+import { getDataDir, getDbPath, getMediaDir } from './config.js';
+import { mkdirSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const DEFAULT_PORT = 3001;
 const HOST = '127.0.0.1';
@@ -24,9 +29,31 @@ function getPort(): number {
   return parsed;
 }
 
-async function buildServer() {
+export interface BuildServerOptions {
+  dbPath?: string;
+  mediaDir?: string;
+}
+
+async function buildServer(options: BuildServerOptions = {}) {
+  const dbPath = options.dbPath ?? getDbPath();
+  const mediaDir = options.mediaDir ?? getMediaDir();
+
+  // Ensure directories exist
+  const dataDir = resolve(dbPath, '..');
+  if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+  if (!existsSync(mediaDir)) mkdirSync(mediaDir, { recursive: true });
+
+  await runMigrations(dbPath);
+
+  const conn = openDatabase(dbPath);
+  const db = conn.db;
+
   const app = Fastify({
     logger: false,
+  });
+
+  app.addHook('onClose', async () => {
+    closeDatabase(db);
   });
 
   app.get('/api/v1/health', async () => {
@@ -34,6 +61,7 @@ async function buildServer() {
   });
 
   await registerSecurityRoutes(app);
+  await registerMediaRoutes(app, { db, mediaDir });
 
   return app;
 }

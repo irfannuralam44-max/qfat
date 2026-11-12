@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 import { BrowserRouter, Link, useLocation, Outlet, NavLink, Routes, Route } from 'react-router-dom';
 import { OverviewPage } from './pages/OverviewPage';
 import { CreateContentPage } from './pages/CreateContentPage';
+import { MediaLibraryPage } from './pages/MediaLibraryPage';
 import { securityClient } from './security/client';
 
 type ThemePreference = 'dark' | 'light' | 'system';
@@ -12,7 +13,7 @@ const THEME_STORAGE_KEY = 'qfat-theme-preference';
 const navigationItems = [
   { label: 'Overview', path: '/', available: true },
   { label: 'Accounts', path: '/accounts', available: false },
-  { label: 'Media Library', path: '/media', available: false },
+  { label: 'Media Library', path: '/media', available: true },
   { label: 'Create Content', path: '/create', available: true },
   { label: 'Queue', path: '/queue', available: false },
   { label: 'History', path: '/history', available: false },
@@ -262,6 +263,7 @@ function App() {
         <Route path="/" element={<AppShell />}>
           <Route index element={<OverviewPage />} />
           <Route path="create" element={<CreateContentPage />} />
+          <Route path="media" element={<MediaLibraryPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
