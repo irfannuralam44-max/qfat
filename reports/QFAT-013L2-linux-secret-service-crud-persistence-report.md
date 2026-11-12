@@ -2512,7 +2512,7 @@ The previous agent-reported F-09/F-10/F-11 PASS claims above are superseded. The
 
 ### Tracked test artifact
 
-`scripts/validation/qfat-013l2-runner-safety-tests.sh`
+`scripts/validation/qfat-013l2-runner-safety-tests.sh` (latest harness revision: `9cffc008a9887725aed923ae5499e47402319d72`).
 
 This is a Linux-only test harness containing the runner-safety primitives and exercising them through real child processes and EXIT/signal handling. When sourced, it exposes the `qfat_*` lifecycle functions without starting the tests; when executed directly, it runs the regression suite.
 
