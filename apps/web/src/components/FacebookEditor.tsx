@@ -31,9 +31,8 @@ export function FacebookEditor({ initialMetadata = {}, onChange, disabled = fals
   useEffect(() => {
     setCaption(initialMetadata.caption || '');
     setMediaIntent(initialMetadata.mediaIntent || 'video');
-    // Note: We don't auto-reset media here - the parent CreateContentPage handles
-    // media compatibility when mediaIntent changes
-  }, [resetKey, initialMetadata.caption, initialMetadata.mediaIntent]);
+    setMedia(initialMetadata.media || null);
+  }, [resetKey, initialMetadata.caption, initialMetadata.mediaIntent, initialMetadata.media]);
 
   const validateCaption = (value: string) => {
     if (value.length > FACEBOOK_CAPTION_MAX) return `Caption must be ${FACEBOOK_CAPTION_MAX} characters or fewer`;
@@ -56,9 +55,7 @@ export function FacebookEditor({ initialMetadata = {}, onChange, disabled = fals
   };
 
   const captionError = validateCaption(caption);
-
   const isValid = !captionError && caption.trim().length > 0;
-
   const isVideoIntent = mediaIntent === 'video' || mediaIntent === 'reel';
   const mediaType = isVideoIntent ? 'video' : 'image';
   const accept = isVideoIntent ? '.mp4,.mov,video/mp4,video/quicktime' : 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp';
@@ -66,6 +63,18 @@ export function FacebookEditor({ initialMetadata = {}, onChange, disabled = fals
   const helperText = isVideoIntent
     ? 'Select a video file (.mp4, .mov). Preliminary validation only; server-side validation applies on upload.'
     : 'Select a single image (JPEG, PNG, WebP). Multiple images not supported in MVP.';
+
+  const selectedMediaIsIncompatible = Boolean(
+    media && (
+      (isVideoIntent && !media.type.startsWith('video/')) ||
+      (!isVideoIntent && !media.type.startsWith('image/'))
+    )
+  );
+  const mediaCompatibilityError = selectedMediaIsIncompatible
+    ? isVideoIntent
+      ? 'The selected file is an image, not a video. Remove or replace it before using this intent.'
+      : 'The selected file is a video, not an image. Remove or replace it before using this intent.'
+    : undefined;
 
   return (
     <div className="editor-section facebook-editor">
@@ -103,7 +112,7 @@ export function FacebookEditor({ initialMetadata = {}, onChange, disabled = fals
           onChange={handleMediaChange}
           currentFile={media}
           helperText={helperText}
-          error={media && isVideoIntent && mediaType === 'image' ? 'Selected file is an image, not a video. Please remove or replace it.' : media && !isVideoIntent && mediaType === 'video' ? 'Selected file is a video, not an image. Please remove or replace it.' : undefined}
+          error={mediaCompatibilityError}
           disabled={disabled}
         />
 
