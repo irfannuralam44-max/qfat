@@ -178,11 +178,44 @@ Environment, steps, outcomes, and evidence paths; state explicitly if unavailabl
 Known defects, risks, unresolved questions, and anything not tested.
 
 ## Git Publication
-Remote branch, commit message, full SHA, and push verification.
+
+- Repository: irfannuralam44-max/qfat
+- Branch: main
+- Implementation commit: <full SHA>
+- Follow-up fix commit: <full SHA atau N/A>
+- Report update commit: <full SHA atau N/A>
+- Push verification: PASS / FAIL
 
 ## Handoff
 State that work is ready for GPT/owner audit; do not claim owner acceptance.
 ```
+
+### Git Publication standard on reports
+
+Every task report must contain a `## Git Publication` section with this exact format:
+
+```markdown
+## Git Publication
+
+- Repository: irfannuralam44-max/qfat
+- Branch: main
+- Implementation commit: <full SHA>
+- Follow-up fix commit: <full SHA atau N/A>
+- Report update commit: <full SHA atau N/A>
+- Push verification: PASS / FAIL
+```
+
+Rules:
+
+1. SHA values must be full commit SHAs, never short SHAs.
+2. `Implementation commit` points to the main implementation commit for the task.
+3. `Follow-up fix commit` records a later fix commit after implementation. Write `N/A` when none exists.
+4. `Report update commit` records a commit that only updates report metadata/content. Write `N/A` when none exists.
+5. A SHA may be recorded only after the commit has actually been created and verified on remote `origin/main`.
+6. Before commit/push, use `Pending`, not an estimated SHA.
+7. Do not replace the original implementation commit SHA when follow-up commits are added.
+8. If push or remote verification fails, write `FAIL` and explain the condition. Do not claim success.
+9. Chat handoff remains concise: only Branch, Commit message, Full SHA, and Report.
 
 A report must be factual. Use PASS WITH FINDINGS when required work passed but known non-blocking findings remain. Use BLOCKED when work cannot safely proceed or publication cannot be verified.
 
