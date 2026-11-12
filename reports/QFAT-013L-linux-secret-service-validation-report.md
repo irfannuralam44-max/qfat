@@ -5,7 +5,7 @@
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
 - **Commit message:** `docs(QFAT-013L): add Linux Secret Service feasibility validation report`
-- **Commit SHA:** Pending
+- **Commit SHA:** `f23d57b970c271f86c9f50894e2e24402a9e130a`
 
 ## Scope
 
@@ -255,7 +255,7 @@ production provider implementation be authorized.
 
 - Repository: irfannuralam44-max/qfat
 - Branch: main
-- Implementation commit: Pending
+- Implementation commit: `f23d57b970c271f86c9f50894e2e24402a9e130a`
 - Follow-up fix commit: N/A
 - Report update commit: Pending
 - Push verification: Pending
