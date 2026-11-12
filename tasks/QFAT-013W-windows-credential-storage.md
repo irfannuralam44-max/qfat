@@ -1,6 +1,18 @@
 # Task QFAT-013W — Windows Credential Storage ACL and Durability
 
-- **Status:** OWNER-AUTHORIZED FOR EXECUTION
+> **OWNER HOLD — DO NOT EXECUTE.**
+>
+> Windows work is explicitly deferred. This task is retained as a future specification
+> only; its presence in the repository is **not authorization** to start it. Do not
+> dispatch it to an agent, implement it, test it, or treat it as the next task.
+>
+> Windows may be reconsidered only after the owner explicitly confirms that Linux
+> credential storage is 100% complete, all Linux verification and independent audit
+> are finished, the Linux stage is formally accepted, and the owner then gives
+> separate, explicit authorization to begin Windows work. Until all of those
+> conditions are met, keep Windows fail-closed and leave this task untouched.
+
+- **Status:** DEFERRED — NOT AUTHORIZED FOR EXECUTION
 - **Task type:** Windows-specific credential key-file security implementation and host verification
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
@@ -12,7 +24,7 @@
 
 Complete the deferred Windows stage for the temporary encrypted credential key-file provider. Implement and verify Windows-specific filesystem security so that the provider can operate on Windows only when the effective ACL and key-file lifecycle guarantees are established.
 
-Linux implementation and verification are already accepted. Preserve Linux behavior. This task must be executed and tested on the owner's Windows PC; Linux-only simulation is not evidence of Windows ACL correctness.
+The Linux implementation is still the active workstream and must reach 100% completion, independent audit, and explicit owner acceptance first. This task must remain untouched until the owner separately authorizes the Windows stage. If later authorized, it must be executed and tested on the owner's Windows PC; Linux-only simulation is not evidence of Windows ACL correctness.
 
 ## 2. Authoritative decisions and source
 
@@ -140,7 +152,9 @@ If any required Windows security or durability guarantee cannot be established, 
 | AC-11 | No OAuth/account/API/UI/publishing or unrelated feature scope is introduced | Diff review |
 | AC-12 | Windows typecheck, tests, build, and diff checks pass | Exact commands, environment, and exit codes |
 
-## 8. Verification and publication
+## 8. Verification and publication (future stage only — currently prohibited)
+
+The following commands are **not authorized to run now**. They apply only after the owner has explicitly released the hold described at the top of this file.
 
 Run on the owner's Windows PC:
 - `cd apps/server && npm run typecheck`
