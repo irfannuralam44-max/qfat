@@ -1,79 +1,99 @@
 # ADR-002: Local Browser-to-Backend Security Design
 
-- **Status:** PROPOSED
+- **Status:** OWNER-APPROVED DESIGN DIRECTION — IMPLEMENTATION DETAILS REQUIRE VALIDATION
 - **Date:** 2026-11-11
-- **Related:** QFAT-005, QFAT-005R2, QFAT-002R2 decision #9
-- **Supersedes:** None
+- **Updated:** 2026-11-12
+- **Related:** QFAT-005, QFAT-005R2, QFAT-006, QFAT-002R2 decision #9
+- **Supersedes:** The original loopback-only browser-origin assumptions in this ADR; historical proposal text is retained below.
 
-> This ADR is a proposal, not an approved decision. No security controls described here are implemented or validated. Explicit owner approval is required before any implementation task begins.
+> The owner approved the security direction for QFAT's LAN/Tailscale browser workflow on 2026-11-12: dynamic browser-facing IPs, same-origin requests, a loopback-only backend behind the frontend proxy, an HttpOnly session cookie, and a session-bound CSRF synchronizer token. This approval does not claim that the controls are implemented or validated, and does not by itself authorize an implementation task. The concrete proxy/header behavior, IP validation, cookie transport limitations, and browser tests must be resolved in a bounded implementation task before security-sensitive endpoints are exposed.
 
-## Context
+## Context and approved operating model
 
-The PRD defines QFAT as a local-first browser UI with a separate backend. It requires loopback-only binding, no wildcard CORS, CSRF protection for state-changing requests, Origin/Host validation, and no exposure of platform credentials or session secrets to frontend storage or logs. Loopback is not an authentication boundary.
+QFAT is a local-first web application. The owner's PC runs the frontend, backend, and SQLite database. Other devices use an ordinary browser:
 
-The proposed development browser origin is `http://localhost:5173`; Vite proxies same-origin browser API requests to `http://127.0.0.1:3001`. Production uses the canonical same-origin URL `http://127.0.0.1:3001`. `localhost` and `127.0.0.1` are distinct cookie hosts.
+- At home or at another local network, a device opens the frontend using the PC's current LAN IP, for example `http://192.168.0.15:5173` or `http://192.168.100.20:5173`.
+- Away from home, the device connects to the owner's private network through Tailscale and opens the frontend using the PC's current Tailscale IP, for example `http://100.x.y.z:5173`.
+- The LAN and Tailscale addresses can change. QFAT must not hardcode a specific IP, router subnet, or Tailscale address, and must not require a security configuration edit whenever the address changes.
+- The frontend listens on `0.0.0.0:5173`; the backend remains bound to `127.0.0.1:3001`. Browser API calls use relative same-origin paths and are proxied by the frontend to the fixed loopback backend.
+- QFAT does not integrate with the Tailscale SDK/API/CLI, Serve, or Funnel. Tailscale is a network path, not an application authentication mechanism.
+- This is private-network access, not public internet hosting. No router port forwarding or public backend binding is permitted.
 
-## Proposed design
+The browser's origin is therefore dynamic. It is the exact origin used to open the frontend, not a preconfigured list of one or two IP addresses. A browser switching from a LAN IP to a Tailscale IP uses a different origin and does not carry the host-only session cookie across; the user obtains a separate session on that origin.
 
-### 1. Request topology and validation
+## Approved security design direction
 
-- Development browser requests target `http://localhost:5173/api/...`; the browser sends `Origin: http://localhost:5173`. Vite proxies to the fixed upstream `http://127.0.0.1:3001`.
-- With `changeOrigin: true`, Vite rewrites the upstream `Host` to `127.0.0.1:3001`. It does not prove the browser Origin, and the backend cannot infer the original browser-facing Host from this rewritten Host.
-- Proxy contract for implementation: Vite and backend bind only to loopback; proxy only the named API/event paths to the fixed backend URL; preserve the browser Origin; strip client-supplied `Forwarded`, `X-Forwarded-Host`, and `X-Original-Host`; do not rely on forwarded/original-host headers. Validate exact Origin and expected upstream Host. Verify the actual behavior when implemented.
-- Production uses the single canonical authority `http://127.0.0.1:3001`; allow only its exact Origin and Host. Do not casually allow `localhost`, arbitrary names/ports, wildcard origins, LAN binding, or arbitrary forwarded-host values.
-- Reject missing, `null`, malformed, multiple, or unexpected Origin values on bootstrap and all state-changing requests; reject missing/unexpected Host and unexpected ports. Origin indicates the browser's claimed initiating origin, not user identity. Host identifies the authority received at the current server/proxy boundary; behind Vite it is the rewritten upstream target. Neither check alone defeats DNS rebinding.
-- If the proxy cannot preserve this contract, do not trust forwarded values as a workaround; redesign to a topology that exposes the browser-facing authority to the backend or otherwise establishes a verifiable trusted proxy boundary.
+### 1. Request topology and dynamic Origin/Host validation
+
+- Browser API calls target the same origin from which the QFAT frontend was opened. The frontend proxy forwards only explicitly configured API/event paths to `http://127.0.0.1:3001`.
+- The backend must validate the browser-facing authority dynamically, without a hardcoded LAN/Tailscale IP or router subnet.
+- The request's `Origin` must be a single, well-formed origin and must exactly match the authority represented by the request's validated `Host` (including the expected frontend port). Reject missing, `null`, malformed, multiple, unexpected-scheme, and mismatched values on bootstrap and every state-changing request.
+- The current private-network HTTP MVP expects the frontend authority on port `5173`. The accepted host forms must be deliberately constrained to numeric IP literals appropriate for this deployment: loopback for same-PC development, RFC1918 private IPv4 for LAN, Tailscale CGNAT IPv4 (`100.64.0.0/10)), and, if IPv6 access is supported by the frontend, explicitly validated IPv6 loopback/ULA/link-local forms. Do not accept arbitrary DNS hostnames, arbitrary ports, wildcard origins, or public internet authorities by default. The exact parser and address-range implementation must be tested; do not implement this with a fragile string-prefix check.
+- Do not hardcode a particular address such as `192.168.1.21`, `192.168.0.x`, `192.168.100.x`, or an individual `100.x` Tailscale IP. Address changes within the supported address classes must not require configuration changes.
+- The existing QFAT-006 Vite proxy uses a fixed upstream backend. Its current `changeOrigin`/Host behavior must be inspected and tested before security middleware is implemented. The implementation must establish a verifiable contract for the browser-facing Host at the backend. Prefer preserving the original Host through the trusted same-origin proxy if the framework supports it safely; if a trusted proxy marker is required, the proxy must remove any client-supplied copy and set its own value. Never trust arbitrary client-supplied `Forwarded`, `X-Forwarded-Host`, `X-Original-Host`, or similarly named headers.
+- Backend binding to loopback and frontend proxying are mandatory network boundaries. Direct access to port `3001` from another device must remain impossible. Proxy routing must be limited to explicitly named API/event paths.
+- Origin/Host checks protect browser request context; they do not authenticate a user, encrypt HTTP, or defend against a malicious process already running on the owner PC. The firewall and private network remain part of the deployment boundary. Do not claim that a valid Origin proves user identity.
+- DNS-rebinding resistance must come from rejecting arbitrary DNS hostnames and validating the exact authority/address class, in addition to Origin checks. Origin-only or Host-only validation is insufficient.
 
 ### 2. Session and CSRF
 
-Propose an opaque server-side session and synchronizer token:
+Use an opaque server-side session and a synchronizer token:
 
 - The backend creates unpredictable session and CSRF values and stores the CSRF proof bound to the session record.
-- The browser receives only the session identifier in a host-only `HttpOnly` cookie; the identifier is never returned in JSON.
+- The browser receives only the session identifier in a host-only `HttpOnly` cookie; the identifier is never returned in JSON and no `Domain` attribute is set.
 - Bootstrap returns the separate CSRF proof and expiry metadata. The SPA retains the proof only in JavaScript memory and sends `X-CSRF-Token` on state-changing requests.
 - The backend validates the session and compares the submitted proof to the proof bound to that session, using constant-time comparison where applicable. Do not issue a CSRF cookie or use unbound cookie/header equality.
-- Bootstrap must pass exact Origin and proxy checks and be rate-limited. Refresh and destroy require the current session-bound proof and exact Origin; successful refresh rotates session/proof, and destroy invalidates session and clears its cookie.
+- Bootstrap must pass exact Origin/Host validation and be rate-limited. Refresh and destroy require the current session-bound proof and exact Origin; successful refresh rotates session/proof, and destroy invalidates the session and clears its cookie.
 - Apply the proof to JSON and multipart mutations. Safe read methods must not mutate state; sensitive reads remain session-authorized.
 - A JavaScript-memory proof is accessible to same-origin script and is not an XSS defense. HttpOnly protects direct access to the session cookie but does not prevent active XSS from using the session.
+- Session lifetime, rotation behavior, bootstrap rate limits, response codes, and safe-read Origin policy must be specified in the implementation task and tested.
 
-A synchronizer token is preferred because server-side session binding clearly defeats the naive cookie-tossing weakness. Naive double-submit compares values that an attacker may inject or toss; `SameSite=Strict` does not universally prevent cookie injection. A signed/session-bound double-submit design is a possible alternative but adds key and validation complexity without a clear advantage for this SPA.
+A synchronizer token is preferred because server-side session binding avoids the cookie-tossing weakness of naive double-submit. A signed/session-bound double-submit design is possible but adds key and validation complexity without a clear advantage for this SPA.
 
-### 3. Cookie attributes and transport
+### 3. Cookie attributes and transport limitations
 
-The MVP proposal uses HTTP loopback; HTTPS is not designed or implemented. The `Set-Cookie` header must omit the `Secure` attribute entirely; `Secure=false` is not a valid cookie attribute. Use one host-only session cookie (omit `Domain`) with `HttpOnly; SameSite=Strict; Path=/; Max-Age=1800`. In development, the browser receives the cookie for `localhost`; in production, for `127.0.0.1`. Do not assume the hosts share cookies or are the same site.
-
-`SameSite` is evaluated using the browser-facing request context. In development, the browser talks to its own Vite origin; the upstream proxy address is not the browser-facing site. Omitting `Secure` is a narrow HTTP-loopback MVP trade-off, not a general production-safe cookie configuration. Keep loopback binding and the other checks; revisit cookie transport before any non-loopback deployment. Browser acceptance and behavior are **UNVERIFIED**.
+- Use one host-only session cookie (omit `Domain`) with `HttpOnly; SameSite=Strict; Path=/; Max-Age=1800` as the initial MVP policy.
+- The current LAN/Tailscale browser entrypoint uses HTTP. The `Secure` attribute must therefore be omitted for this HTTP-only MVP; `Secure=false` is not a valid cookie attribute. This is a deliberate transport limitation, not a general production-safe cookie configuration.
+- HTTP on a LAN does not encrypt browser-to-PC traffic. Tailscale encrypts traffic inside its network tunnel, but ordinary LAN HTTP does not provide equivalent end-to-end transport protection. Do not claim that HttpOnly or CSRF protects session cookies from an on-path network observer. A future HTTPS design requires separate certificate/trust and origin planning; it is not silently included in this ADR.
+- Cookies are host-only. Opening QFAT through a different LAN or Tailscale IP creates a distinct browser cookie scope/session. No IP migration or cookie sharing is promised.
+- Browser cookie acceptance, SameSite behavior, and session lifecycle across supported browsers are unverified until tested.
 
 ### 4. Multipart and CORS
 
-A custom header does not inherently break multipart requests. It can trigger CORS preflight for cross-origin browser requests. Here, development browser requests are same-origin with Vite, which proxies upstream, and production is same-origin, so browser-to-backend CORS preflight is avoided. The browser/client library must generate the multipart boundary; do not manually set an incomplete multipart Content-Type. Multipart state changes require the same session, Origin, and CSRF validation.
+A custom header does not inherently break multipart requests. It can trigger CORS preflight for cross-origin browser requests. QFAT's intended browser flow is same-origin with the frontend; the frontend proxies the request to the backend, so browser-to-backend CORS is avoided. The browser/client library must generate the multipart boundary; do not manually set an incomplete multipart Content-Type. Multipart mutations require the same session, Origin/Host, and CSRF validation.
 
 ## Alternatives considered
 
 | Alternative | Assessment |
 |---|---|
+| Hardcoded single LAN/Tailscale IP | Rejected: addresses change across routers and networks |
+| Allow every private subnet or arbitrary hostname without validation | Rejected: overly broad and weakens DNS-rebinding resistance |
 | Naive double-submit cookie | Not recommended: unbound equality can be vulnerable to cookie tossing/injection; SameSite alone is insufficient |
-| Signed/session-bound double-submit | Viable with careful MAC/session binding and key lifecycle; more complexity than synchronizer state |
-| Synchronizer token bound to session | Recommended proposal: clear server-side binding; session ID stays HttpOnly; proof remains memory-only in SPA |
-| Bearer token in localStorage | Rejected: persistent browser storage exposes reusable authentication material to XSS and conflicts with PRD intent |
-| Origin-only or Host-only validation | Rejected as insufficient alone; checks cover different, limited facts and must be used with fixed loopback/proxy trust rules |
+| Signed/session-bound double-submit | Viable but more complex than synchronizer state |
+| Synchronizer token bound to session | Approved direction: clear server-side binding; session ID stays HttpOnly; proof remains memory-only in SPA |
+| Bearer token in localStorage | Rejected: persistent browser storage exposes reusable authentication material to XSS |
 | Wildcard CORS or arbitrary forwarded-host trust | Rejected by PRD/security boundary |
+| Public hosting / router port forwarding | Out of MVP scope and not authorized |
 
-## Consequences and unresolved decisions
+## Consequences, limitations, and implementation gates
 
-- Session lifetime, CSRF rotation/grace policy, bootstrap rate limits, response codes, and safe-read Origin policy need owner approval or implementation validation.
-- Vite/Fastify header preservation, cookie forwarding, and browser behavior are **UNVERIFIED**; no Linux or Windows browser testing is claimed.
-- HTTP loopback does not encrypt traffic or authenticate the local user.
+- QFAT remains a local-first web app accessible on the local network or through the owner's Tailscale network. The PC must remain on and the relevant frontend process running.
+- No Tailscale-specific integration is required. The application must not assume one router subnet or one fixed address.
+- HTTP LAN traffic is not encrypted. This is a known MVP limitation and must be visible in security documentation; it must not be described as secure against on-path LAN attackers.
 - A same-origin script compromise can use the active session even though it cannot directly read the HttpOnly cookie.
-- QFAT-002R2 decision #9 has a **proposed resolution pending explicit owner approval**; it is not resolved or approved.
+- A malicious local process is outside the protection provided by browser Origin/CSRF controls. Loopback binding is a network exposure control, not local-user authentication.
+- The QFAT-002R2 decision #9 direction is accepted at the design level; implementation details and runtime verification remain open.
+- Vite/Fastify Host preservation, proxy path restrictions, cookie forwarding, Origin parsing, address-range validation, and browser behavior are **UNVERIFIED**. No Linux/Windows browser security validation is claimed.
 
 ## Verification boundary
 
-The 18 application scenarios in the design report are **specified, not executed** by QFAT-005 or QFAT-005R. No application, browser, platform, or runtime security validation is claimed. `git diff --check` is a documentation whitespace check only. Implementation acceptance must come from a later explicitly authorized task and its evidence.
+The 18 application scenarios in the design report remain **specified, not executed** by QFAT-005 or QFAT-005R. This ADR update is a documentation decision only. No application, browser, platform, or runtime security validation is claimed. Implementation acceptance requires a later explicitly authorized task and recorded evidence.
 
-## Owner approval gate
+## Owner approval and implementation boundary
 
-ADR-002 stays **PROPOSED**. Do not implement sessions, cookies, CSRF, proxy, Origin/Host, or DNS-rebinding controls until the owner explicitly approves this proposal and any outstanding parameters are resolved. This ADR does not authorize QFAT-006 or UI implementation.
+The owner approved the design direction described above on 2026-11-12. This ADR update does not authorize a broad backend/media implementation. The next task must be narrowly scoped to implementing and verifying the browser session, CSRF, dynamic Origin/Host, and trusted-proxy boundary before those controls are relied on by media intake or other mutating APIs. Any unresolved security behavior discovered during implementation must stop the task for review rather than be guessed.
+
+---
 
 ## Post-publication audit correction — 2026-11-11 (historical)
 
