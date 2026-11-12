@@ -37,16 +37,22 @@ Linux is the first and only active platform target until the complete Linux impl
 ## Key-file lifecycle and safety
 
 1. On Linux, the QFAT data-directory path, `keys` directory, and key file are
-   validated before use. The data-directory leaf must be a real directory owned
-   by the effective user and not group/world writable; the `keys` directory is
-   owner-only (`0700`) and the key file is owner read/write only (`0600`).
-   Symlink and unsafe ownership/permission states fail closed.
+   validated before use. The trust boundary is the QFAT data-directory leaf
+   itself: it must be a real directory owned by the effective user and not
+   group/world writable. Ancestors such as `/` or `/home` are intentionally not
+   validated because those checks would be impractical and are outside QFAT's
+   control. When QFAT creates the data directory, it uses owner-only mode
+   `0700`; an existing data directory is accepted when it is not group/world
+   writable, even if it is group/world readable or executable. The `keys`
+   directory is owner-only (`0700`) and the key file is owner read/write only
+   (`0600`). Symlink and unsafe ownership/permission states fail closed.
 2. A key is 32 cryptographically random bytes from `node:crypto`.
 3. First-time creation writes and syncs a temporary file with exclusive
    creation, then publishes it with a no-overwrite hard link. The containing
    `keys` directory must also be fsynced after publication before the provider
    can return the new key. A directory-sync failure fails closed; it must never
-   be treated as successful key initialization. `link()` fails with `EEXIST`
+   be treated as successful key initialization, and the published key is not
+   deleted merely because synchronization failed. `link()` fails with `EEXIST`
    instead of replacing an existing key, so concurrent first starts converge
    on one key.
 4. A missing key with no encrypted records is the only case that creates a key.

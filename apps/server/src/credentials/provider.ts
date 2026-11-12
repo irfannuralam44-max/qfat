@@ -39,12 +39,14 @@ export class KeyFileCredentialProvider implements CredentialProvider {
   private readonly db: Database;
   private readonly keyPath: string;
   private readonly platform: NodeJS.Platform;
+  private readonly fsyncDirectory?: (directoryPath: string) => void;
   private keyCache: Buffer | null = null;
 
   constructor(db: Database, options: KeyFileCredentialProviderOptions = {}) {
     this.db = db;
     this.keyPath = options.keyPath ?? getCredentialKeyPath();
     this.platform = options.platform ?? process.platform;
+    this.fsyncDirectory = options.fsyncDirectory;
     // Fail at provider construction so account-management startup cannot
     // proceed on a platform whose ACL guarantees are unverified.
     assertCredentialKeyPlatform(this.platform);
@@ -179,6 +181,7 @@ export class KeyFileCredentialProvider implements CredentialProvider {
     this.keyCache = loadOrCreateCredentialKey(this.keyPath, {
       platform: this.platform,
       hasEncryptedRecords,
+      fsyncDirectory: this.fsyncDirectory,
     });
     return this.keyCache;
   }

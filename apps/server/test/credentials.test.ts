@@ -3,10 +3,14 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import {
   chmodSync,
+  closeSync,
+  constants,
   existsSync,
+  fsyncSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   rmSync,
   statSync,
@@ -398,7 +402,7 @@ describe('Credential key-file lifecycle', () => {
     }
   });
 
-  test('key material owned by another OS user is rejected', async () => {
+  test('QFAT data directory owned by another OS user is rejected', async () => {
     const f = await openFixture();
     try {
       writeValidKey(f.keyPath);
@@ -407,7 +411,7 @@ describe('Credential key-file lifecycle', () => {
       try {
         expectSyncCode(
           () => loadOrCreateCredentialKey(f.keyPath, { platform: 'linux', hasEncryptedRecords: false }),
-          'KEY_OWNERSHIP_UNSAFE',
+          'KEY_DATA_DIRECTORY_UNSAFE',
         );
       } finally {
         (process as any).getuid = originalGetuid;
@@ -560,6 +564,172 @@ describe('Credential error hygiene', () => {
       assert.equal(message.includes(DUMMY_TOKEN), false);
       assert.equal(message.includes(ciphertextHex), false);
       assert.equal(message.includes(readFileSync(f.keyPath).toString('hex')), false);
+    } finally {
+      f.close();
+    }
+  });
+});
+
+describe('Credential QFAT data-directory validation', () => {
+  test('default and configured data directories are created owner-only when missing', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'qfat-data-parent-'));
+    const dataDir = join(parent, 'qfat-data');
+    const keyPath = join(dataDir, 'keys', 'credential.key');
+    try {
+      loadOrCreateCredentialKey(keyPath, { platform: 'linux', hasEncryptedRecords: false });
+      assert.equal(statSync(dataDir).isDirectory(), true);
+      assert.equal(statSync(dataDir).mode & 0o777, 0o700);
+      assert.equal(statSync(dirname(keyPath)).mode & 0o777, 0o700);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('symlinked QFAT data directory is rejected', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'qfat-data-parent-'));
+    const realDir = join(parent, 'real-data');
+    const dataDir = join(parent, 'qfat-data');
+    const keyPath = join(dataDir, 'keys', 'credential.key');
+    mkdirSync(realDir, { recursive: true, mode: 0o700 });
+    symlinkSync(realDir, dataDir);
+    try {
+      expectSyncCode(
+        () => loadOrCreateCredentialKey(keyPath, { platform: 'linux', hasEncryptedRecords: false }),
+        'KEY_DATA_DIRECTORY_UNSAFE',
+      );
+      assert.equal(existsSync(keyPath), false);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('non-directory QFAT data path is rejected', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'qfat-data-parent-'));
+    const dataDir = join(parent, 'qfat-data');
+    const keyPath = join(dataDir, 'keys', 'credential.key');
+    writeFileSync(dataDir, 'not a directory');
+    try {
+      expectSyncCode(
+        () => loadOrCreateCredentialKey(keyPath, { platform: 'linux', hasEncryptedRecords: false }),
+        'KEY_DATA_DIRECTORY_UNSAFE',
+      );
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('group/world-writable QFAT data directory is rejected', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'qfat-data-parent-'));
+    const dataDir = join(parent, 'qfat-data');
+    const keyPath = join(dataDir, 'keys', 'credential.key');
+    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    chmodSync(dataDir, 0o777);
+    try {
+      expectSyncCode(
+        () => loadOrCreateCredentialKey(keyPath, { platform: 'linux', hasEncryptedRecords: false }),
+        'KEY_DATA_DIRECTORY_UNSAFE',
+      );
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('safe group/world-readable but non-writable data directory is accepted', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'qfat-data-parent-'));
+    const dataDir = join(parent, 'qfat-data');
+    const keyPath = join(dataDir, 'keys', 'credential.key');
+    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    chmodSync(dataDir, 0o755);
+    try {
+      const key = loadOrCreateCredentialKey(keyPath, { platform: 'linux', hasEncryptedRecords: false });
+      assert.equal(key.length, 32);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+
+  test('QFAT data directory owned by another OS user is rejected', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'qfat-data-parent-'));
+    const dataDir = join(parent, 'qfat-data');
+    const keyPath = join(dataDir, 'keys', 'credential.key');
+    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    const originalGetuid = process.getuid;
+    (process as any).getuid = () => (originalGetuid?.() ?? 0) + 1;
+    try {
+      expectSyncCode(
+        () => loadOrCreateCredentialKey(keyPath, { platform: 'linux', hasEncryptedRecords: false }),
+        'KEY_DATA_DIRECTORY_UNSAFE',
+      );
+    } finally {
+      (process as any).getuid = originalGetuid;
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('Credential key directory durability', () => {
+  test('fsyncs the containing directory after publishing a new key', async () => {
+    const f = await openFixture();
+    try {
+      const calls: string[] = [];
+      const provider = new KeyFileCredentialProvider(f.db, {
+        keyPath: f.keyPath,
+        fsyncDirectory: (dir) => { calls.push(dir); },
+      });
+      await provider.store(CONTEXT, Buffer.from(DUMMY_TOKEN));
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0], f.keyDir);
+    } finally {
+      f.close();
+    }
+  });
+
+  test('directory fsync failure fails closed and leaves the published key without ciphertext', async () => {
+    const f = await openFixture();
+    try {
+      const provider = new KeyFileCredentialProvider(f.db, {
+        keyPath: f.keyPath,
+        fsyncDirectory: () => { throw new Error('sync failed'); },
+      });
+      await expectCode(provider.store(CONTEXT, Buffer.from(DUMMY_TOKEN)), 'KEY_DIRECTORY_SYNC_FAILED');
+      assert.equal(existsSync(f.keyPath), true);
+      assert.equal(rows(f).length, 0);
+    } finally {
+      f.close();
+    }
+  });
+
+  test('fsync is not called when loading an existing key', async () => {
+    const f = await openFixture();
+    try {
+      const okProvider = new KeyFileCredentialProvider(f.db, { keyPath: f.keyPath });
+      await okProvider.store(CONTEXT, Buffer.from(DUMMY_TOKEN));
+      const calls: string[] = [];
+      const second = new KeyFileCredentialProvider(f.db, {
+        keyPath: f.keyPath,
+        fsyncDirectory: (dir) => calls.push(dir),
+      });
+      assert.deepEqual(await second.retrieve(CONTEXT), Buffer.from(DUMMY_TOKEN));
+      assert.equal(calls.length, 0);
+    } finally {
+      f.close();
+    }
+  });
+
+  test('default directory fsync opens and syncs the key directory', async () => {
+    const f = await openFixture();
+    try {
+      const key = loadOrCreateCredentialKey(f.keyPath, {
+        platform: 'linux',
+        hasEncryptedRecords: false,
+        fsyncDirectory: (dir) => {
+          assert.equal(dir, f.keyDir);
+          const fd = openSync(dir, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
+          fsyncSync(fd);
+          closeSync(fd);
+        },
+      });
+      assert.equal(key.length, 32);
     } finally {
       f.close();
     }
