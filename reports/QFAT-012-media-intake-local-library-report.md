@@ -65,11 +65,22 @@ UI:
 
 Commands run:
 - `cd apps/server && npm run typecheck` — PASS
-- `cd apps/server && npm test` — PASS (100 tests)
+- `cd apps/server && npm test` — PASS (116 tests)
 - `cd apps/server && npm run build` — PASS
 - `cd apps/web && npm run typecheck` — PASS
 - `cd apps/web && npm run build` — PASS
 - `git diff --check` — PASS
+
+Media regression tests now cover:
+- database delete failure rollback (SQLite trigger raises on delete),
+- filesystem move failure (read-only `.trash`),
+- filesystem unlink failure (quarantined copy retained),
+- crash after quarantine before DB delete followed by restart recovery,
+- orphan quarantine cleanup after DB row removal,
+- symlinked `.tmp`, `.trash`, and target file rejection,
+- exact quarantine-name matching,
+- stable pagination with identical timestamps,
+- pagination limit/offset pages and max/invalid parameters.
 
 Manual smoke test via temporary `QFAT_DATA_DIR` verified upload, list, detail, delete, and persistence behavior.
 
@@ -82,9 +93,9 @@ Manual smoke test via temporary `QFAT_DATA_DIR` verified upload, list, detail, d
 | AC-03 | PASS | Streaming implementation; no full-buffer accumulation |
 | AC-04 | PASS | Empty/mismatch tests |
 | AC-05 | PASS | Automated upload test verifies record |
-| AC-06 | PASS | Restart persistence test |
+| AC-06 | PASS | Restart persistence test; stable pagination test |
 | AC-07 | PASS | Detail response excludes storage path |
-| AC-08 | PASS | Delete, DB/filesystem failure, and recovery tests |
+| AC-08 | PASS | Delete, DB/filesystem failure, crash recovery, orphan cleanup, and symlink tests |
 | AC-09 | PASS | Security guard tests |
 | AC-10 | PASS | Abort cleanup, quarantine, and recovery tests |
 | AC-11 | PASS | UI states implemented |
@@ -96,11 +107,11 @@ Manual smoke test via temporary `QFAT_DATA_DIR` verified upload, list, detail, d
 
 - Upload uses raw binary rather than multipart; documented in code.
 - Crash recovery for partial `.part` files is not automatically cleaned; documented limitation.
-- Delete now quarantines the managed file before deleting the database row, rolls back the file move if database deletion fails, and leaves recoverable copies in `.trash` if final cleanup fails.
-- Symlink/path containment is validated lexically and via realpath where paths exist; symlinked roots, `.tmp`, and target files are rejected or detected.
-- Recovery scans quarantined files on startup and restores copies for records whose managed file is missing.
+- Delete quarantines the managed file before deleting the database row, rolls back the file move if database deletion fails, and leaves recoverable copies in `.trash` if final cleanup fails.
+- Startup recovery restores exact quarantined copies for active records and removes orphan quarantine files that no longer belong to an active record.
+- Symlink/path containment is validated lexically and via realpath where paths exist; symlinked roots, `.tmp`, `.trash`, and target files are rejected or detected.
 - No platform-specific media constraints implemented; marked as follow-up validation.
-- List uses bounded pagination (default 100, max 500).
+- List uses bounded pagination (default 100, max 500) with deterministic `created_at DESC, id DESC` ordering.
 
 ## Git Publication
 

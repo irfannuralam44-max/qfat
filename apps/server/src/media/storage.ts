@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, rename, unlink, stat } from 'node:fs/promises';
-import { realpathSync, lstatSync, mkdirSync, existsSync } from 'node:fs';
+import { realpathSync, lstatSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import type { Database } from 'better-sqlite3';
 
@@ -77,6 +77,13 @@ export function sanitizeFilename(raw: string | null | undefined): string {
     cleaned = cleaned.slice(0, 200);
   }
   return cleaned;
+}
+
+export function isQuarantineNameFor(storageKey: string, name: string): boolean {
+  if (name === storageKey) return true;
+  if (!name.startsWith(`${storageKey}.`)) return false;
+  const suffix = name.slice(storageKey.length + 1);
+  return /^[1-9]\d*$/.test(suffix);
 }
 
 function detectMime(firstBytes: Buffer): { mediaType: 'video' | 'image'; mimeType: string } | null {
@@ -314,7 +321,9 @@ export async function recoverMediaStorage(db: Database, mediaDir: string): Promi
   const { mediaItems } = await import('../schema/index.js');
   const drizzleDb = drizzle(db);
   const rows = drizzleDb.select().from(mediaItems).all() as Array<{ id: string; storageKey: string }>;
+  const activeKeys = new Set(rows.map((row) => row.storageKey));
 
+  // Restore quarantined files only for records whose managed file is missing.
   for (const row of rows) {
     let originalPath: string;
     try {
@@ -324,27 +333,48 @@ export async function recoverMediaStorage(db: Database, mediaDir: string): Promi
     }
     if (existsSync(originalPath)) continue;
 
-    // Look for a quarantined copy to restore.
-    const base = resolve(trashDir, row.storageKey);
-    let candidate: string | null = null;
-    if (existsSync(base)) candidate = base;
-    if (!candidate) {
-      let i = 1;
-      while (existsSync(`${base}.${i}`)) {
-        candidate = `${base}.${i}`;
-        break;
-      }
-    }
-    if (candidate) {
+    // Pick only names that belong to this record's exact storage key.
+    const candidates = readdirSync(trashDir)
+      .filter((name) => isQuarantineNameFor(row.storageKey, name))
+      .sort((a, b) => {
+        if (a === row.storageKey) return -1;
+        if (b === row.storageKey) return 1;
+        return a.localeCompare(b);
+      });
+
+    for (const name of candidates) {
+      const candidate = resolve(trashDir, name);
       try {
         const st = lstatSync(candidate);
-        if (st.isSymbolicLink()) continue;
+        if (st.isSymbolicLink() || !st.isFile()) continue;
         if (!existsSync(originalPath)) {
           await rename(candidate, originalPath);
         }
+        break;
       } catch {
         // Leave recovery best-effort; do not crash startup.
       }
+    }
+  }
+
+  // Remove orphaned quarantine files whose records no longer exist. Never
+  // remove a file that still belongs to an active record.
+  for (const name of readdirSync(trashDir)) {
+    const candidate = resolve(trashDir, name);
+    let st;
+    try {
+      st = lstatSync(candidate);
+    } catch {
+      continue;
+    }
+    if (st.isSymbolicLink()) {
+      try { await unlink(candidate); } catch { /* ignore */ }
+      continue;
+    }
+    if (!st.isFile()) continue;
+    const owned = [...activeKeys].some((key) => isQuarantineNameFor(key, name));
+    if (!owned) {
+      try { await unlink(candidate); } catch { /* ignore */ }
     }
   }
 }
@@ -365,5 +395,9 @@ export async function listMediaRecords(db: Database, limit = 100, offset = 0) {
   const { mediaItems } = await import('../schema/index.js');
   const { desc } = await import('drizzle-orm');
   const drizzleDb = drizzle(db);
-  return drizzleDb.select().from(mediaItems).orderBy(desc(mediaItems.createdAt)).limit(safeLimit).offset(safeOffset).all();
+  return drizzleDb.select().from(mediaItems)
+    .orderBy(desc(mediaItems.createdAt), desc(mediaItems.id))
+    .limit(safeLimit)
+    .offset(safeOffset)
+    .all();
 }
