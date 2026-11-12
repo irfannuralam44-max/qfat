@@ -1,5 +1,11 @@
 const API_BASE = '/api/v1';
 
+function assertApiPath(url: string): void {
+  if (url !== API_BASE && !url.startsWith(`${API_BASE}/`)) {
+    throw new Error('Security client requests must target a relative QFAT API path.');
+  }
+}
+
 export interface SecurityBootstrapResponse {
   csrfToken: string;
   expiresAt: number;
@@ -145,6 +151,7 @@ export class SecurityClient {
   }
 
   async requestRead<T>(url: string): Promise<T> {
+    assertApiPath(url);
     const response = await fetch(url, { method: 'GET', credentials: 'include' });
     if (!response.ok) {
       const errorData = await readError(response, 'Request failed.');
@@ -154,6 +161,7 @@ export class SecurityClient {
   }
 
   async requestWithCsrf<T>(url: string, options: RequestInit = {}): Promise<T> {
+    assertApiPath(url);
     const method = (options.method || 'GET').toUpperCase();
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
       throw new Error('CSRF helper only supports state-changing HTTP methods.');
