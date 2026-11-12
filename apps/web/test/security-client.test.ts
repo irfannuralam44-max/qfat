@@ -56,6 +56,21 @@ describe('SecurityClient', () => {
     assert.throws(() => client.requestWithCsrf('/api/v1/example', { method: 'GET' }), /state-changing/);
   });
 
+  it('rejects external URLs before sending a CSRF token', async () => {
+    const client = new SecurityClient();
+    let fetchCount = 0;
+    globalThis.fetch = async () => {
+      fetchCount += 1;
+      return validBootstrap();
+    };
+
+    await assert.rejects(
+      client.requestWithCsrf('https://example.com/collect', { method: 'POST' }),
+      /relative QFAT API path/,
+    );
+    assert.equal(fetchCount, 0);
+  });
+
   it('re-bootstrap retries an expired-session mutation exactly once', async () => {
     const client = new SecurityClient();
     let bootstrapCount = 0;
