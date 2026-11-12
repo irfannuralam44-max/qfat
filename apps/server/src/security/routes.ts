@@ -1,9 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import {
-  SESSION_COOKIE_NAME,
   CSRF_HEADER_NAME,
-  SESSION_MAX_AGE_SECONDS,
-  FRONTEND_PORT,
   sessionStore,
   validateOriginHeader,
   validateHostHeader,
@@ -11,45 +8,42 @@ import {
   createSessionCookie,
   createClearSessionCookie,
   constantTimeEqual,
+  generateCsrfToken,
+  hashSessionId,
   SessionData,
 } from './index.js';
 
-const RATE_LIMIT_WINDOW_MS = 60000;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_ATTEMPTS = 10;
 
-const bootstrapAttempts = new Map<string, { count: number; windowStart: number }>();
+// The backend only receives traffic from the local Vite proxy. Do not trust
+// forwarded client-IP headers; use one bounded process-wide bootstrap window.
+let bootstrapWindowStart = 0;
+let bootstrapAttemptCount = 0;
 
 export function resetRateLimit(): void {
-  bootstrapAttempts.clear();
+  bootstrapWindowStart = 0;
+  bootstrapAttemptCount = 0;
 }
 
-function checkRateLimit(ip: string): boolean {
+function checkRateLimit(): boolean {
   const now = Date.now();
-  const record = bootstrapAttempts.get(ip);
-
-  if (!record || now - record.windowStart > RATE_LIMIT_WINDOW_MS) {
-    bootstrapAttempts.set(ip, { count: 1, windowStart: now });
-    return true;
+  if (now - bootstrapWindowStart >= RATE_LIMIT_WINDOW_MS || now < bootstrapWindowStart) {
+    bootstrapWindowStart = now;
+    bootstrapAttemptCount = 0;
   }
 
-  if (record.count >= RATE_LIMIT_MAX_ATTEMPTS) {
-    return false;
-  }
-
-  record.count++;
+  if (bootstrapAttemptCount >= RATE_LIMIT_MAX_ATTEMPTS) return false;
+  bootstrapAttemptCount += 1;
   return true;
 }
 
-function getHeaderValue(headers: Record<string, string | string[] | undefined>, name: string): string | undefined {
+function getSingleHeader(
+  headers: Record<string, string | string[] | undefined>,
+  name: string,
+): string | undefined {
   const value = headers[name.toLowerCase()];
-  if (Array.isArray(value)) {
-    return value[0];
-  }
-  return value;
-}
-
-function getClientIp(request: FastifyRequest): string {
-  return request.ip || getHeaderValue(request.headers, 'x-forwarded-for') || 'unknown';
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 export interface SecurityBootstrapResponse {
@@ -66,14 +60,18 @@ export interface SecurityErrorResponse {
   error: string;
 }
 
-async function validateRequestOriginAndHost(request: FastifyRequest): Promise<{ isValid: boolean; error?: string; authority?: { host: string; port: number } }> {
-  const origin = getHeaderValue(request.headers, 'origin');
+export function validateRequestOriginAndHost(request: FastifyRequest): {
+  isValid: boolean;
+  error?: string;
+  authority?: { host: string; port: number };
+} {
+  const origin = getSingleHeader(request.headers, 'origin');
   const originValidation = validateOriginHeader(origin);
   if (!originValidation.isValid || !originValidation.authority) {
     return { isValid: false, error: originValidation.error };
   }
 
-  const host = getHeaderValue(request.headers, 'host');
+  const host = getSingleHeader(request.headers, 'host');
   const hostValidation = validateHostHeader(host, originValidation.authority);
   if (!hostValidation.isValid) {
     return { isValid: false, error: hostValidation.error };
@@ -82,33 +80,28 @@ async function validateRequestOriginAndHost(request: FastifyRequest): Promise<{ 
   return { isValid: true, authority: originValidation.authority };
 }
 
-async function validateSessionAndCsrf(
+export function validateSessionAndCsrf(
   request: FastifyRequest,
-  requireCsrf: boolean = true
-): Promise<{ isValid: boolean; error?: string; session?: SessionData; hashedId?: string }> {
-  const cookieHeader = request.headers.cookie;
+): { isValid: boolean; error?: string; session?: SessionData; hashedId?: string } {
+  const cookieHeader = getSingleHeader(request.headers, 'cookie');
   const sessionId = parseSessionCookie(cookieHeader);
-
   if (!sessionId) {
-    return { isValid: false, error: 'Missing authentication cookie' };
+    return { isValid: false, error: 'Missing or malformed authentication cookie' };
   }
 
-  const hashedId = (await import('node:crypto')).createHash('sha256').update(sessionId).digest('hex');
+  const hashedId = hashSessionId(sessionId);
   const session = sessionStore.get(hashedId);
-
   if (!session) {
     return { isValid: false, error: 'Invalid or expired authentication' };
   }
 
-  if (requireCsrf) {
-    const csrfToken = getHeaderValue(request.headers, CSRF_HEADER_NAME);
-    if (!csrfToken || typeof csrfToken !== 'string') {
-      return { isValid: false, error: 'Missing CSRF token' };
-    }
+  const csrfToken = getSingleHeader(request.headers, CSRF_HEADER_NAME);
+  if (!csrfToken) {
+    return { isValid: false, error: 'Missing CSRF token' };
+  }
 
-    if (!constantTimeEqual(csrfToken, session.csrfToken)) {
-      return { isValid: false, error: 'Invalid CSRF token' };
-    }
+  if (!constantTimeEqual(csrfToken, session.csrfToken)) {
+    return { isValid: false, error: 'Invalid CSRF token' };
   }
 
   return { isValid: true, session, hashedId };
@@ -118,96 +111,105 @@ export async function registerSecurityRoutes(app: FastifyInstance): Promise<void
   app.post<{
     Reply: SecurityBootstrapResponse | SecurityErrorResponse;
   }>('/api/v1/security/bootstrap', async (request, reply) => {
-    const clientIp = getClientIp(request);
-
-    if (!checkRateLimit(clientIp)) {
-      return reply.status(429).send({ error: 'Too many bootstrap attempts. Please wait.' });
-    }
-
-    const validation = await validateRequestOriginAndHost(request);
+    const validation = validateRequestOriginAndHost(request);
     if (!validation.isValid) {
       return reply.status(403).send({ error: validation.error || 'Invalid Origin/Host' });
     }
 
-    const csrfToken = (await import('./index.js')).generateCsrfToken();
-    const { sessionId, hashedId, expiresAt } = sessionStore.create(csrfToken);
+    if (!checkRateLimit()) {
+      return reply.status(429).send({ error: 'Too many bootstrap attempts. Please wait.' });
+    }
 
-    const cookie = createSessionCookie(sessionId);
-
-    reply.header('Set-Cookie', cookie);
-
-    return reply.send({ csrfToken, expiresAt });
+    const csrfToken = generateCsrfToken();
+    try {
+      const { sessionId, expiresAt } = sessionStore.create(csrfToken);
+      reply.header('Set-Cookie', createSessionCookie(sessionId));
+      return reply.send({ csrfToken, expiresAt });
+    } catch {
+      return reply.status(503).send({ error: 'Session capacity reached. Try again later.' });
+    }
   });
 
   app.post<{
     Reply: SecurityRefreshResponse | SecurityErrorResponse;
   }>('/api/v1/security/session/refresh', async (request, reply) => {
-    const validation = await validateRequestOriginAndHost(request);
+    const validation = validateRequestOriginAndHost(request);
     if (!validation.isValid) {
       return reply.status(403).send({ error: validation.error || 'Invalid Origin/Host' });
     }
 
-    const sessionValidation = await validateSessionAndCsrf(request, true);
-    if (!sessionValidation.isValid || !sessionValidation.session || !sessionValidation.hashedId) {
-      const cookie = createClearSessionCookie();
-      reply.header('Set-Cookie', cookie);
+    const sessionValidation = validateSessionAndCsrf(request);
+    if (!sessionValidation.isValid || !sessionValidation.hashedId) {
+      if (
+        sessionValidation.error === 'Invalid or expired authentication' ||
+        sessionValidation.error === 'Missing or malformed authentication cookie'
+      ) {
+        reply.header('Set-Cookie', createClearSessionCookie());
+      }
       return reply.status(401).send({ error: sessionValidation.error || 'Invalid session' });
     }
 
     const rotated = sessionStore.rotate(sessionValidation.hashedId);
     if (!rotated) {
-      const cookie = createClearSessionCookie();
-      reply.header('Set-Cookie', cookie);
-      return reply.status(401).send({ error: 'Failed to rotate session' });
+      reply.header('Set-Cookie', createClearSessionCookie());
+      return reply.status(401).send({ error: 'Invalid or expired authentication' });
     }
 
-    const cookie = createSessionCookie(rotated.sessionId);
-    reply.header('Set-Cookie', cookie);
-
+    reply.header('Set-Cookie', createSessionCookie(rotated.sessionId));
     return reply.send({ csrfToken: rotated.csrfToken, expiresAt: rotated.expiresAt });
   });
 
   app.post<{
     Reply: { success: boolean } | SecurityErrorResponse;
   }>('/api/v1/security/session/destroy', async (request, reply) => {
-    const validation = await validateRequestOriginAndHost(request);
+    const validation = validateRequestOriginAndHost(request);
     if (!validation.isValid) {
       return reply.status(403).send({ error: validation.error || 'Invalid Origin/Host' });
     }
 
-    const sessionValidation = await validateSessionAndCsrf(request, true);
-    if (sessionValidation.isValid && sessionValidation.hashedId) {
-      sessionStore.destroy(sessionValidation.hashedId);
+    const sessionValidation = validateSessionAndCsrf(request);
+    if (!sessionValidation.isValid || !sessionValidation.hashedId) {
+      if (
+        sessionValidation.error === 'Invalid or expired authentication' ||
+        sessionValidation.error === 'Missing or malformed authentication cookie'
+      ) {
+        reply.header('Set-Cookie', createClearSessionCookie());
+      }
+      return reply.status(401).send({ error: sessionValidation.error || 'Invalid session' });
     }
 
-    const cookie = createClearSessionCookie();
-    reply.header('Set-Cookie', cookie);
-
+    sessionStore.destroy(sessionValidation.hashedId);
+    reply.header('Set-Cookie', createClearSessionCookie());
     return reply.send({ success: true });
   });
 }
 
 export function createMutationGuard() {
   return async function mutationGuard(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-    const validation = await validateRequestOriginAndHost(request);
-    if (!validation.isValid) {
-      reply.status(403).send({ error: validation.error || 'Invalid Origin/Host' });
+    const originValidation = validateRequestOriginAndHost(request);
+    if (!originValidation.isValid) {
+      reply.status(403).send({ error: originValidation.error || 'Invalid Origin/Host' });
       return;
     }
 
-    const sessionValidation = await validateSessionAndCsrf(request, true);
+    const sessionValidation = validateSessionAndCsrf(request);
     if (!sessionValidation.isValid) {
-      if (sessionValidation.error === 'Invalid or expired session' || sessionValidation.error === 'Missing session cookie') {
-        const cookie = createClearSessionCookie();
-        reply.header('Set-Cookie', cookie);
+      if (
+        sessionValidation.error === 'Invalid or expired authentication' ||
+        sessionValidation.error === 'Missing or malformed authentication cookie'
+      ) {
+        reply.header('Set-Cookie', createClearSessionCookie());
       }
       reply.status(401).send({ error: sessionValidation.error || 'Authentication required' });
       return;
     }
 
-    (request as any).securitySession = sessionValidation.session;
-    (request as any).securityHashedId = sessionValidation.hashedId;
+    (request as FastifyRequest & {
+      securitySession?: SessionData;
+      securityHashedId?: string;
+    }).securitySession = sessionValidation.session;
+    (request as FastifyRequest & {
+      securityHashedId?: string;
+    }).securityHashedId = sessionValidation.hashedId;
   };
 }
-
-export { validateRequestOriginAndHost, validateSessionAndCsrf };
