@@ -5,6 +5,7 @@
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
 - **Baseline commit:** `6469446656200da9a74bd6077b1a03c24c947c63`
+- **Synchronization note:** This is the QFAT-013 implementation baseline; the task and platform-sequencing documentation were published in subsequent documentation-only commits. The agent must synchronize to the latest `origin/main` before execution and must not reset to this baseline.
 - **Parent task:** QFAT-013
 - **Parent implementation:** `972e490574709c71f54215c8098a46fc157a4911`
 - **Approved decision:** `docs/decisions/ADR-004-temporary-encrypted-local-credential-storage.md`
