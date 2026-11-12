@@ -1,6 +1,7 @@
 # QFAT Credential Storage Foundation (QFAT-013)
 
-- **Status:** Temporary implementation under ADR-004; not an OS credential store
+- **Status:** Temporary Linux implementation under ADR-004; not an OS credential store
+- **Platform sequence:** Linux first; Windows deferred until all Linux work is complete
 - **Scope:** Local encrypted credential persistence foundation only
 - **Related:** `docs/decisions/ADR-004-temporary-encrypted-local-credential-storage.md`
 
@@ -29,16 +30,25 @@ The key file is deliberately in a separate directory from the SQLite database.
 It is not stored in SQLite, source code, Git, environment variables, logs, API
 responses, or browser storage.
 
+## Platform delivery order
+
+Linux is the first and only active platform target until the complete Linux implementation and required Linux verification are finished. Windows work (including ACL implementation and execution on a Windows host) starts afterward as a separate stage on the owner's Windows PC. Until then, Windows remains unsupported by this provider and fails closed; this is a deferral, not a claim of Windows readiness.
+
 ## Key-file lifecycle and safety
 
-1. On Linux, the key directory is created with mode `0700` and the key file with
-   mode `0600`. Existing directory/file ownership and mode bits are verified;
-   unsafe states fail closed.
+1. On Linux, the QFAT data-directory path, `keys` directory, and key file are
+   validated before use. The data-directory leaf must be a real directory owned
+   by the effective user and not group/world writable; the `keys` directory is
+   owner-only (`0700`) and the key file is owner read/write only (`0600`).
+   Symlink and unsafe ownership/permission states fail closed.
 2. A key is 32 cryptographically random bytes from `node:crypto`.
-3. First-time creation writes a fully synced temporary file with exclusive
-   creation, then atomically hard-links it to `credential.key`. `link()` fails
-   with `EEXIST` instead of replacing an existing key, so concurrent first
-   starts converge on one key.
+3. First-time creation writes and syncs a temporary file with exclusive
+   creation, then publishes it with a no-overwrite hard link. The containing
+   `keys` directory must also be fsynced after publication before the provider
+   can return the new key. A directory-sync failure fails closed; it must never
+   be treated as successful key initialization. `link()` fails with `EEXIST`
+   instead of replacing an existing key, so concurrent first starts converge
+   on one key.
 4. A missing key with no encrypted records is the only case that creates a key.
 5. A missing, malformed, truncated, unreadable, symlinked, non-regular, or
    unsafe-permission key fails closed. It is never silently regenerated when
@@ -64,8 +74,9 @@ Authentication failures return no partial plaintext.
 ## Startup and failure behavior
 
 - On Windows, constructing `KeyFileCredentialProvider` throws
-  `WINDOWS_ACL_UNVERIFIED` before any key is created or read. The provider does
-  not claim Windows support based on POSIX `chmod`.
+  `WINDOWS_ACL_UNVERIFIED` before any key is created or read. Windows work is
+  deferred until all Linux work is complete; the provider does not claim Windows
+  support based on POSIX `chmod`.
 - On Linux, the provider constructor checks platform support. Key loading and
   permission verification happen on the first operation that needs the key.
 - If encrypted records exist and the key file is missing or invalid, the
@@ -109,8 +120,8 @@ logical row but is not a claim of secure physical erasure from SQLite/WAL.
 Additional limitations:
 
 - POSIX mode bits do not establish Windows ACL protection.
-- Windows ACL verification is **NOT RUN/UNVERIFIED** in this task; Windows
-  provider construction fails closed.
+- Windows ACL verification is **DEFERRED — NOT RUN** until all Linux work is
+  complete; Windows provider construction remains fail-closed.
 - A crash can leave an ignored `.tmp` file in the key directory; the final key
   path is only published after a complete, synced write.
 - The provider does not implement key rotation, LSS/WCV migration, or a password
@@ -126,6 +137,6 @@ existing records, repeated and concurrent initialization, symlink/non-regular
 paths, POSIX permissions and ownership, Windows fail-closed behavior, and error
 hygiene.
 
-Actual Windows ACL execution remains **NOT RUN**. Linux POSIX behavior is
-tested on the repository's Linux environment; it is not evidence of Windows ACL
-support.
+Actual Windows ACL execution is **DEFERRED — NOT RUN** until all Linux work is
+complete. Linux POSIX behavior is tested on the repository's Linux environment;
+it is not evidence of Windows ACL support.
