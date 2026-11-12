@@ -122,8 +122,8 @@ host was available and no Windows ACL work was performed.
 - Branch: main
 - Implementation commit: `0fd014089bff54697a2ef6717af2cde4bdc6b64c`
 - Follow-up fix commit: N/A
-- Report update commit: Pending
-- Push verification: Pending
+- Report update commit: `d55fcf63b31a9ee32cae68031f70f9bbab1411c7`
+- Push verification: `origin/main` confirmed at `d55fcf63b31a9ee32cae68031f70f9bbab1411c7` via `git ls-remote origin main` after push; report file present on the remote branch.
 
 ## Handoff
 
