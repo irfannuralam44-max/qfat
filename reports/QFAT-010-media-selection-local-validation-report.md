@@ -5,7 +5,7 @@
 - **Repository:** irfannuralam44-max/qfat
 - **Target branch:** main
 - **Commit message:** feat(web): implement media selection and local validation for Create Content
-- **Commit SHA:** (to be filled after commit)
+- **Commit SHA:** ba8e0c9cf908cc96e5a0c4fdab7b55a8a4dd79db
 
 ## Scope
 
@@ -134,8 +134,8 @@ Implemented local media selection and validation for the Create Content page, ex
 - **Branch:** `main`
 - **Commit message:** `feat(web): implement media selection and local validation for Create Content`
 - **Files changed:** 5 files (4 modified, 1 new)
-- **Full commit SHA:** (to be filled after commit)
-- **Push verification:** (to be verified after push)
+- **Full commit SHA:** `ba8e0c9cf908cc96e5a0c4fdab7b55a8a4dd79db`
+- **Push verification:** Verified — remote `main` points to `ba8e0c9cf908cc96e5a0c4fdab7b55a8a4dd79db`
 
 ## Handoff
 
