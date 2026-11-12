@@ -1,7 +1,15 @@
 const API_BASE = '/api/v1';
 
 function assertApiPath(url: string): void {
-  if (url !== API_BASE && !url.startsWith(`${API_BASE}/`)) {
+  try {
+    const parsed = new URL(url, 'http://qfat.invalid');
+    if (
+      parsed.origin !== 'http://qfat.invalid' ||
+      (parsed.pathname !== API_BASE && !parsed.pathname.startsWith(`${API_BASE}/`))
+    ) {
+      throw new Error('Security client requests must target a relative QFAT API path.');
+    }
+  } catch {
     throw new Error('Security client requests must target a relative QFAT API path.');
   }
 }
