@@ -40,3 +40,14 @@ This is a temporary implementation decision, not a claim that a key file provide
 ## Approval boundary
 
 This ADR records the owner's explicit approval on 2026-11-12 of encrypted SQLite credential values plus a separate local key file as a temporary alternative under PRD §6.4. It authorizes only the bounded QFAT-013 implementation task. It does not approve plaintext storage, a machine-ID-derived key, weakening fail-closed behavior, or skipping later LSS/WCV validation.
+
+
+## Platform delivery sequence — owner decision (2026-11-12)
+
+The owner has explicitly set a Linux-first delivery sequence:
+
+1. Complete implementation, integration, verification, and readiness work for **Linux** first.
+2. Begin **Windows** implementation and host-specific validation only after all Linux work is complete, as a separate platform stage on the owner's Windows PC.
+3. Until that later Windows stage, the Windows credential provider must remain fail-closed. Windows ACL support and Windows readiness must not be claimed or treated as a prerequisite for completing Linux work.
+
+This sequencing decision does not change the cryptographic design or weaken the fail-closed requirement. QFAT-013R is limited to Linux hardening. The Windows work is explicitly deferred, not cancelled.
