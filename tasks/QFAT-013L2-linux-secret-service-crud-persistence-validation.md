@@ -1,6 +1,7 @@
 # Task QFAT-013L2 — Isolated Linux Secret Service CRUD & Persistence Validation
 
-- **Status:** READY FOR OWNER AUTHORIZATION — NOT AUTHORIZED FOR EXECUTION
+- **Status:** OWNER-AUTHORIZED FOR EXECUTION — isolated Linux validation only
+- **Owner authorization:** Explicitly granted in chat on 2026-11-12; recorded in GitHub authorization commit (see repository history).
 - **Task type:** Linux-only isolated credential-store validation
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
@@ -19,7 +20,7 @@ This task must not weaken that boundary. It must create or use a disposable isol
 
 ## 2. Authority and platform boundary
 
-- This task is **not authorized for execution yet**. The owner must explicitly authorize it after reviewing this task specification.
+- Owner authorization has been granted for this isolated feasibility-validation task only. This does not authorize production integration, QFAT dependency changes, or credential migration.
 - Linux only. Windows remains DEFERRED and NOT AUTHORIZED.
 - This task authorizes isolated feasibility validation only. It does not authorize production provider implementation, QFAT dependency changes, database changes, or credential migration.
 - Do not infer authorization from this file's existence, task ID/order, roadmap, or prior approval of QFAT-013L.
