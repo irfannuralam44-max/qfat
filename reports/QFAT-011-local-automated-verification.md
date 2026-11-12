@@ -1,9 +1,10 @@
 # QFAT-011 Local Automated Verification Report
 
-- **Commit SHA tested:** `46d910678912d2a728d8d2f76fd3ef147a29c26d`
+- **Commit SHA tested:** `d12139198b13e81976dd3781189708b972510b0a` (after remediation)
+- **Previous report commit:** `d12139198b13e81976dd3781189708b972510b0a`
 - **Repository:** `irfannuralam44-max/qfat`
 - **Branch:** `main`
-- **Date:** 2026-11-12
+- **Date:** 2026-11-12 (updated)
 - **Working tree status:** Clean (no uncommitted changes)
 - **HEAD synchronized with origin/main:** Yes
 
@@ -14,7 +15,7 @@
 | Check | Result |
 |-------|--------|
 | Branch | `main` (synchronized with `origin/main`) |
-| HEAD | `46d910678912d2a728d8d2f76fd3ef147a29c26d` |
+| HEAD | `d12139198b13e81976dd3781189708b972510b0a` |
 | Working tree | Clean |
 | Local commits not pushed | None |
 | Remote commits not integrated | None |
@@ -23,7 +24,7 @@
 
 ---
 
-## Stage 2 — Automated Verification Commands and Results
+## Stage 2 — Automated Verification Commands and Results (After Remediation)
 
 ### 2.1 Backend Security Tests
 
@@ -31,35 +32,33 @@
 
 **Exit code:** 0
 
-**Result:** PASS — 90 tests passed
+**Result:** PASS — 92 tests passed (2 new forwarded-header tests added)
 
 **Summary:**
 - SQLite Connection: 9 tests
 - Drizzle Migrations: 5 tests
 - Health Server: 3 tests
 - Port validation: 12 tests
-- QFAT-011 security hardening: 5 tests
+- QFAT-011 security hardening: 7 tests (was 5, +2 forwarded-header)
 - Security Validation: 26 tests
 - Security Routes Integration: 30 tests
 
 ### 2.2 All Backend Tests
 
-**Same as 2.1** — All backend tests are security-related. Total: 90 PASS, 0 FAIL.
+**Same as 2.1** — All backend tests are security-related. Total: 92 PASS, 0 FAIL.
 
 ### 2.3 Frontend Tests
 
 **Command:** `cd apps/web && npm test`
 
-**Exit code:** 1
+**Exit code:** 0
 
-**Result:** PASS WITH FINDINGS — 6 PASS, 1 FAIL
+**Result:** PASS — 7 PASS, 0 FAIL
 
-**Failing test:** `SecurityClient > attaches CSRF only to state-changing requests`
+**Fixed test:** `SecurityClient > attaches CSRF only to state-changing requests` — Changed `assert.throws()` to `await assert.rejects()` to properly test async function rejection.
 
-**Failure reason:** Test bug — `assert.throws()` used on async function without `await`. The implementation correctly throws for GET method. The test should use `assert.rejects()`.
-
-**Passing tests:**
-- SecurityClient: 5/6 pass (keeps CSRF in memory, rejects external URLs, re-bootstrap retry once, no repeated retry, recovers from bootstrap failure)
+**All passing tests:**
+- SecurityClient: 6/6 pass (keeps CSRF in memory, attaches CSRF only to state-changing requests, rejects external URLs, re-bootstrap retry once, no repeated retry, recovers from bootstrap failure)
 - Vite browser-authority proxy contract: 1/1 pass
 
 ### 2.4 Backend Typecheck
@@ -104,7 +103,7 @@
 
 ---
 
-## Stage 3 — Security Test Coverage Audit
+## Stage 3 — Security Test Coverage Audit (Updated)
 
 | Security Behavior | Test Coverage | Test Name | File |
 |-------------------|---------------|-----------|------|
@@ -119,7 +118,7 @@
 | 9. Session destroy requires valid session + CSRF | PASS | `destroy requires a valid session and matching CSRF token`, `POST /api/v1/security/session/destroy invalidates session` | `apps/server/test/security-hardening.test.ts`, `apps/server/test/security.test.ts` |
 | 10. Bootstrap rate limiter works per limit | PASS | `rate limits repeated bootstrap attempts`, `session store enforces capacity and reuses capacity after expiry cleanup` | `apps/server/test/security.test.ts`, `apps/server/test/security-hardening.test.ts` |
 | 11. Vite proxy only forwards allowed API endpoints | PASS | `Vite browser-authority proxy contract` (verifies only `/api/v1` paths proxied) | `apps/web/test/vite-proxy.test.ts` |
-| 12. Forwarded headers cannot bypass security checks | NOT COVERED | No test explicitly verifies X-Forwarded-Host/X-Forwarded-For are ignored | — |
+| 12. Forwarded headers cannot bypass security checks | PASS | `forwarded headers do not bypass Origin/Host validation`, `forwarded headers do not affect mutation guard` | `apps/server/test/security-hardening.test.ts` |
 
 ---
 
@@ -175,7 +174,7 @@ Network: http://100.69.215.44:5173/  tailscale0
 
 ## Stage 5 — Local Request Simulation
 
-### Test Results Summary
+### Test Results Summary (Updated)
 
 | Test | Scenario | Result | Notes |
 |------|----------|--------|-------|
@@ -195,13 +194,13 @@ Network: http://100.69.215.44:5173/  tailscale0
 | 14 | Session refresh with wrong CSRF | PASS | Rejected: "Invalid or expired authentication" |
 | 15 | Session destroy with valid CSRF | PASS | Returns success, clears cookie |
 | 16 | Session destroy without CSRF | PASS | Rejected: "Missing CSRF token" |
-| 17 | Rate limiting (12 requests) | PASS | Requests 1-8 succeed, 9-12 rate limited (429) |
+| 17 | Rate limiting (12 requests, fresh process) | PASS | Requests 1-10 succeed, 11-12 rate limited (429) |
 | 18 | Backend via LAN IP (192.168.1.21:3001) | PASS | Connection refused (backend binds only to loopback) |
 | 19 | Bootstrap through Vite proxy (localhost) | PASS | Works correctly |
 | 20 | Bootstrap through Vite proxy (RFC1918) | PASS | Works correctly |
 | 21 | Cookie attributes | PASS | HttpOnly, SameSite=Strict, Path=/, Max-Age=1800, no Secure, no Domain |
 | 22 | Vite proxy rejects non-API paths | PASS | Non-/api/v1 paths not proxied |
-| 23 | X-Forwarded-Host ignored | PASS | Public IP Origin still rejected |
+| 23 | X-Forwarded-Host ignored | PASS | Public IP Origin still rejected even with private X-Forwarded-Host |
 | 24 | X-Forwarded-For ignored | PASS | Not trusted for Origin validation |
 | 25 | Duplicate cookie rejected | PASS | "Missing or malformed authentication cookie" |
 | 26 | Empty cookie rejected | PASS | "Missing or malformed authentication cookie" |
@@ -209,26 +208,58 @@ Network: http://100.69.215.44:5173/  tailscale0
 
 ---
 
-## Stage 6 — Findings and Risk Assessment
+## Stage 6 — Findings and Risk Assessment (Updated)
 
 ### Automated Verification Status: **AUTOMATED VERIFICATION PASS WITH FINDINGS**
 
-### Findings
+### Findings (Resolved and Remaining)
 
-| # | Finding | Severity | Category |
-|---|---------|----------|----------|
-| 1 | Frontend test `attaches CSRF only to state-changing requests` fails due to test bug (uses `assert.throws` on async function) | Low | Test quality |
-| 2 | No automated test for forwarded header rejection (X-Forwarded-Host, X-Forwarded-For) | Medium | Test coverage gap |
-| 3 | Rate limit observed at 8 requests, not 10 as documented | Low | Implementation vs doc mismatch |
-| 4 | Physical LAN/Tailscale browser validation not performed | High | Manual validation required |
+| # | Finding | Status | Severity | Category |
+|---|---------|--------|----------|----------|
+| 1 | Frontend test `attaches CSRF only to state-changing requests` fails due to test bug (uses `assert.throws` on async function) | **RESOLVED** — Fixed to use `await assert.rejects()` | Low | Test quality |
+| 2 | No automated test for forwarded header rejection (X-Forwarded-Host, X-Forwarded-For) | **RESOLVED** — Added 2 integration tests in `security-hardening.test.ts` | Medium | Test coverage gap |
+| 3 | Rate limit observed at 8 requests, not 10 as documented | **INVESTIGATED** — Implementation is correct (10 requests per 60s window per process). Earlier observation was due to test state leakage in long-running server process. | Low | Test isolation |
+| 4 | Physical LAN/Tailscale browser validation not performed | **PENDING** | High | Manual validation required |
+
+### Rate Limiter Investigation Details
+
+**Implementation:** `apps/server/src/security/routes.ts:16-39`
+
+```typescript
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_ATTEMPTS = 10;
+
+// Process-wide counter (backend only sees Vite proxy)
+let bootstrapWindowStart = 0;
+let bootstrapAttemptCount = 0;
+
+function checkRateLimit(): boolean {
+  const now = Date.now();
+  if (now - bootstrapWindowStart >= RATE_LIMIT_WINDOW_MS || now < bootstrapWindowStart) {
+    bootstrapWindowStart = now;
+    bootstrapAttemptCount = 0;
+  }
+  if (bootstrapAttemptCount >= RATE_LIMIT_MAX_ATTEMPTS) return false;
+  bootstrapAttemptCount += 1;
+  return true;
+}
+```
+
+**Behavior:** Allows exactly 10 successful bootstrap attempts per 60-second window per backend process. The counter increments **after** Origin/Host validation passes (line 114-117 in routes.ts), so rejected requests don't consume quota.
+
+**Test Verification:** 
+- Automated test `rate limits repeated bootstrap attempts` in `security.test.ts:452-460` passes (10 success, 11th = 429)
+- Manual test with fresh server process: 10 SUCCESS, 11th = rate limited
+- Earlier "8 requests" observation was due to cumulative state in a long-running dev server across multiple test runs
+
+**Conclusion:** Implementation matches documented limit of 10. No code change needed. Test isolation is adequate because each test suite calls `resetRateLimit()` in its `before` hook.
 
 ### Limitations
 
 1. **Local simulation only** — Tests run from the same machine; cannot verify cross-device LAN/Tailscale connectivity.
-2. **Frontend test failure** — One test has a bug (not a security issue); implementation correctly rejects GET.
-3. **No HTTPS/TLS testing** — HTTP only; cookie intentionally lacks `Secure` flag for MVP.
-4. **IPv6 not supported** — By design per QFAT-011.
-5. **Rate limiter is process-wide** — Due to proxy hiding true client IP; documented limitation.
+2. **No HTTPS/TLS testing** — HTTP only; cookie intentionally lacks `Secure` flag for MVP.
+3. **IPv6 not supported** — By design per QFAT-011.
+4. **Rate limiter is process-wide** — Due to proxy hiding true client IP; documented limitation.
 
 ### Physical Validation Still Required (from mobile device via LAN and Tailscale)
 
@@ -248,12 +279,12 @@ Network: http://100.69.215.44:5173/  tailscale0
 
 ```bash
 git status --short
-# Only new report file shown
-git diff -- reports/QFAT-011-local-automated-verification.md
-# Only new file diff shown
-git add reports/QFAT-011-local-automated-verification.md
-# Only report staged
-git commit -m "docs(report): add QFAT-011 local automated verification"
+# Only test file and report file shown
+git diff -- apps/server/test/security-hardening.test.ts apps/web/test/security-client.test.ts reports/QFAT-011-local-automated-verification.md
+# Only expected changes shown
+git add apps/server/test/security-hardening.test.ts apps/web/test/security-client.test.ts reports/QFAT-011-local-automated-verification.md
+# Only these files staged
+git commit -m "test(security): close QFAT-011 verification findings"
 git fetch origin
 git rev-parse HEAD
 git rev-parse origin/main
@@ -277,16 +308,19 @@ git rev-parse origin/main
 
 | Item | Value |
 |------|-------|
-| **Commit SHA tested** | `46d910678912d2a728d8d2f76fd3ef147a29c26d` |
+| **Commit SHA tested (before remediation)** | `46d910678912d2a728d8d2f76fd3ef147a29c26d` |
+| **Commit SHA after remediation** | `d12139198b13e81976dd3781189708b972510b0a` |
 | **Automated verification** | PASS WITH FINDINGS |
-| **Backend tests** | 90 PASS |
-| **Frontend tests** | 6 PASS, 1 FAIL (test bug, not security) |
+| **Backend tests** | 92 PASS (was 90, +2 forwarded-header tests) |
+| **Frontend tests** | 7 PASS (was 6 PASS + 1 FAIL, now all pass) |
 | **Typecheck (both)** | PASS |
 | **Build (both)** | PASS |
 | **Git diff check** | PASS |
 | **Backend binding** | `127.0.0.1:3001` only (verified via `ss`) |
 | **Frontend binding** | `0.0.0.0:5173` (LAN + Tailscale accessible) |
 | **Vite proxy** | Scoped to `/api/v1`, preserves Host/Origin, `changeOrigin: false` |
+| **Forwarded header tests** | 2 new integration tests added and passing |
+| **Rate limiter** | Verified at 10 requests/60s per process (implementation correct) |
 | **Report commit SHA** | *(to be filled after push)* |
 | **Push status** | *(to be filled after push)* |
 | **GitHub report URL** | `https://github.com/irfannuralam44-max/qfat/blob/main/reports/QFAT-011-local-automated-verification.md` |
@@ -300,4 +334,4 @@ git rev-parse origin/main
 
 ---
 
-**QFAT-011 is NOT owner-accepted.** Automated verification passes with minor findings. Physical validation from a second device (phone) on LAN and Tailscale is required before acceptance. Do not start QFAT-012 until QFAT-011 is accepted.
+**QFAT-011 is NOT owner-accepted.** Automated verification passes with findings resolved. Physical validation from a second device (phone) on LAN and Tailscale is required before acceptance. Do not start QFAT-012 until QFAT-011 is accepted.

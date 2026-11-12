@@ -182,4 +182,121 @@ describe('QFAT-011 security hardening', () => {
       await app.close();
     }
   });
+
+  test('forwarded headers do not bypass Origin/Host validation', async () => {
+    resetRateLimit();
+    const app = await buildServer();
+    try {
+      await app.ready();
+
+      const publicOrigin = 'http://8.8.8.8:5173';
+
+      // 1. X-Forwarded-Host with private IP should not make public Origin valid
+      const response1 = await app.inject({
+        method: 'POST',
+        url: '/api/v1/security/bootstrap',
+        headers: {
+          origin: publicOrigin,
+          host: '8.8.8.8:5173',
+          'x-forwarded-host': '127.0.0.1:5173',
+        },
+      });
+      assert.equal(response1.statusCode, 403);
+      const body1 = response1.json();
+      assert.ok(body1.error?.includes('loopback, RFC1918, or Tailscale CGNAT'));
+
+      // 2. X-Forwarded-For with private IP should not make public Origin valid
+      const response2 = await app.inject({
+        method: 'POST',
+        url: '/api/v1/security/bootstrap',
+        headers: {
+          origin: publicOrigin,
+          host: '8.8.8.8:5173',
+          'x-forwarded-for': '127.0.0.1',
+        },
+      });
+      assert.equal(response2.statusCode, 403);
+      const body2 = response2.json();
+      assert.ok(body2.error?.includes('loopback, RFC1918, or Tailscale CGNAT'));
+
+      // 3. Multiple forwarded headers should not bypass validation
+      const response3 = await app.inject({
+        method: 'POST',
+        url: '/api/v1/security/bootstrap',
+        headers: {
+          origin: publicOrigin,
+          host: '8.8.8.8:5173',
+          'x-forwarded-host': '127.0.0.1:5173',
+          'x-forwarded-for': '10.0.0.1',
+        },
+      });
+      assert.equal(response3.statusCode, 403);
+
+      // 4. Valid request without forwarded headers should still work
+      const validOrigin = 'http://127.0.0.1:5173';
+      const response4 = await app.inject({
+        method: 'POST',
+        url: '/api/v1/security/bootstrap',
+        headers: {
+          origin: validOrigin,
+          host: '127.0.0.1:5173',
+        },
+      });
+      assert.equal(response4.statusCode, 200);
+      const body4 = response4.json();
+      assert.ok(body4.csrfToken);
+    } finally {
+      await app.close();
+    }
+  });
+
+  test('forwarded headers do not affect mutation guard', async () => {
+    resetRateLimit();
+    const app = await buildServer();
+    try {
+      app.post('/api/v1/test/mutation', { preHandler: createMutationGuard() }, async () => ({ ok: true }));
+      await app.ready();
+
+      const bootstrap = await app.inject({
+        method: 'POST',
+        url: '/api/v1/security/bootstrap',
+        headers: { origin, host: origin.replace('http://', '') },
+      });
+      assert.equal(bootstrap.statusCode, 200);
+      const body = bootstrap.json<{ csrfToken: string }>();
+      const cookieHeader = String(bootstrap.headers['set-cookie']);
+      const sessionCookie = cookieHeader.split(';', 1)[0];
+
+      // Mutation with valid session/CSRF but X-Forwarded-Host mismatch should still work
+      // (mutation guard validates Origin/Host from actual headers, not forwarded)
+      const accepted = await app.inject({
+        method: 'POST',
+        url: '/api/v1/test/mutation',
+        headers: {
+          origin,
+          host: origin.replace('http://', ''),
+          cookie: sessionCookie,
+          'x-csrf-token': body.csrfToken,
+          'x-forwarded-host': 'different-host:5173',
+        },
+      });
+      assert.equal(accepted.statusCode, 200);
+      assert.deepEqual(accepted.json(), { ok: true });
+
+      // Mutation with X-Forwarded-For should not bypass CSRF check
+      const rejected = await app.inject({
+        method: 'POST',
+        url: '/api/v1/test/mutation',
+        headers: {
+          origin,
+          host: origin.replace('http://', ''),
+          cookie: sessionCookie,
+          'x-forwarded-for': '127.0.0.1',
+        },
+      });
+      assert.equal(rejected.statusCode, 401);
+    } finally {
+      await app.close();
+    }
+  });
 });

@@ -53,7 +53,10 @@ describe('SecurityClient', () => {
     assert.ok(mutation);
     assert.equal(mutation.init?.credentials, 'include');
     assert.equal(new Headers(mutation.init?.headers).get('X-CSRF-Token'), validToken);
-    assert.throws(() => client.requestWithCsrf('/api/v1/example', { method: 'GET' }), /state-changing/);
+    await assert.rejects(
+      client.requestWithCsrf('/api/v1/example', { method: 'GET' }),
+      /state-changing/,
+    );
   });
 
   it('rejects external URLs before sending a CSRF token', async () => {
