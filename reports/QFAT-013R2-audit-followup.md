@@ -1,6 +1,6 @@
 # QFAT-013R2 — GPT Audit Follow-up
 
-- **Status:** Local verification passed; pending GPT audit
+- **Status:** GPT source audit PASS; latest Linux verification reported PASS; owner acceptance pending
 - **Repository:** `irfannuralam44-max/qfat`
 - **Branch:** `main`
 - **Original implementation:** `0fd014089bff54697a2ef6717af2cde4bdc6b64c`
@@ -77,11 +77,48 @@ Regression coverage verified PASS:
 
 Windows execution: **NOT RUN — DEFERRED** (unchanged; no Windows ACL work performed).
 
-## 5. Acceptance status
+## 5. Latest verification and GPT audit addendum
 
-Local runtime verification passed. GPT final acceptance remains pending independent audit.
+A further local verification was performed after the documentation-only commits that
+advanced `main` from the earlier test HEAD
+`8d71a30b5253713477d05c9d999107f7b0d7cea6` to
+`0b07c62ad0c8272aee4d21233b7517de98d977aa`.
 
-- Implementation source review: corrected test seams and assertions are present on `main`.
-- Runtime verification: PASS (162/162 tests, typecheck, build, diff check).
-- GPT final acceptance: pending independent audit.
-- Owner acceptance: not granted.
+The agent reported that it pulled `origin/main` with fast-forward, confirmed a
+clean working tree before and after, and ran the following on Linux at that HEAD:
+
+- `npm run typecheck` — PASS (exit 0)
+- `npm test` — PASS (exit 0): 162 tests, 162 pass, 0 fail, 0 skip
+- `npm run build` — PASS (exit 0)
+- `git diff --check` — PASS (exit 0)
+
+The agent also confirmed the four QFAT-013R2 race/failure tests and the existing-key,
+creator-fsync, and Linux path-security tests passed. Windows remains deferred and
+was not run. The detailed OS/kernel, Node.js, and npm versions for this repeat run
+were not included in the handoff and are therefore not asserted here.
+
+GPT independently inspected the current `main` source and tests:
+- The `linkFile` seam defaults to the real `linkSync` operation and is passed
+  through the provider only for deterministic test control.
+- The EEXIST loser branch reads and validates the winner key, synchronizes the
+  containing directory, and returns no key if synchronization fails.
+- The existing-key path synchronizes the containing directory before returning
+  key bytes.
+- The provider-level failure tests assert `KEY_DIRECTORY_SYNC_FAILED` and zero
+  SQLite credential rows; the competing-reader test holds the creator while the
+  reader's own fsync fails.
+- The creator publishes with no-overwrite linking, synchronizes the directory
+  before returning, and does not delete the published key after a sync failure.
+
+**GPT audit result: PASS** for the scoped QFAT-013R2 Linux hardening and the
+reported Linux verification evidence. This audit relies on the agent's local
+execution report; GPT did not independently execute the test suite in this
+environment.
+
+## 6. Acceptance status
+
+- Implementation source review: PASS.
+- Agent-reported Linux runtime verification at `0b07c62ad0c8272aee4d21233b7517de98d977aa`: PASS (162/162 tests, typecheck, build, diff check).
+- GPT final audit: PASS for QFAT-013R2 scope.
+- Windows: DEFERRED — NOT AUTHORIZED; no Windows work or verification.
+- Owner acceptance: **not yet granted**.
