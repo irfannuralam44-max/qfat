@@ -699,7 +699,7 @@ describe('Credential key directory durability', () => {
     }
   });
 
-  test('fsync is not called when loading an existing key', async () => {
+  test('existing key load synchronizes the directory before returning bytes', async () => {
     const f = await openFixture();
     try {
       const okProvider = new KeyFileCredentialProvider(f.db, { keyPath: f.keyPath });
@@ -710,7 +710,8 @@ describe('Credential key directory durability', () => {
         fsyncDirectory: (dir) => calls.push(dir),
       });
       assert.deepEqual(await second.retrieve(CONTEXT), Buffer.from(DUMMY_TOKEN));
-      assert.equal(calls.length, 0);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0], f.keyDir);
     } finally {
       f.close();
     }
@@ -731,6 +732,236 @@ describe('Credential key directory durability', () => {
       });
       assert.equal(key.length, 32);
     } finally {
+      f.close();
+    }
+  });
+});
+
+describe('Credential key durability invariant (QFAT-013R2)', () => {
+  test('existing key read fsyncs the containing directory before returning bytes', async () => {
+    const f = await openFixture();
+    try {
+      const creator = new KeyFileCredentialProvider(f.db, { keyPath: f.keyPath });
+      await creator.store(CONTEXT, Buffer.from(DUMMY_TOKEN));
+
+      const calls: string[] = [];
+      const key = loadOrCreateCredentialKey(f.keyPath, {
+        platform: 'linux',
+        hasEncryptedRecords: true,
+        fsyncDirectory: (dir) => { calls.push(dir); },
+      });
+      assert.equal(key.length, 32);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0], f.keyDir);
+    } finally {
+      f.close();
+    }
+  });
+
+  test('creator path fails closed when directory fsync fails and commits no ciphertext', async () => {
+    const f = await openFixture();
+    try {
+      const provider = new KeyFileCredentialProvider(f.db, {
+        keyPath: f.keyPath,
+        fsyncDirectory: () => { throw new Error('sync failed'); },
+      });
+      await expectCode(provider.store(CONTEXT, Buffer.from(DUMMY_TOKEN)), 'KEY_DIRECTORY_SYNC_FAILED');
+      assert.equal(existsSync(f.keyPath), true);
+      assert.equal(rows(f).length, 0);
+    } finally {
+      f.close();
+    }
+  });
+
+  test('existing key read fails closed when directory fsync fails', async () => {
+    const f = await openFixture();
+    try {
+      const creator = new KeyFileCredentialProvider(f.db, { keyPath: f.keyPath });
+      await creator.store(CONTEXT, Buffer.from(DUMMY_TOKEN));
+
+      expectSyncCode(
+        () => loadOrCreateCredentialKey(f.keyPath, {
+          platform: 'linux',
+          hasEncryptedRecords: true,
+          fsyncDirectory: () => { throw new Error('sync failed'); },
+        }),
+        'KEY_DIRECTORY_SYNC_FAILED',
+      );
+    } finally {
+      f.close();
+    }
+  });
+
+  test('deterministic competing reader performs its own fsync before returning key bytes', async () => {
+    const f = await openFixture();
+    const children: ReturnType<typeof spawn>[] = [];
+    try {
+      const tsxCli = resolve(process.cwd(), 'node_modules/tsx/dist/cli.mjs');
+      const publishedPath = join(f.dir, 'published.marker');
+      const releasePath = join(f.dir, 'release.marker');
+      const creatorDone = join(f.dir, 'creator.done');
+      const readerDone = join(f.dir, 'reader.done');
+      const creatorOut = join(f.dir, 'creator.hex');
+      const readerOut = join(f.dir, 'reader.hex');
+      const logPath = join(f.dir, 'fsync.log');
+
+      const creatorScript = join(f.dir, 'creator.ts');
+      writeFileSync(creatorScript, `
+import { existsSync, writeFileSync, appendFileSync } from 'node:fs';
+import { openSync, fsyncSync, closeSync, constants } from 'node:fs';
+import { loadOrCreateCredentialKey } from ${JSON.stringify(resolve(process.cwd(), 'src/credentials/key-file.js'))};
+
+const [keyPath, publishedPath, releasePath, donePath, outPath, logPath] = process.argv.slice(2);
+
+function fsyncDirectory(dir: string) {
+  writeFileSync(publishedPath, 'published');
+  while (!existsSync(releasePath)) {
+    // deterministic busy-wait barrier; no timing-based correctness assertion
+  }
+  const fd = openSync(dir, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
+  fsyncSync(fd);
+  closeSync(fd);
+  appendFileSync(logPath, 'creator\\n');
+}
+
+const key = loadOrCreateCredentialKey(keyPath, { platform: 'linux', hasEncryptedRecords: false, fsyncDirectory });
+writeFileSync(outPath, key.toString('hex'));
+writeFileSync(donePath, 'done');
+`);
+
+      const readerScript = join(f.dir, 'reader.ts');
+      writeFileSync(readerScript, `
+import { existsSync, writeFileSync, appendFileSync } from 'node:fs';
+import { openSync, fsyncSync, closeSync, constants } from 'node:fs';
+import { loadOrCreateCredentialKey } from ${JSON.stringify(resolve(process.cwd(), 'src/credentials/key-file.js'))};
+
+const [keyPath, publishedPath, donePath, outPath, logPath] = process.argv.slice(2);
+
+while (!existsSync(publishedPath)) {
+  // wait for publication
+}
+
+const key = loadOrCreateCredentialKey(keyPath, { platform: 'linux', hasEncryptedRecords: false });
+writeFileSync(outPath, key.toString('hex'));
+writeFileSync(donePath, 'done');
+`);
+
+      const creator = spawn(process.execPath, [tsxCli, creatorScript, f.keyPath, publishedPath, releasePath, creatorDone, creatorOut, logPath], { stdio: ['ignore', 'ignore', 'pipe'] });
+      const reader = spawn(process.execPath, [tsxCli, readerScript, f.keyPath, publishedPath, readerDone, readerOut, logPath], { stdio: ['ignore', 'ignore', 'pipe'] });
+      children.push(creator, reader);
+
+      let stderr = '';
+      creator.stderr?.on('data', (c) => { stderr += String(c); });
+      reader.stderr?.on('data', (c) => { stderr += String(c); });
+
+      const waitForFile = async (path: string, timeoutMs: number) => {
+        const deadline = Date.now() + timeoutMs;
+        while (!existsSync(path)) {
+          if (Date.now() > deadline) throw new Error(`timed out waiting for ${path}: ${stderr}`);
+          await new Promise((r) => setTimeout(r, 5));
+        }
+      };
+
+      await waitForFile(publishedPath, 10_000);
+      await waitForFile(readerDone, 10_000);
+
+      // Reader returned before creator completed its fsync; verify it produced a valid key.
+      assert.equal(readFileSync(readerOut, 'utf8').length, 64);
+
+      // Release creator.
+      writeFileSync(releasePath, 'go');
+      await waitForFile(creatorDone, 10_000);
+
+      assert.equal(readFileSync(creatorOut, 'utf8'), readFileSync(readerOut, 'utf8'));
+    } finally {
+      for (const child of children) {
+        if (child.exitCode === null) child.kill('SIGKILL');
+      }
+      f.close();
+    }
+  });
+
+  test('concurrent initialization records a directory fsync for every initializer', async () => {
+    const f = await openFixture();
+    const children: ReturnType<typeof spawn>[] = [];
+    try {
+      const tsxCli = resolve(process.cwd(), 'node_modules/tsx/dist/cli.mjs');
+      const barrierPath = join(f.dir, 'start.barrier');
+      const ready1 = join(f.dir, 'ready-1');
+      const ready2 = join(f.dir, 'ready-2');
+      const out1 = join(f.dir, 'key-1.hex');
+      const out2 = join(f.dir, 'key-2.hex');
+      const logPath = join(f.dir, 'fsync-all.log');
+
+      const scriptPath = join(f.dir, 'init-key.ts');
+      writeFileSync(scriptPath, `
+import { existsSync, writeFileSync, appendFileSync } from 'node:fs';
+import { openSync, fsyncSync, closeSync, constants } from 'node:fs';
+import { loadOrCreateCredentialKey } from ${JSON.stringify(resolve(process.cwd(), 'src/credentials/key-file.js'))};
+
+async function main() {
+  const [keyPath, barrier, ready, out, logPath] = process.argv.slice(2);
+  writeFileSync(ready, 'ready');
+  while (!existsSync(barrier)) {
+    await new Promise((resolveWait) => setTimeout(resolveWait, 2));
+  }
+  const key = loadOrCreateCredentialKey(keyPath, {
+    platform: 'linux',
+    hasEncryptedRecords: false,
+    fsyncDirectory: (dir) => {
+      const fd = openSync(dir, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
+      fsyncSync(fd);
+      closeSync(fd);
+      appendFileSync(logPath, 'fsync\\n');
+    },
+  });
+  writeFileSync(out, key.toString('hex'));
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
+`);
+
+      const startChild = (ready: string, out: string) => {
+        const child = spawn(process.execPath, [tsxCli, scriptPath, f.keyPath, barrierPath, ready, out, logPath], { stdio: ['ignore', 'ignore', 'pipe'] });
+        children.push(child);
+        return child;
+      };
+      const child1 = startChild(ready1, out1);
+      const child2 = startChild(ready2, out2);
+      let stderr = '';
+      child1.stderr?.on('data', (chunk) => { stderr += String(chunk); });
+      child2.stderr?.on('data', (chunk) => { stderr += String(chunk); });
+
+      const waitFor = async (predicate: () => boolean, timeoutMs: number) => {
+        const deadline = Date.now() + timeoutMs;
+        while (!predicate()) {
+          if (Date.now() > deadline) throw new Error('timed out waiting for child process readiness');
+          await new Promise((resolveWait) => setTimeout(resolveWait, 5));
+        }
+      };
+      await waitFor(() => existsSync(ready1) && existsSync(ready2), 10_000);
+      writeFileSync(barrierPath, 'go');
+
+      const exitCode = (child: ReturnType<typeof spawn>) => new Promise<number>((resolveExit, rejectExit) => {
+        child.once('error', rejectExit);
+        child.once('exit', (code) => resolveExit(code ?? 1));
+      });
+      const [code1, code2] = await Promise.all([exitCode(child1), exitCode(child2)]);
+      assert.equal(code1, 0, `first child failed: ${stderr}`);
+      assert.equal(code2, 0, `second child failed: ${stderr}`);
+
+      assert.equal(readFileSync(out1, 'utf8'), readFileSync(out2, 'utf8'));
+      // Each initializer synchronizes the directory at least once, including the
+      // loser of the creation race through its EEXIST path.
+      const fsyncCount = readFileSync(logPath, 'utf8').trim().split('\n').filter(Boolean).length;
+      assert.ok(fsyncCount >= 2, `expected at least two directory fsyncs, got ${fsyncCount}`);
+    } finally {
+      for (const child of children) {
+        if (child.exitCode === null) child.kill('SIGKILL');
+      }
       f.close();
     }
   });

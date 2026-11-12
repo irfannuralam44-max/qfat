@@ -252,6 +252,17 @@ function createKeyFile(
         if (!existing) {
           fail('KEY_INVALID', 'Credential key file disappeared during creation.');
         }
+        // The losing initializer did not publish this key, but it must still
+        // establish the directory-durability invariant before returning bytes.
+        try {
+          fsyncDirectory(dirname(keyPath));
+        } catch (err) {
+          if (err instanceof CredentialStorageError) throw err;
+          throw new CredentialStorageError(
+            'KEY_DIRECTORY_SYNC_FAILED',
+            'Credential key directory could not be durably synchronized.',
+          );
+        }
         return existing;
       }
       fail('KEY_INVALID', 'Credential key file could not be created safely.');
@@ -296,8 +307,23 @@ export function loadOrCreateCredentialKey(
   options: KeyFileOptions & { hasEncryptedRecords: boolean },
 ): Buffer {
   const platform = options.platform ?? process.platform;
+  const fsyncDirectory = options.fsyncDirectory ?? defaultFsyncDirectory;
   const existing = readKeyFile(keyPath, platform);
-  if (existing) return existing;
+  if (existing) {
+    // Invariant: no key bytes are returned until the containing directory has
+    // been durably synchronized during this invocation. This also covers a key
+    // published by a competing process whose own fsync may not have completed.
+    try {
+      fsyncDirectory(dirname(keyPath));
+    } catch (err) {
+      if (err instanceof CredentialStorageError) throw err;
+      throw new CredentialStorageError(
+        'KEY_DIRECTORY_SYNC_FAILED',
+        'Credential key directory could not be durably synchronized.',
+      );
+    }
+    return existing;
+  }
 
   if (options.hasEncryptedRecords) {
     fail(
@@ -306,5 +332,5 @@ export function loadOrCreateCredentialKey(
     );
   }
 
-  return createKeyFile(keyPath, platform, options.fsyncDirectory);
+  return createKeyFile(keyPath, platform, fsyncDirectory);
 }

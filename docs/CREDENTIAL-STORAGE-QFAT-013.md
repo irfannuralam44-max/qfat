@@ -55,6 +55,11 @@ Linux is the first and only active platform target until the complete Linux impl
    deleted merely because synchronization failed. `link()` fails with `EEXIST`
    instead of replacing an existing key, so concurrent first starts converge
    on one key.
+4. Every key return path synchronizes the containing `keys` directory before
+   returning key bytes: an already existing key, a newly created key, a loser of
+   the creation race (`EEXIST`), and any retry after another process published
+   the key. This closes the race where a competing process could observe a
+   published key before the creator's directory fsync completed.
 4. A missing key with no encrypted records is the only case that creates a key.
 5. A missing, malformed, truncated, unreadable, symlinked, non-regular, or
    unsafe-permission key fails closed. It is never silently regenerated when
