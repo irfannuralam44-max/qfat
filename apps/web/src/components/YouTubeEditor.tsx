@@ -163,6 +163,7 @@ export function YouTubeEditor({ initialMetadata = {}, onChange, disabled = false
           mediaType="video"
           onChange={handleMediaChange}
           currentFile={media}
+          resetKey={resetKey}
           helperText="Select a video file (.mp4, .mov). Preliminary validation only; server-side validation applies on upload."
           disabled={disabled}
         />
