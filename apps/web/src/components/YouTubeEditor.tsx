@@ -127,6 +127,9 @@ export function YouTubeEditor({ initialMetadata = {}, onChange, disabled = false
           onChange={handleDescriptionChange}
           placeholder="Tell viewers about your video"
           rows={5}
+          countValue={getByteLength(description)}
+          countMax={YOUTUBE_DESCRIPTION_MAX_BYTES}
+          countUnit="bytes"
           showCharCount
           error={descriptionError}
           helperText="Supports line breaks, hashtags, and links. First two lines appear before 'Show more'. Limit: 5,000 bytes."
@@ -139,6 +142,7 @@ export function YouTubeEditor({ initialMetadata = {}, onChange, disabled = false
           onChange={handleTagsChange}
           placeholder="Add a tag and press Enter"
           maxTagLength={YOUTUBE_TAGS_MAX_LENGTH}
+          resetKey={resetKey}
           error={tagsError}
           helperText="Descriptive keywords help discovery. Separate with commas or press Enter. Total combined limit: 500 characters."
           disabled={disabled}
