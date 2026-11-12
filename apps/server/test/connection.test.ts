@@ -227,6 +227,7 @@ describe('Drizzle Migrations', () => {
 
       assert.ok(result.appliedCount >= 1, 'At least one migration should be applied');
       assert.ok(result.tables.includes('app_meta'), 'app_meta table should exist');
+      assert.ok(result.tables.includes('credential_records'), 'credential_records table should exist');
 
       // Verify schema
       const db = new Database(path);
@@ -331,14 +332,16 @@ describe('Drizzle Migrations', () => {
       const journal = JSON.parse(readFileSync(journalPath, 'utf-8'));
 
       // Verify journal has the expected number of entries with expected tags
-      assert.equal(journal.entries.length, 3, 'Journal should have exactly three entries');
+      assert.equal(journal.entries.length, 4, 'Journal should have exactly four entries');
       const v1Entry = journal.entries[0];
       const v2Entry = journal.entries[1];
       const v3Entry = journal.entries[2];
-      assert.ok(v1Entry.tag && v2Entry.tag && v3Entry.tag, 'All entries should have tags');
+      const v4Entry = journal.entries[3];
+      assert.ok(v1Entry.tag && v2Entry.tag && v3Entry.tag && v4Entry.tag, 'All entries should have tags');
       assert.notEqual(v1Entry.tag, v2Entry.tag, 'Entry tags should be distinct');
       assert.notEqual(v2Entry.tag, v3Entry.tag, 'Entry tags should be distinct');
-      assert.ok(v1Entry.when && v2Entry.when && v3Entry.when, 'All entries should have timestamps');
+      assert.notEqual(v3Entry.tag, v4Entry.tag, 'Entry tags should be distinct');
+      assert.ok(v1Entry.when && v2Entry.when && v3Entry.when && v4Entry.when, 'All entries should have timestamps');
 
       // Dynamically compute expected hashes from committed SQL files
       const v1SqlPath = resolve(process.cwd(), 'migrations', `${v1Entry.tag}.sql`);
@@ -355,6 +358,11 @@ describe('Drizzle Migrations', () => {
       const v3SqlContent = readFileSync(v3SqlPath, 'utf-8');
       const v3ExpectedHash = createHash('sha256').update(v3SqlContent).digest('hex');
       const v3ExpectedTimestamp = v3Entry.when;
+
+      const v4SqlPath = resolve(process.cwd(), 'migrations', `${v4Entry.tag}.sql`);
+      const v4SqlContent = readFileSync(v4SqlPath, 'utf-8');
+      const v4ExpectedHash = createHash('sha256').update(v4SqlContent).digest('hex');
+      const v4ExpectedTimestamp = v4Entry.when;
 
       // Step 2: Build v1-only migration fixture from committed artifacts
       const v1MetaDir = resolve(v1FixtureDir, 'meta');
@@ -421,7 +429,7 @@ describe('Drizzle Migrations', () => {
           hash: string;
           created_at: number;
         }[];
-        assert.equal(migrations.length, 3, 'Should have exactly 3 migrations tracked');
+        assert.equal(migrations.length, 4, 'Should have exactly 4 migrations tracked');
 
         // Verify v1 migration hash and timestamp match dynamically derived values
         assert.equal(migrations[0].hash, v1ExpectedHash, 'v1 migration hash should match dynamically derived hash');
@@ -434,6 +442,10 @@ describe('Drizzle Migrations', () => {
         // Verify v3 migration hash and timestamp match dynamically derived values
         assert.equal(migrations[2].hash, v3ExpectedHash, 'v3 migration hash should match dynamically derived hash');
         assert.equal(migrations[2].created_at, v3ExpectedTimestamp, 'v3 migration timestamp should match journal');
+
+        // Verify v4 migration hash and timestamp match dynamically derived values
+        assert.equal(migrations[3].hash, v4ExpectedHash, 'v4 migration hash should match dynamically derived hash');
+        assert.equal(migrations[3].created_at, v4ExpectedTimestamp, 'v4 migration timestamp should match journal');
       } finally {
         if (db2) db2.close();
       }

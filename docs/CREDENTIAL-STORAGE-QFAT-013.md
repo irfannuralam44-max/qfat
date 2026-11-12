@@ -1,0 +1,131 @@
+# QFAT Credential Storage Foundation (QFAT-013)
+
+- **Status:** Temporary implementation under ADR-004; not an OS credential store
+- **Scope:** Local encrypted credential persistence foundation only
+- **Related:** `docs/decisions/ADR-004-temporary-encrypted-local-credential-storage.md`
+
+## What this provides
+
+The backend can persist an opaque credential payload in SQLite as AES-256-GCM
+authenticated ciphertext. The encryption key is a separate local key file. The
+implementation is behind `CredentialProvider`, so a later Linux Secret Service
+(LSS) or Windows Credential Vault (WCV) provider can replace the key-file
+provider without changing account-management business logic.
+
+This foundation does **not** implement OAuth, account connection, account APIs,
+Account Management UI, platform API calls, or publishing.
+
+## Storage layout
+
+The existing QFAT data-directory convention is used: `QFAT_DATA_DIR` when set,
+otherwise `~/.qfat`.
+
+| Platform | Database | Key file | Effective status |
+|---|---|---|---|
+| Linux | `~/.qfat/qfat.db` (or `$QFAT_DATA_DIR/qfat.db`) | `~/.qfat/keys/credential.key` (or `$QFAT_DATA_DIR/keys/credential.key`) | Implemented and tested with POSIX permissions |
+| Windows | `%USERPROFILE%\.qfat\qfat.db` (or `%QFAT_DATA_DIR%\qfat.db`) | `%USERPROFILE%\.qfat\keys\credential.key` (or `%QFAT_DATA_DIR%\keys\credential.key`) | **Fails closed at provider construction**; Windows ACL verification is not implemented/validated in this build |
+
+The key file is deliberately in a separate directory from the SQLite database.
+It is not stored in SQLite, source code, Git, environment variables, logs, API
+responses, or browser storage.
+
+## Key-file lifecycle and safety
+
+1. On Linux, the key directory is created with mode `0700` and the key file with
+   mode `0600`. Existing directory/file ownership and mode bits are verified;
+   unsafe states fail closed.
+2. A key is 32 cryptographically random bytes from `node:crypto`.
+3. First-time creation writes a fully synced temporary file with exclusive
+   creation, then atomically hard-links it to `credential.key`. `link()` fails
+   with `EEXIST` instead of replacing an existing key, so concurrent first
+   starts converge on one key.
+4. A missing key with no encrypted records is the only case that creates a key.
+5. A missing, malformed, truncated, unreadable, symlinked, non-regular, or
+   unsafe-permission key fails closed. It is never silently regenerated when
+   credential records may exist.
+6. The key is cached in the running provider process after a successful load.
+   The key is never exposed by the provider interface.
+
+## Envelope format
+
+Each row in `credential_records` stores:
+
+- envelope version (`1`),
+- 12-byte nonce,
+- 16-byte authentication tag,
+- ciphertext,
+- non-secret record context (`id`, `purpose`, `provider`) and timestamps.
+
+AES-256-GCM AAD is derived from the envelope version, record ID, purpose, and
+provider discriminator. A ciphertext copied to another record or purpose fails
+authentication. Envelope shape and lengths are validated before decryption.
+Authentication failures return no partial plaintext.
+
+## Startup and failure behavior
+
+- On Windows, constructing `KeyFileCredentialProvider` throws
+  `WINDOWS_ACL_UNVERIFIED` before any key is created or read. The provider does
+  not claim Windows support based on POSIX `chmod`.
+- On Linux, the provider constructor checks platform support. Key loading and
+  permission verification happen on the first operation that needs the key.
+- If encrypted records exist and the key file is missing or invalid, the
+  operation throws a typed `CredentialStorageError` (`KEY_MISSING_WITH_RECORDS`
+  or `KEY_INVALID`). Account-management startup must treat this as fatal and
+  must not continue with a replacement key.
+- Error messages are actionable but do not include key bytes, plaintext,
+  ciphertext, or absolute filesystem paths.
+
+## Backup and restore
+
+The SQLite database and key file are **separately stored but jointly required**
+artifacts.
+
+- Back up the database (including WAL sidecars when live) and the key file.
+- Restore the key file to the owner-only key directory with mode `0600`; the
+  directory must be owner-only (`0700`).
+- Losing the key makes existing encrypted credential values unrecoverable.
+- Restoring a different key causes authentication failure; QFAT does not
+  replace the key automatically.
+- Do not copy only the database and assume credentials are recoverable.
+
+## Threat model and limitations
+
+This protects credential values in a copied or exposed SQLite database when the
+separate key file is not also compromised.
+
+It does **not** protect against:
+
+- malware or an attacker who can read both the QFAT data directory and key file,
+- compromise of the logged-in OS user,
+- inspection of a running QFAT process or its memory,
+- a compromised backend process,
+- whole-database compromise that includes the key file.
+
+It is **not** whole-database encryption, not SQLCipher, and not equivalent to
+LSS/WCV. Non-secret account metadata and other SQLite records remain plaintext
+under their existing data-protection requirements. SQLite deletion removes the
+logical row but is not a claim of secure physical erasure from SQLite/WAL.
+
+Additional limitations:
+
+- POSIX mode bits do not establish Windows ACL protection.
+- Windows ACL verification is **NOT RUN/UNVERIFIED** in this task; Windows
+  provider construction fails closed.
+- A crash can leave an ignored `.tmp` file in the key directory; the final key
+  path is only published after a complete, synced write.
+- The provider does not implement key rotation, LSS/WCV migration, or a password
+  prompt.
+
+## Verification
+
+Focused automated tests use synthetic dummy credentials and isolated temporary
+directories/databases. They cover round trip, plaintext absence in SQLite and
+database files, fresh nonces, ciphertext/nonce/tag/wrong-key/AAD tampering,
+envelope validation, missing/corrupt/truncated/unreadable keys, missing key with
+existing records, repeated and concurrent initialization, symlink/non-regular
+paths, POSIX permissions and ownership, Windows fail-closed behavior, and error
+hygiene.
+
+Actual Windows ACL execution remains **NOT RUN**. Linux POSIX behavior is
+tested on the repository's Linux environment; it is not evidence of Windows ACL
+support.

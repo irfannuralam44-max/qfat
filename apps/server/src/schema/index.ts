@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, primaryKey, uniqueIndex, blob } from 'drizzle-orm/sqlite-core';
 
 /**
  * Minimal infrastructure schema for the QFAT backend foundation.
@@ -29,14 +29,35 @@ export const mediaItems = sqliteTable('media_items', {
 }));
 
 /**
+ * Encrypted credential payloads for the temporary local key-file provider.
+ *
+ * Only authenticated ciphertext and non-secret envelope metadata live here.
+ * The encryption key is stored separately in the QFAT key directory.
+ */
+export const credentialRecords = sqliteTable('credential_records', {
+  id: text('id').primaryKey(),
+  purpose: text('purpose').notNull(),
+  provider: text('provider').notNull(),
+  envelopeVersion: integer('envelope_version').notNull(),
+  nonce: blob('nonce', { mode: 'buffer' }).notNull(),
+  authTag: blob('auth_tag', { mode: 'buffer' }).notNull(),
+  ciphertext: blob('ciphertext', { mode: 'buffer' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+});
+
+/**
  * Schema registry for Drizzle.
  */
 export const schema = {
   appMeta,
   mediaItems,
+  credentialRecords,
 };
 
 export type AppMeta = typeof appMeta.$inferSelect;
 export type NewAppMeta = typeof appMeta.$inferInsert;
 export type MediaItem = typeof mediaItems.$inferSelect;
 export type NewMediaItem = typeof mediaItems.$inferInsert;
+export type CredentialRecord = typeof credentialRecords.$inferSelect;
+export type NewCredentialRecord = typeof credentialRecords.$inferInsert;

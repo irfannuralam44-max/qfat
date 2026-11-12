@@ -53,6 +53,17 @@ Invalid values (non-integer, out of range, empty, decimal, or partial strings) c
 
 Hardcoded to `127.0.0.1` (loopback only). The server never binds to `0.0.0.0` or LAN interfaces.
 
+### Credential storage
+
+QFAT-013 adds the temporary ADR-004 credential provider. On Linux, the
+encryption key file is stored separately from the database at
+`$QFAT_DATA_DIR/keys/credential.key` (default `~/.qfat/keys/credential.key`).
+On Windows the derived path is `%USERPROFILE%\.qfat\keys\credential.key`, but
+this build fails closed because Windows ACL verification is not implemented or
+validated. See [`docs/CREDENTIAL-STORAGE-QFAT-013.md`](../../docs/CREDENTIAL-STORAGE-QFAT-013.md)
+for the threat model, permissions, startup failure behavior, and backup/restore
+requirements.
+
 ## Health Check
 
 ```bash
