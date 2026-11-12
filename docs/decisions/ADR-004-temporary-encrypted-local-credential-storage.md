@@ -44,10 +44,11 @@ This ADR records the owner's explicit approval on 2026-11-12 of encrypted SQLite
 
 ## Platform delivery sequence — owner decision (2026-11-12)
 
-The owner has explicitly set a Linux-first delivery sequence:
+The owner has explicitly set a Linux-only active delivery sequence:
 
-1. Complete implementation, integration, verification, and readiness work for **Linux** first.
-2. Begin **Windows** implementation and host-specific validation only after all Linux work is complete, as a separate platform stage on the owner's Windows PC.
-3. Until that later Windows stage, the Windows credential provider must remain fail-closed. Windows ACL support and Windows readiness must not be claimed or treated as a prerequisite for completing Linux work.
+1. **Linux is the only authorized active platform workstream.** Complete implementation, integration, verification, independent audit, and formal owner acceptance for Linux.
+2. **Windows is deferred and NOT AUTHORIZED.** Do not start, dispatch, implement, or test Windows work merely because a task specification exists in the repository or Linux work appears nearly complete.
+3. Windows may be reconsidered only after the owner explicitly confirms Linux is 100% complete, the independent audit is finished, the Linux stage is formally accepted, and the owner gives a separate, explicit authorization to begin Windows as a later stage on the owner's Windows PC.
+4. Until that separate authorization, the Windows credential provider must remain fail-closed. Windows ACL support and Windows readiness must not be claimed or treated as a prerequisite for completing Linux work.
 
-This sequencing decision does not change the cryptographic design or weaken the fail-closed requirement. QFAT-013R is limited to Linux hardening. The Windows work is explicitly deferred, not cancelled.
+This sequencing decision does not change the cryptographic design or weaken the fail-closed requirement. QFAT-013R and related follow-ups are limited to Linux hardening. Windows is parked for later and is not an active or automatically queued task.
