@@ -3,7 +3,7 @@ import { registerSecurityRoutes } from './security/routes.js';
 import { sessionStore } from './security/index.js';
 import { openDatabase, closeDatabase, runMigrations } from './db/index.js';
 import { registerMediaRoutes } from './media/routes.js';
-import { ensureMediaRoot } from './media/storage.js';
+import { ensureMediaRoot, recoverMediaStorage } from './media/storage.js';
 import { getDataDir, getDbPath, getMediaDir } from './config.js';
 import { mkdirSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -49,6 +49,8 @@ async function buildServer(options: BuildServerOptions = {}) {
 
   const conn = openDatabase(dbPath);
   const db = conn.db;
+
+  await recoverMediaStorage(db, mediaDir);
 
   const app = Fastify({
     logger: false,

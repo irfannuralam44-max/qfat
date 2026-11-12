@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { buildServer } from '../src/index.js';
 import { createTempDatabase } from '../src/db/connection.js';
+import { resolveMediaPath, ensureMediaRoot } from '../src/media/storage.js';
+import { symlinkSync, writeFileSync, mkdirSync as mkd } from 'node:fs';
 
 const origin = 'http://127.0.0.1:5173';
 
@@ -257,6 +259,115 @@ describe('Media persistence across restart', () => {
       });
       assert.equal(list.statusCode, 200);
       assert.equal(list.json<{ items: any[] }>().items.length, 1);
+      await app.close();
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('Media path safety', () => {
+  test('resolveMediaPath rejects traversal and absolute escape', () => {
+    assert.throws(() => resolveMediaPath('/tmp/qfat-root', '../outside'), /escapes media root/);
+    assert.throws(() => resolveMediaPath('/tmp/qfat-root', '/etc/passwd'), /escapes media root/);
+  });
+
+  test('resolveMediaPath rejects symlink escape when target exists', () => {
+    const root = mkdtempSync(join(tmpdir(), 'qfat-symroot-'));
+    const outside = mkdtempSync(join(tmpdir(), 'qfat-outside-'));
+    const outsideFile = join(outside, 'secret.txt');
+    writeFileSync(outsideFile, 'secret');
+    const linkPath = join(root, 'evil');
+    symlinkSync(outsideFile, linkPath);
+    try {
+      assert.throws(() => resolveMediaPath(root, 'evil'), /escapes media root/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  test('ensureMediaRoot rejects symlinked root', () => {
+    const real = mkdtempSync(join(tmpdir(), 'qfat-real-'));
+    const link = join(tmpdir(), `qfat-link-${Date.now()}`);
+    symlinkSync(real, link);
+    try {
+      assert.throws(() => ensureMediaRoot(link), /real directory/);
+    } finally {
+      rmSync(link, { force: true });
+      rmSync(real, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('Media pagination', () => {
+  test('returns distinct pages with correct counts', async () => {
+    const dbPath = createTempDatabase('qfat-media-page');
+    const mediaDir = mkdtempSync(join(tmpdir(), 'qfat-media-page-dir-'));
+    const cleanup = () => {
+      try { rmSync(dbPath, { force: true }); } catch {}
+      try { rmSync(`${dbPath}-wal`, { force: true }); } catch {}
+      try { rmSync(`${dbPath}-shm`, { force: true }); } catch {}
+      try { rmSync(mediaDir, { recursive: true, force: true }); } catch {}
+    };
+    try {
+      const app = await buildServer({ dbPath, mediaDir });
+      await app.ready();
+      const bootstrap = await app.inject({
+        method: 'POST',
+        url: '/api/v1/security/bootstrap',
+        headers: { origin, host: origin.replace('http://', '') },
+      });
+      const csrfToken = bootstrap.json<{ csrfToken: string }>().csrfToken;
+      const sessionCookie = String(bootstrap.headers['set-cookie']).split(';', 1)[0];
+      const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+      for (let i = 0; i < 3; i++) {
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/media',
+          headers: {
+            origin,
+            host: origin.replace('http://', ''),
+            cookie: sessionCookie,
+            'x-csrf-token': csrfToken,
+            'content-type': 'application/octet-stream',
+            'x-file-name': `p${i}.png`,
+          },
+          payload: png,
+        });
+      }
+
+      const page1 = await app.inject({
+        method: 'GET',
+        url: '/api/v1/media?limit=2&offset=0',
+        headers: { origin, host: origin.replace('http://', ''), cookie: sessionCookie },
+      });
+      assert.equal(page1.statusCode, 200);
+      const body1 = page1.json<{ items: any[] }>();
+      assert.equal(body1.items.length, 2);
+
+      const page2 = await app.inject({
+        method: 'GET',
+        url: '/api/v1/media?limit=2&offset=2',
+        headers: { origin, host: origin.replace('http://', ''), cookie: sessionCookie },
+      });
+      assert.equal(page2.statusCode, 200);
+      const body2 = page2.json<{ items: any[] }>();
+      assert.equal(body2.items.length, 1);
+
+      // distinct ids
+      const ids1 = body1.items.map((x: any) => x.id);
+      const ids2 = body2.items.map((x: any) => x.id);
+      assert.ok(!ids2.some((id: string) => ids1.includes(id)));
+
+      // max limit enforced
+      const big = await app.inject({
+        method: 'GET',
+        url: '/api/v1/media?limit=1000',
+        headers: { origin, host: origin.replace('http://', ''), cookie: sessionCookie },
+      });
+      assert.equal(big.json<{ limit: number }>().limit, 500);
+
       await app.close();
     } finally {
       cleanup();

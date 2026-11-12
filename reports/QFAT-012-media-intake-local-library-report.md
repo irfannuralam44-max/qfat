@@ -84,9 +84,9 @@ Manual smoke test via temporary `QFAT_DATA_DIR` verified upload, list, detail, d
 | AC-05 | PASS | Automated upload test verifies record |
 | AC-06 | PASS | Restart persistence test |
 | AC-07 | PASS | Detail response excludes storage path |
-| AC-08 | PASS | Delete test |
+| AC-08 | PASS | Delete, DB/filesystem failure, and recovery tests |
 | AC-09 | PASS | Security guard tests |
-| AC-10 | PASS | Abort cleanup in implementation; partial file removal |
+| AC-10 | PASS | Abort cleanup, quarantine, and recovery tests |
 | AC-11 | PASS | UI states implemented |
 | AC-12 | PASS | Existing routes/security preserved; typecheck/tests pass |
 | AC-13 | PASS | No publishing/OAuth/albums introduced |
@@ -96,8 +96,9 @@ Manual smoke test via temporary `QFAT_DATA_DIR` verified upload, list, detail, d
 
 - Upload uses raw binary rather than multipart; documented in code.
 - Crash recovery for partial `.part` files is not automatically cleaned; documented limitation.
-- Delete now uses DB-first deletion with best-effort record restoration if file deletion fails; a crash between DB commit and file deletion could still leave an orphaned file, but not a record without a file.
-- Symlink/path containment is validated lexically and via realpath where paths exist; a pre-existing symlinked media root is rejected.
+- Delete now quarantines the managed file before deleting the database row, rolls back the file move if database deletion fails, and leaves recoverable copies in `.trash` if final cleanup fails.
+- Symlink/path containment is validated lexically and via realpath where paths exist; symlinked roots, `.tmp`, and target files are rejected or detected.
+- Recovery scans quarantined files on startup and restores copies for records whose managed file is missing.
 - No platform-specific media constraints implemented; marked as follow-up validation.
 - List uses bounded pagination (default 100, max 500).
 

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, rename, unlink, stat } from 'node:fs/promises';
-import { realpathSync, lstatSync, mkdirSync } from 'node:fs';
+import { realpathSync, lstatSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import type { Database } from 'better-sqlite3';
 
@@ -23,6 +23,14 @@ export function ensureMediaRoot(mediaDir: string): void {
   const st = lstatSync(mediaDir);
   if (!st.isDirectory() || st.isSymbolicLink()) {
     throw new Error('Media root must be a real directory');
+  }
+}
+
+export function ensureRealDirectory(dir: string): void {
+  mkdirSync(dir, { recursive: true });
+  const st = lstatSync(dir);
+  if (!st.isDirectory() || st.isSymbolicLink()) {
+    throw new Error('Directory must be a real directory');
   }
 }
 
@@ -228,33 +236,117 @@ export async function deleteMedia(db: Database, mediaDir: string, id: string): P
   if (rows.length === 0) return false;
   const row = rows[0];
 
+  ensureMediaRoot(mediaDir);
+  const trashDir = resolve(mediaDir, '.trash');
+  ensureRealDirectory(trashDir);
+
   // Validate path containment before any mutation.
   const filePath = resolveMediaPath(mediaDir, row.storageKey);
-  ensureMediaRoot(mediaDir);
+  const fileStat = (() => {
+    try {
+      return lstatSync(filePath);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') return null;
+      throw err;
+    }
+  })();
+  if (fileStat && fileStat.isSymbolicLink()) {
+    throw new Error('Refusing to delete symlinked media file');
+  }
 
-  // Delete database row first so a DB failure does not leave a record
-  // pointing at a deleted file.
+  // Move the managed file into a quarantine/trash directory before touching
+  // the database. This is atomic on the same filesystem and leaves a
+  // recoverable copy if the database deletion fails.
+  let trashPath: string | null = null;
+  let moved = false;
+  if (fileStat) {
+    trashPath = resolve(trashDir, row.storageKey);
+    let candidate = trashPath;
+    let suffix = 0;
+    while (existsSync(candidate)) {
+      suffix += 1;
+      candidate = `${trashPath}.${suffix}`;
+    }
+    trashPath = candidate;
+    await rename(filePath, trashPath);
+    moved = true;
+  }
+
+  // Delete the database row only after the file is safely quarantined.
   try {
     drizzleDb.delete(mediaItems).where(eq(mediaItems.id, id)).run();
   } catch (err) {
+    // Roll back the quarantine move so the original file is restored.
+    if (moved && trashPath) {
+      try {
+        await rename(trashPath, filePath);
+      } catch {
+        // Leave the quarantined file for recovery; do not hide the DB error.
+      }
+    }
     throw err;
   }
 
-  // Then remove the managed file. If this fails, restore the record.
-  try {
-    await unlink(filePath);
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code !== 'ENOENT') {
-      try {
-        drizzleDb.insert(mediaItems).values(row as any).run();
-      } catch {
-        // Best-effort compensation; original error is more important.
-      }
-      throw err;
+  // Remove the quarantined file. A failure here leaves a recoverable copy
+  // in trash while the database record is already gone.
+  if (moved && trashPath) {
+    try {
+      await unlink(trashPath);
+    } catch {
+      // Intentionally not fatal: the library record is gone and the copy is
+      // quarantined for later cleanup/recovery.
     }
   }
   return true;
+}
+
+export async function recoverMediaStorage(db: Database, mediaDir: string): Promise<void> {
+  ensureMediaRoot(mediaDir);
+  const trashDir = resolve(mediaDir, '.trash');
+  try {
+    ensureRealDirectory(trashDir);
+  } catch {
+    return;
+  }
+
+  const { drizzle } = await import('drizzle-orm/better-sqlite3');
+  const { mediaItems } = await import('../schema/index.js');
+  const drizzleDb = drizzle(db);
+  const rows = drizzleDb.select().from(mediaItems).all() as Array<{ id: string; storageKey: string }>;
+
+  for (const row of rows) {
+    let originalPath: string;
+    try {
+      originalPath = resolveMediaPath(mediaDir, row.storageKey);
+    } catch {
+      continue;
+    }
+    if (existsSync(originalPath)) continue;
+
+    // Look for a quarantined copy to restore.
+    const base = resolve(trashDir, row.storageKey);
+    let candidate: string | null = null;
+    if (existsSync(base)) candidate = base;
+    if (!candidate) {
+      let i = 1;
+      while (existsSync(`${base}.${i}`)) {
+        candidate = `${base}.${i}`;
+        break;
+      }
+    }
+    if (candidate) {
+      try {
+        const st = lstatSync(candidate);
+        if (st.isSymbolicLink()) continue;
+        if (!existsSync(originalPath)) {
+          await rename(candidate, originalPath);
+        }
+      } catch {
+        // Leave recovery best-effort; do not crash startup.
+      }
+    }
+  }
 }
 
 export async function getMediaRecord(db: Database, id: string) {
