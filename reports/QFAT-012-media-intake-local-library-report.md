@@ -96,9 +96,16 @@ Manual smoke test via temporary `QFAT_DATA_DIR` verified upload, list, detail, d
 
 - Upload uses raw binary rather than multipart; documented in code.
 - Crash recovery for partial `.part` files is not automatically cleaned; documented limitation.
-- Delete consistency uses file-first then DB delete; rare DB failure after file deletion could leave a dangling record pointing to a missing file.
+- Delete now uses DB-first deletion with best-effort record restoration if file deletion fails; a crash between DB commit and file deletion could still leave an orphaned file, but not a record without a file.
+- Symlink/path containment is validated lexically and via realpath where paths exist; a pre-existing symlinked media root is rejected.
 - No platform-specific media constraints implemented; marked as follow-up validation.
+- List uses bounded pagination (default 100, max 500).
 
-## Git publication
+## Git Publication
 
-To be completed in final handoff.
+- Repository: irfannuralam44-max/qfat
+- Branch: main
+- Implementation commit: 6fc6e3afe9d7b5764b1da5ae4bcd117d822d949c
+- Follow-up fix commit: Pending
+- Report update commit: Pending
+- Push verification: Pending

@@ -92,7 +92,28 @@ export function MediaLibraryPage() {
   const handleDelete = async (item: MediaItem) => {
     setDeletingId(item.id);
     try {
-      await securityClient.requestWithCsrf(`/api/v1/media/${item.id}`, { method: 'DELETE' });
+      const csrfToken = await securityClient.getCsrfTokenOrBootstrap();
+      const response = await fetch(`/api/v1/media/${item.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'X-CSRF-Token': csrfToken },
+      });
+      if (response.status === 401) {
+        securityClient.clear();
+        const refreshed = await securityClient.bootstrap();
+        const retry = await fetch(`/api/v1/media/${item.id}`, {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: { 'X-CSRF-Token': refreshed.csrfToken },
+        });
+        if (!retry.ok && retry.status !== 204) {
+          const err = await retry.json().catch(() => ({ error: 'Delete failed.' }));
+          throw new Error(err.error || `Delete failed (${retry.status}).`);
+        }
+      } else if (!response.ok && response.status !== 204) {
+        const err = await response.json().catch(() => ({ error: 'Delete failed.' }));
+        throw new Error(err.error || `Delete failed (${response.status}).`);
+      }
       setConfirmDelete(null);
       await load();
     } catch (err) {

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, rename, unlink, stat } from 'node:fs/promises';
+import { realpathSync, lstatSync, mkdirSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import type { Database } from 'better-sqlite3';
 
@@ -17,11 +18,42 @@ export interface StoredMedia {
   createdAt: Date;
 }
 
+export function ensureMediaRoot(mediaDir: string): void {
+  mkdirSync(mediaDir, { recursive: true });
+  const st = lstatSync(mediaDir);
+  if (!st.isDirectory() || st.isSymbolicLink()) {
+    throw new Error('Media root must be a real directory');
+  }
+}
+
 export function resolveMediaPath(mediaDir: string, storageKey: string): string {
   const root = resolve(mediaDir);
   const target = resolve(root, storageKey);
   if (target !== root && !target.startsWith(root + sep)) {
     throw new Error('Storage key escapes media root');
+  }
+  // Guard against symlink escape when paths already exist.
+  try {
+    const realRoot = realpathSync(root);
+    let realTarget: string;
+    try {
+      realTarget = realpathSync(target);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') throw err;
+      // For not-yet-created files, validate the parent directory.
+      realTarget = realpathSync(resolve(target, '..'));
+      if (realTarget !== realRoot && !realTarget.startsWith(realRoot + sep)) {
+        throw new Error('Storage path escapes media root');
+      }
+      return target;
+    }
+    if (realTarget !== realRoot && !realTarget.startsWith(realRoot + sep)) {
+      throw new Error('Storage path escapes media root');
+    }
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') throw err;
   }
   return target;
 }
@@ -77,9 +109,14 @@ export async function storeUploadedImageOrVideo(
   originalFilename: string | null,
   abortSignal?: AbortSignal,
 ): Promise<StoredMedia> {
-  await mkdir(mediaDir, { recursive: true });
+  ensureMediaRoot(mediaDir);
   const tmpDir = resolve(mediaDir, '.tmp');
   await mkdir(tmpDir, { recursive: true });
+  // Ensure temp dir is also a real directory, not a symlink escape.
+  const tmpStat = lstatSync(tmpDir);
+  if (!tmpStat.isDirectory() || tmpStat.isSymbolicLink()) {
+    throw new Error('Temporary media directory is invalid');
+  }
 
   const id = randomUUID();
   const storageKey = id;
@@ -191,22 +228,32 @@ export async function deleteMedia(db: Database, mediaDir: string, id: string): P
   if (rows.length === 0) return false;
   const row = rows[0];
 
-  // Validate path containment
+  // Validate path containment before any mutation.
   const filePath = resolveMediaPath(mediaDir, row.storageKey);
+  ensureMediaRoot(mediaDir);
 
-  // Delete file first
+  // Delete database row first so a DB failure does not leave a record
+  // pointing at a deleted file.
+  try {
+    drizzleDb.delete(mediaItems).where(eq(mediaItems.id, id)).run();
+  } catch (err) {
+    throw err;
+  }
+
+  // Then remove the managed file. If this fails, restore the record.
   try {
     await unlink(filePath);
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code !== 'ENOENT') {
+      try {
+        drizzleDb.insert(mediaItems).values(row as any).run();
+      } catch {
+        // Best-effort compensation; original error is more important.
+      }
       throw err;
     }
-    // file already missing; proceed to remove record
   }
-
-  // Delete DB row
-  drizzleDb.delete(mediaItems).where(eq(mediaItems.id, id)).run();
   return true;
 }
 
@@ -219,10 +266,12 @@ export async function getMediaRecord(db: Database, id: string) {
   return rows[0] ?? null;
 }
 
-export async function listMediaRecords(db: Database) {
+export async function listMediaRecords(db: Database, limit = 100, offset = 0) {
+  const safeLimit = Math.min(Math.max(1, Math.trunc(limit)), 500);
+  const safeOffset = Math.max(0, Math.trunc(offset));
   const { drizzle } = await import('drizzle-orm/better-sqlite3');
   const { mediaItems } = await import('../schema/index.js');
   const { desc } = await import('drizzle-orm');
   const drizzleDb = drizzle(db);
-  return drizzleDb.select().from(mediaItems).orderBy(desc(mediaItems.createdAt)).all();
+  return drizzleDb.select().from(mediaItems).orderBy(desc(mediaItems.createdAt)).limit(safeLimit).offset(safeOffset).all();
 }

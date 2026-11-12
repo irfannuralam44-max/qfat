@@ -3,6 +3,7 @@ import { registerSecurityRoutes } from './security/routes.js';
 import { sessionStore } from './security/index.js';
 import { openDatabase, closeDatabase, runMigrations } from './db/index.js';
 import { registerMediaRoutes } from './media/routes.js';
+import { ensureMediaRoot } from './media/storage.js';
 import { getDataDir, getDbPath, getMediaDir } from './config.js';
 import { mkdirSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -42,6 +43,7 @@ async function buildServer(options: BuildServerOptions = {}) {
   const dataDir = resolve(dbPath, '..');
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
   if (!existsSync(mediaDir)) mkdirSync(mediaDir, { recursive: true });
+  ensureMediaRoot(mediaDir);
 
   await runMigrations(dbPath);
 

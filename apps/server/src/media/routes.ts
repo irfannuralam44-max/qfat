@@ -57,10 +57,16 @@ export async function registerMediaRoutes(
     done(null, undefined);
   });
 
-  // List
-  app.get('/api/v1/media', { preHandler: readGuard }, async (_request, reply) => {
-    const rows = await listMediaRecords(db);
-    return reply.send({ items: rows.map(toResponse) });
+  // List (bounded; default limit 100, max 500)
+  app.get('/api/v1/media', { preHandler: readGuard }, async (request, reply) => {
+    const query = request.query as { limit?: string; offset?: string };
+    const limit = query.limit ? Number(query.limit) : 100;
+    const offset = query.offset ? Number(query.offset) : 0;
+    if (!Number.isFinite(limit) || !Number.isFinite(offset) || limit < 1 || offset < 0) {
+      return reply.status(400).send({ error: 'Invalid pagination parameters' });
+    }
+    const rows = await listMediaRecords(db, limit, offset);
+    return reply.send({ items: rows.map(toResponse), limit: Math.min(Math.max(1, Math.trunc(limit)), 500), offset: Math.max(0, Math.trunc(offset)) });
   });
 
   // Detail

@@ -182,6 +182,27 @@ describe('Media intake', () => {
     });
     assert.equal(res.statusCode, 403);
   });
+
+  test('list supports pagination parameters', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/media?limit=1&offset=0',
+      headers: { origin, host: origin.replace('http://', ''), cookie: sessionCookie },
+    });
+    assert.equal(res.statusCode, 200);
+    const body = res.json<{ items: any[]; limit: number; offset: number }>();
+    assert.equal(body.limit, 1);
+    assert.equal(body.offset, 0);
+  });
+
+  test('list rejects invalid pagination', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/media?limit=0',
+      headers: { origin, host: origin.replace('http://', ''), cookie: sessionCookie },
+    });
+    assert.equal(res.statusCode, 400);
+  });
 });
 
 describe('Media persistence across restart', () => {
