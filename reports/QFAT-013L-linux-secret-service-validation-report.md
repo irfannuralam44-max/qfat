@@ -257,8 +257,8 @@ production provider implementation be authorized.
 - Branch: main
 - Implementation commit: `f23d57b970c271f86c9f50894e2e24402a9e130a`
 - Follow-up fix commit: N/A
-- Report update commit: Pending
-- Push verification: Pending
+- Report update commit: `a8bfd665990aaa785b8b17a70a0b7031963a3199`
+- Push verification: PASS (report and metadata commit verified on origin/main)
 
 ## Handoff
 
@@ -266,3 +266,12 @@ This investigation is ready for GPT/owner audit. It is not owner acceptance and
 does not authorize production LSS integration or migration.
 EOF
 echo done
+
+## GPT Post-Publication Audit — 2026-11-12
+
+- Remote report presence and branch publication were verified on `main`; the latest verified branch HEAD at audit start was `a8bfd665990aaa785b8b17a70a0b7031963a3199`.
+- The candidate's documented Linux backend behavior was cross-checked against the package's published README: default selection may fall back to kernel keyutils; explicit `{ linux: { store: 'secret-service' } }` pins Secret Service and fails if unavailable. The README also documents keyutils as in-memory and non-persistent across reboots.
+- The report's NOT RUN status for writable CRUD and process-restart persistence is material. This audit does not treat AC-05 as demonstrated and does not authorize adoption or migration.
+- Host-specific spike execution and the reported runtime errors were not independently reproduced by GPT; those remain agent-reported evidence.
+- Audit disposition: **PASS WITH FINDINGS for the bounded investigation only; NOT READY for production LSS adoption**.
+- Required follow-up before any implementation decision: obtain safe, controlled evidence for Secret Service set/get/update/delete and process-restart persistence on a writable collection, without modifying the owner's normal keyring or weakening host security.
