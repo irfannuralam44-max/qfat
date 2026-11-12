@@ -306,7 +306,8 @@ qfat_test_not_run() {
   qfat_assert_contains "$content" 'CLEANUP_STATUS: NOT_RUN'
   [[ ! -d "$base" ]] || qfat_fail 'NOT RUN cleanup did not remove disposable directory'
   [[ "$(wc -l < "$marker")" -eq 1 ]] || qfat_fail 'NOT RUN cleanup did not run exactly once'
-  pid="$(cat "$pidfile")"; command kill -KILL "$pid" 2>/dev/null || true
+  read -r pid start < "$pidfile"
+  if qfat_verify_proc_identity "$pid" "$start"; then command kill -KILL "$pid" 2>/dev/null || true; fi
   rm -f "$out" "$marker" "$pidfile"
   printf 'PASS F-10: real provenance mismatch path, exit 2, no false success, cleanup once\n'
 }
