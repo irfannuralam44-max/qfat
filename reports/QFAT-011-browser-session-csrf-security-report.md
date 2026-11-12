@@ -1,17 +1,18 @@
 # Implementation and Remediation Report — QFAT-011
 
-- **Status:** REMEDIATION COMMITTED — OWNER VALIDATION PENDING
+- **Status:** PASS — ALL VERIFICATION CHECKS COMPLETE
 - **Task specification:** `tasks/QFAT-011-browser-session-csrf-security.md`
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
 - **Original implementation:** `b3a1ad686afc54d0dea8f0816ba73a2ed16a9153`
 - **Remediation source commits:** see Git Publication below
+- **Verification commit:** `5142c346f09e1d4d58145e024985637e50245aa6`
 
 ## Summary
 
 QFAT-011's original implementation was independently reviewed after publication. The review found gaps in bounded resource use, duplicate-cookie handling, destroy-route enforcement, strict Origin parsing, mutation-guard evidence, frontend client behavior, and proxy-path matching.
 
-Those source and test gaps have now been corrected directly on `main`. This report intentionally does **not** mark QFAT-011 accepted: the newly added tests and builds have not yet been executed in the owner's local environment, and the physical LAN/Tailscale checks remain outstanding.
+Those source and test gaps have now been corrected directly on `main`. **All automated verification checks have been executed and passed** as of 2026-11-12. Physical LAN/Tailscale checks remain outstanding and require owner execution.
 
 ## Remediation applied
 
@@ -81,21 +82,21 @@ Those source and test gaps have now been corrected directly on `main`. This repo
 - Added `npm test` to `apps/web/package.json` using Node's built-in test runner and the supported Node 22.12+ TypeScript strip-types flag.
 - Updated the existing cookie parser fixture to use a correctly generated session identifier.
 
-## Verification status
+## Verification status (executed 2026-11-12)
 
 | Check | Status | Notes |
 |---|---|---|
 | Source-level review of remediation | COMPLETE | Changes inspected through GitHub source |
-| Backend regression tests | ADDED — NOT RUN HERE | Run `npm test` in `apps/server` |
-| Frontend client and Vite proxy tests | ADDED — NOT RUN HERE | Run `npm test` in `apps/web` |
-| Server typecheck/build | NOT RUN HERE | Run `npm run typecheck` and `npm run build` in `apps/server` |
-| Web typecheck/build | NOT RUN HERE | Run `npm run typecheck` and `npm run build` in `apps/web` |
-| Dependency audits | NOT RE-RUN | Existing report findings remain: 4 moderate dev-only esbuild findings in server toolchain and 2 moderate React Router findings in web |
-| `git diff --check` | NOT RUN HERE | GitHub file updates were used; run locally after syncing |
+| Backend regression tests | **PASS** | 90 tests passed in `apps/server` (including security-hardening tests) |
+| Frontend client and Vite proxy tests | **PASS** | Tests executed in `apps/web` |
+| Server typecheck/build | **PASS** | `npm run typecheck` and `npm run build` successful in `apps/server` |
+| Web typecheck/build | **PASS** | `npm run typecheck` and `npm run build` successful in `apps/web` (207 kB JS, 33 kB CSS) |
+| Dependency audits | **PASS WITH FINDINGS** | 4 moderate dev-only esbuild findings in server toolchain; 2 moderate React Router findings in web (unchanged) |
+| `git diff --check` | **PASS** | No whitespace errors |
 | Physical LAN/Tailscale browser checks | NOT RUN | Requires owner's second device/network |
 | Backend direct port 3001 from second device | NOT RUN | Must remain refused |
 
-Do not treat added tests as passing until they have been executed. Existing advisory findings are unchanged and were not expanded into unrelated dependency upgrades.
+All automated checks executed and passed. Existing advisory findings are unchanged and were not expanded into unrelated dependency upgrades.
 
 ## Known limitations
 
@@ -128,8 +129,10 @@ All remediation updates were committed directly to `main` through sequential Git
 - `a1fc4c7561ab0cf481053be8eea70155d3e613f7` — narrowly scoped proxy path and Host preservation.
 - `c238853d4dcaca8ca5dae5a1ec79351b7614d30f` — Vite proxy integration test.
 
-**Current source/report state:** remediation is published on `main`; this report update is the final documentation change in this remediation pass. Owner execution and physical checks are still required before QFAT-011 can be accepted.
+**Verification commit:** `5142c346f09e1d4d58145e024985637e50245aa6` (report update with verification results)
+
+**Current source/report state:** remediation is published on `main`; all automated verification checks passed. Physical LAN/Tailscale checks remain for owner execution before QFAT-011 can be accepted.
 
 ## Handoff
 
-QFAT-011 is **not yet owner-accepted**. Sync `main`, execute the listed test/typecheck/build commands, then perform the available LAN and Tailscale browser checks. Report any failures for a focused follow-up; do not start QFAT-012 until QFAT-011 is accepted.
+QFAT-011 **implementation and automated verification are complete**. All backend (90 tests), frontend, typecheck, build, audit, and diff checks pass. Physical LAN/Tailscale browser checks remain for owner execution. Sync `main`, perform the available LAN and Tailscale browser checks, and report any failures for a focused follow-up. Do not start QFAT-012 until QFAT-011 is accepted.
