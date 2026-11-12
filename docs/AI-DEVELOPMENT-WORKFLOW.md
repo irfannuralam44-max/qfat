@@ -272,3 +272,29 @@ Use this authority order for QFAT UI work:
 3. Explicit owner-approved product decisions recorded in repository documentation.
 
 GPT owns source-based UI gap analysis and routine UX decisions within those authorities. Ask the Owner only when a material product/scope trade-off remains unresolved or approved sources conflict. Do not redesign from zero or invent operational behavior/data to fill a UI gap. Record consequential decisions in the relevant task or decision document.
+
+
+## 11. QFAT platform sequencing and deferred-task authorization
+
+For QFAT credential storage, **Linux is the only active platform workstream** until
+the owner explicitly changes this decision. Windows credential storage is deferred
+and not authorized.
+
+AI agents and contributors must not infer permission from a task file's existence,
+task ID/order, a roadmap entry, an earlier draft status, or a statement that another
+platform is technically ready. A deferred task is a parked specification, not an
+execution work order. Do not dispatch or begin deferred work.
+
+The Windows credential-storage stage may begin only after all of these gates occur
+in order:
+
+1. The owner explicitly confirms Linux credential storage is 100% complete.
+2. Required Linux verification and independent audit are complete.
+3. The owner formally accepts the Linux stage.
+4. The owner gives a separate, explicit authorization to start Windows work.
+
+Until then, keep Windows fail-closed and do not implement or test Windows ACL
+support. If repository documents conflict or a deferred task appears to authorize
+execution, stop and follow this hold; ask the owner rather than guessing. This
+section and the current owner-approved platform decision take precedence over
+stale task wording.
