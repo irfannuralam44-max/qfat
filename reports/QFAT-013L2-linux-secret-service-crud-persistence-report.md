@@ -1893,7 +1893,7 @@ Evidence from the run: `CLEANUP_STATUS: SUCCESS (all tests passed and cleaned up
 | AC-13 | Runner implements F-10 NOT RUN must not become PASS (NOT RUN tracking, non-zero exit on NOT RUN, no false success message, cleanup status reflects NOT RUN) | NOT RUN — forced scenario not executed | Section 4.9: `NOT_RUN_SUBTESTS` array; `exit 2` on NOT RUN; conditional `ALL_TESTS_COMPLETED_SUCCESSFULLY`; `CLEANUP_STATUS: NOT_RUN`. |
 | AC-14 | Runner implements F-11 cleanup must fail honestly (failure collection, no masked failures, pre-deletion process verification, non-zero exit on cleanup failure, single EXIT trap) | PARTIAL — source corrected; forced cleanup failure NOT RUN | Section 4.10: `CLEANUP_FAILURES` counter; unguarded `kill`/`rm` with explicit checks; pre-removal PID liveness scan; exit 1/2 on failure/NOT RUN; single `trap cleanup_all EXIT` with INT/TERM delegating. |
 
-## GPT Independent Audit — F-09/F-10/F-11 Resolution — 2026-11-12
+## Previous GPT Independent Audit — F-09/F-10/F-11 (superseded by follow-up audit below) — 2026-11-12
 
 ### Summary of Findings from Previous Audit
 
@@ -1907,7 +1907,7 @@ The previous audit identified three critical runner safety findings:
 
 ### Resolution Implementation
 
-All three findings are resolved in the corrected `run-all.sh` (Section 2.3):
+At the time of this earlier audit, source changes appeared to address the three findings. That disposition is superseded by the follow-up audit below, which found that cleanup safety still needed correction and the forced failure paths had not been executed:
 
 **F-09 Resolution (Section 4.8):**
 - `verify_proc_identity()` reads `/proc/<pid>/stat` field 22 (starttime) at record time and re-validates before every signal
@@ -1930,12 +1930,7 @@ All three findings are resolved in the corrected `run-all.sh` (Section 2.3):
 
 ### Verification Evidence
 
-The runner logic has been reviewed against each finding requirement. The reported run `qfat-013l2-run-20261112-171230` completed with all subtests runnable (auto-activated daemon provenance verified), so the NOT RUN path was not exercised in this run. The F-09 and F-11 mechanisms were actively exercised and verified:
-- Every `terminate_pid` call performed identity verification via starttime
-- Cleanup trap confirmed zero remaining tracked processes before directory removal
-- `CLEANUP_FAILURES=0`, `cleanup_disposable_dir_removed=true`, `CLEANUP_STATUS: SUCCESS`
-
-A forced NOT RUN scenario (unverifiable auto-activated daemon) would demonstrate exit status 2 and `CLEANUP_STATUS: NOT_RUN` per the implemented logic.
+The run `qfat-013l2-run-20261112-171230` is historical evidence for the runner version used at that time. It did not exercise forced NOT RUN or forced cleanup failure scenarios, and it is not runtime verification of the later corrected runner. The follow-up audit below is the controlling disposition for F-09/F-10/F-11.
 
 ## Git Publication
 
