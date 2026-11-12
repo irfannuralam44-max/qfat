@@ -1,4 +1,4 @@
-import { useId, type ChangeEvent, type FocusEvent, type KeyboardEvent, type RefObject, forwardRef, useState } from 'react';
+import { useEffect, useId, type ChangeEvent, type FocusEvent, type KeyboardEvent, type RefObject, forwardRef, useState } from 'react';
 
 interface BaseFieldProps {
   id?: string;
@@ -74,17 +74,22 @@ interface TextareaProps extends BaseFieldProps {
   rows?: number;
   maxLength?: number;
   showCharCount?: boolean;
+  countValue?: number;
+  countMax?: number;
+  countUnit?: string;
   textareaRef?: RefObject<HTMLTextAreaElement>;
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ id: providedId, label, helperText, error, disabled, required, placeholder, value, onChange, rows = 4, maxLength, showCharCount, 'aria-describedby': ariaDescribedBy, textareaRef }) => {
+  ({ id: providedId, label, helperText, error, disabled, required, placeholder, value, onChange, rows = 4, maxLength, showCharCount, countValue, countMax, countUnit, 'aria-describedby': ariaDescribedBy, textareaRef }) => {
     const generatedId = useId();
     const id = providedId || generatedId;
     const errorId = `${id}-error`;
     const helperId = `${id}-helper`;
     const countId = `${id}-count`;
-    const describedBy = [error && errorId, helperText && helperId, showCharCount && maxLength && countId, ariaDescribedBy].filter(Boolean).join(' ') || undefined;
+    const displayedCountMax = countMax ?? maxLength;
+    const displayedCountValue = countValue ?? value.length;
+    const describedBy = [error && errorId, helperText && helperId, showCharCount && displayedCountMax !== undefined && countId, ariaDescribedBy].filter(Boolean).join(' ') || undefined;
 
     return (
       <div className="field-wrapper">
@@ -110,9 +115,9 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         />
         {error && <p id={errorId} className="field-error" role="alert">{error}</p>}
         {helperText && !error && <p id={helperId} className="field-helper">{helperText}</p>}
-        {showCharCount && maxLength && (
+        {showCharCount && displayedCountMax !== undefined && (
           <p id={countId} className="field-char-count" aria-live="polite">
-            {value.length} / {maxLength}
+            {displayedCountValue} / {displayedCountMax}{countUnit ? ` ${countUnit}` : ''}
           </p>
         )}
       </div>
@@ -128,11 +133,12 @@ interface TagInputProps extends BaseFieldProps {
   placeholder?: string;
   maxTags?: number;
   maxTagLength?: number;
+  resetKey?: number;
   inputRef?: RefObject<HTMLInputElement>;
 }
 
 export const TagInput = forwardRef<HTMLDivElement, TagInputProps>(
-  ({ id: providedId, label, helperText, error, disabled, required, tags, onChange, placeholder = 'Add a tag and press Enter', maxTags, maxTagLength = 50, 'aria-describedby': ariaDescribedBy, inputRef }, ref) => {
+  ({ id: providedId, label, helperText, error, disabled, required, tags, onChange, placeholder = 'Add a tag and press Enter', maxTags, maxTagLength = 50, resetKey = 0, 'aria-describedby': ariaDescribedBy, inputRef }, ref) => {
     const generatedId = useId();
     const id = providedId || generatedId;
     const inputId = `${id}-input`;
@@ -143,6 +149,11 @@ export const TagInput = forwardRef<HTMLDivElement, TagInputProps>(
 
     const [inputValue, setInputValue] = useState('');
     const [inputError, setInputError] = useState<string | undefined>(undefined);
+
+    useEffect(() => {
+      setInputValue('');
+      setInputError(undefined);
+    }, [resetKey]);
 
     const validateTagInput = (value: string, currentTags: string[]): string | undefined => {
       const trimmed = value.trim();
@@ -164,7 +175,7 @@ export const TagInput = forwardRef<HTMLDivElement, TagInputProps>(
       const value = e.currentTarget.value.trim();
       if (e.key === 'Enter' && value) {
         e.preventDefault();
-        const newTag = maxTagLength ? value.slice(0, maxTagLength) : value;
+        const newTag = value;
         const validationError = validateTagInput(newTag, tags);
         if (validationError) {
           setInputError(validationError);
@@ -242,7 +253,6 @@ export const TagInput = forwardRef<HTMLDivElement, TagInputProps>(
             onChange={handleChange}
             onBlur={handleBlur}
             disabled={disabled}
-            maxLength={maxTagLength}
             aria-activedescendant={tags.length > 0 ? `${listId}-option-0` : undefined}
             aria-autocomplete="list"
             aria-controls={listId}
