@@ -1,6 +1,6 @@
 # Task QFAT-010 — Media Selection and Local Validation
 
-- **Status:** READY FOR OWNER REVIEW — NOT AUTHORIZED FOR IMPLEMENTATION
+- **Status:** OWNER-AUTHORIZED FOR IMPLEMENTATION — 2026-11-12
 - **Task type:** Frontend media-selection workflow
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
@@ -10,9 +10,8 @@
 - **Product authority:** `docs/PRD-QFAT-MVP.md`
 - **Design foundation:** QFAT-008 app shell and QFAT-009 Create Content editors
 - **Predecessor:** QFAT-009 accepted by owner on 2026-11-12
+- **Owner authorization:** Owner explicitly approved QFAT-010 implementation in chat on 2026-11-12. Authorization applies only to the scope in this task.
 - **Workflow:** GitHub-first; one OpenCode agent serially; GPT audit and owner approval gate
-
-## 1. Objective
 
 Add a usable local media-selection step to the existing Create Content workflow. The operator must be able to choose one local video for YouTube/Facebook video workflows or exactly one image for a Facebook single-image workflow, see the selected file's basic metadata, and receive clear client-side validation feedback.
 
