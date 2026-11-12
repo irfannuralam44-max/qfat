@@ -1,7 +1,20 @@
 # QFAT Credential Storage Foundation (QFAT-013)
 
+> **ACTIVE WORKSTREAM: LINUX ONLY. WINDOWS IS ON HOLD AND NOT AUTHORIZED.**
+>
+> AI agents and contributors must not start, plan as the next task, dispatch, implement,
+> or test Windows credential storage merely because a Windows task/specification exists
+> in this repository. The Windows task is a parked future specification, not an active
+> work order. Do not infer authorization from task numbering, task-file presence, or
+> earlier draft wording.
+>
+> Windows can be considered only after the owner explicitly confirms that Linux is
+> 100% complete, Linux verification and independent audit are finished, the Linux
+> stage is formally accepted, and the owner gives a separate explicit authorization
+> to begin Windows work. Until then, Windows must remain fail-closed and untouched.
+
 - **Status:** Temporary Linux implementation under ADR-004; not an OS credential store
-- **Platform sequence:** Linux first; Windows deferred until all Linux work is complete
+- **Platform sequence:** Linux only for now; Windows explicitly deferred and unauthorized until Linux is 100% complete, independently audited, formally accepted, and separately authorized by the owner
 - **Scope:** Local encrypted credential persistence foundation only
 - **Related:** `docs/decisions/ADR-004-temporary-encrypted-local-credential-storage.md`
 
@@ -32,7 +45,7 @@ responses, or browser storage.
 
 ## Platform delivery order
 
-Linux is the first and only active platform target until the complete Linux implementation and required Linux verification are finished. Windows work (including ACL implementation and execution on a Windows host) starts afterward as a separate stage on the owner's Windows PC. Until then, Windows remains unsupported by this provider and fails closed; this is a deferral, not a claim of Windows readiness.
+Linux is the only active platform target. Windows work (including ACL implementation and execution on a Windows host) is not automatically next and must not start when Linux implementation and verification appear complete. It requires, in order: explicit owner confirmation that Linux is 100% complete, completion of independent audit, formal owner acceptance of the Linux stage, and a separate explicit owner authorization for Windows. Until then, Windows remains unsupported by this provider and fails closed. The Windows task file is a parked specification only, not permission to execute.
 
 ## Key-file lifecycle and safety
 
