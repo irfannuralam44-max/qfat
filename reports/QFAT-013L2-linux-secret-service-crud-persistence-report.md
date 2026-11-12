@@ -743,3 +743,33 @@ backend is unavailable in this environment and cannot be used as a fallback.
 - Follow-up fix commit: N/A
 - Report update commit: `6b0258e5b9797d91fa770ab4661b7019a91baea9`
 - Push verification: `origin/main` confirmed at `6b0258e5b9797d91fa770ab4661b7019a91baea9` via `git ls-remote origin main` after push; report file present on the remote branch.
+
+
+## GPT Independent Audit — Final Evidence Review — 2026-11-12
+
+### Publication and scope
+
+- Verified commit `6b0258e5b9797d91fa770ab4661b7019a91baea9` adds the expanded evidence to this report.
+- Verified commit `f8ebdeba1f23cd3e8e1a0f140f57992b69d54539` records its publication metadata.
+- Compared with prior audit commit `3d5dbcb1afccc398efadd3562d896a0f1d283c30`: two commits ahead, zero behind; only this report changed.
+- No production source, dependency, lockfile, database, or credential implementation is part of the diff.
+
+### Remaining technical evidence findings
+
+The latest appendix addresses the missing-script-content issue by including source text. However, the evidence still does not establish all acceptance claims:
+
+1. **The scripts report observations but do not assert success.** The CRUD script logs `hashMatch`, `newMatch`, `oldMatch`, `deleted`, and absence, but never throws or exits non-zero when an equality/deletion assertion is false. The process-restart and daemon-restart retrieval scripts likewise print a hash without comparing it to an expected value or failing on absence/mismatch. A recorded `EXIT_CODE=0` therefore proves script completion, not that the acceptance assertions passed.
+2. **The negative test is not a complete negative operation test.** When the constructor throws, the catch logs the constructor error and exits normally. It does not demonstrate an attempted set/get returning failure at the operation boundary. If construction succeeds, the nested set failure is logged but not asserted; the subsequent get is not protected and no explicit no-entry verification is made. The report's conclusion is stronger than the script evidence.
+3. **Daemon lifecycle proof is still ambiguous.** The setup backgrounds a shell pipeline (`printf ... | gnome-keyring-daemon ... &`) and stores `$!`; that PID may identify the pipeline/subshell rather than the daemon. The restart procedure does not show a verified termination of the actual daemon process, wait for its exit, verify the replacement process, or prove that the replacement reopened the same keyring files. The listed PID/cmdline snapshot is not enough to establish daemon restart persistence.
+4. **Reproduction setup is incomplete.** The scripts are now printed, but the report still does not provide the exact isolated spike workspace/package installation command, exact commands used to write each script to the referenced path, the actual invocation commands for all scripts in the final environment, or captured exit statuses for setup, daemon stop/start, and cleanup. The commands shown still reference temporary paths that are not part of the repository.
+5. **Isolation trace remains partly declarative.** The report gives environment values and a bus socket path but does not show command output linking the candidate process PID to those exact environment variables and the temporary D-Bus socket for each test process.
+
+These findings do not establish that the tests failed. They mean the scripts and trace do not yet independently substantiate the reported PASS results. GPT has not executed the reported scripts or recreated the disposable keyring.
+
+### Audit disposition
+
+**PASS WITH FINDINGS — NOT READY FOR OWNER ACCEPTANCE.**
+
+Before acceptance, make the scripts fail non-zero on every mismatch, verify deletion and absence, make the negative test assert the expected failure and absence of a stored entry, and capture a deterministic daemon lifecycle using the actual daemon PID (not a background pipeline PID). Include complete workspace setup/invocation commands and process-to-D-Bus isolation evidence. If the original environment is gone, rerun only in a fresh disposable environment.
+
+No production provider implementation, dependency adoption, credential migration, or Windows work is authorized. The task remains isolated Linux feasibility validation only.
