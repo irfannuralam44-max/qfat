@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 import { BrowserRouter, Link, useLocation, Outlet, NavLink, Routes, Route } from 'react-router-dom';
 import { OverviewPage } from './pages/OverviewPage';
 import { CreateContentPage } from './pages/CreateContentPage';
+import { securityClient } from './security/client';
 
 type ThemePreference = 'dark' | 'light' | 'system';
 type ResolvedTheme = 'dark' | 'light';
@@ -83,6 +84,18 @@ function AppShell() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileOverviewRef = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    securityClient.bootstrap().catch((error) => {
+      if (isMounted) {
+        console.error('Security bootstrap failed:', error);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia?.('(prefers-color-scheme: light)');

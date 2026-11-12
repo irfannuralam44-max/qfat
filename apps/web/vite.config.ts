@@ -7,13 +7,19 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     strictPort: true,
-    // Vite's default permits IP literals and localhost but rejects arbitrary DNS hosts.
-    // Keep the empty allowlist explicit; never use `true` here.
     allowedHosts: [],
     proxy: {
-      '^/api/v1/health$': {
+      '^/api/v1': {
         target: 'http://127.0.0.1:3001',
-        changeOrigin: true,
+        changeOrigin: false,
+        configure: (proxy, _options) => {
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            const host = req.headers.host;
+            if (host) {
+              proxyReq.setHeader('Host', host);
+            }
+          });
+        },
       },
     },
   },

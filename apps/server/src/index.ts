@@ -1,4 +1,6 @@
 import Fastify from 'fastify';
+import { registerSecurityRoutes } from './security/routes.js';
+import { sessionStore } from './security/index.js';
 
 const DEFAULT_PORT = 3001;
 const HOST = '127.0.0.1';
@@ -31,6 +33,8 @@ async function buildServer() {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
+  await registerSecurityRoutes(app);
+
   return app;
 }
 
@@ -48,6 +52,7 @@ async function start() {
       }
       isShuttingDown = true;
       console.log(`Received ${signal}, shutting down gracefully...`);
+      sessionStore.shutdown();
       await app.close();
       process.exit(0);
     });
@@ -67,3 +72,23 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 export { buildServer, start, getPort, HOST, DEFAULT_PORT };
+export { registerSecurityRoutes, createMutationGuard, resetRateLimit } from './security/routes.js';
+export {
+  SESSION_COOKIE_NAME,
+  CSRF_HEADER_NAME,
+  SESSION_MAX_AGE_SECONDS,
+  FRONTEND_PORT,
+  sessionStore,
+  validateOriginHeader,
+  validateHostHeader,
+  generateSessionId,
+  generateCsrfToken,
+  constantTimeEqual,
+  hashSessionId,
+  type SessionData,
+  type ParsedAuthority,
+  type OriginValidationResult,
+  createSessionCookie,
+  createClearSessionCookie,
+  parseSessionCookie,
+} from './security/index.js';
