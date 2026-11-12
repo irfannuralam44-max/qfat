@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useId, type ChangeEvent, forwardRef } from 'react';
+import { useCallback, useEffect, useId, type ChangeEvent, forwardRef } from 'react';
 
 export type MediaType = 'video' | 'image';
 
@@ -46,11 +46,11 @@ function isImageFile(file: File): boolean {
 
 function validateFile(file: File | null, accept: string, mediaType: MediaType): string | undefined {
   if (!file) return undefined;
-  
+
   if (file.size === 0) {
     return 'File is empty (zero bytes). Please select a valid file.';
   }
-  
+
   const acceptTypes = accept.split(',').map(t => t.trim());
   const extMatch = acceptTypes.some(t => {
     if (t.startsWith('.')) {
@@ -58,103 +58,82 @@ function validateFile(file: File | null, accept: string, mediaType: MediaType): 
     }
     return file.type.startsWith(t.replace('*', ''));
   });
-  
+
   if (!extMatch) {
     const allowed = acceptTypes.filter(t => t.startsWith('.')).join(', ');
     return `Unsupported file type. Allowed: ${allowed}`;
   }
-  
+
   if (mediaType === 'video' && !isVideoFile(file)) {
     return 'Please select a valid video file.';
   }
-  
+
   if (mediaType === 'image' && !isImageFile(file)) {
     return 'Please select a valid image file (JPEG, PNG, or WebP).';
   }
-  
+
   return undefined;
 }
 
 export const MediaSelector = forwardRef<HTMLDivElement, MediaSelectorProps>(
   ({ label, accept, mediaType, onChange, disabled = false, currentFile, helperText, error: propError, required, id: providedId }, ref) => {
-    const [previewUrl, setPreviewUrl] = useState<string | undefined>(undefined);
-    const [inputError, setInputError] = useState<string | undefined>(undefined);
     const generatedId = useId();
     const id = providedId || generatedId;
     const inputId = `${id}-input`;
     const errorId = `${id}-error`;
     const helperId = `${id}-helper`;
     const previewId = `${id}-preview`;
-    
-    const combinedError = propError || inputError;
-    const file = currentFile || (previewUrl ? { file: new File([], ''), name: '', size: 0, type: '', previewUrl } : null);
-    
+
+    const combinedError = propError;
+    const file = currentFile || null;
+
+    // The parent owns the File and its object URL. Revoke the URL whenever that
+    // selection is replaced, cleared, or this selector unmounts.
     useEffect(() => {
-      if (currentFile?.previewUrl) {
-        setPreviewUrl(currentFile.previewUrl);
-      }
-    }, [currentFile?.previewUrl]);
-    
-    useEffect(() => {
+      const ownedPreviewUrl = currentFile?.previewUrl;
       return () => {
-        if (previewUrl) {
-          URL.revokeObjectURL(previewUrl);
-        }
+        if (ownedPreviewUrl) URL.revokeObjectURL(ownedPreviewUrl);
       };
-    }, [previewUrl]);
-    
+    }, [currentFile?.previewUrl]);
+
     const handleFileSelect = useCallback((e: ChangeEvent<HTMLInputElement>) => {
       const selectedFile = e.target.files?.[0] || null;
       e.target.value = '';
-      
+
       if (!selectedFile) {
         onChange(null);
-        setPreviewUrl(undefined);
-        setInputError(undefined);
         return;
       }
-      
+
       const validationError = validateFile(selectedFile, accept, mediaType);
       if (validationError) {
-        setInputError(validationError);
         onChange(null);
         return;
       }
-      
-      let newPreviewUrl: string | undefined;
-      if (mediaType === 'image') {
-        newPreviewUrl = URL.createObjectURL(selectedFile);
-      }
-      
+
+      const previewUrl = mediaType === 'image' ? URL.createObjectURL(selectedFile) : undefined;
       const mediaFile: MediaFile = {
         file: selectedFile,
         name: selectedFile.name,
         size: selectedFile.size,
         type: selectedFile.type,
-        previewUrl: newPreviewUrl,
+        previewUrl,
       };
-      
-      setPreviewUrl(newPreviewUrl);
-      setInputError(undefined);
+
       onChange(mediaFile);
     }, [accept, mediaType, onChange]);
-    
+
     const handleRemove = useCallback(() => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-      setPreviewUrl(undefined);
-      setInputError(undefined);
       onChange(null);
-    }, [onChange, previewUrl]);
-    
+    }, [onChange]);
+
     return (
       <div className="field-wrapper media-selector" ref={ref}>
         <label htmlFor={inputId} className="field-label">
           {label}
           {required && <span className="field-required" aria-hidden="true">*</span>}
         </label>
-        
+
         <div className={`media-input-wrapper ${combinedError ? 'media-input-wrapper--error' : ''} ${disabled ? 'media-input-wrapper--disabled' : ''}`}>
           <input
             id={inputId}
@@ -167,7 +146,7 @@ export const MediaSelector = forwardRef<HTMLDivElement, MediaSelectorProps>(
             aria-invalid={combinedError ? 'true' : 'false'}
             hidden
           />
-          
+
           {!file && (
             <button
               type="button"
@@ -184,7 +163,7 @@ export const MediaSelector = forwardRef<HTMLDivElement, MediaSelectorProps>(
               <span>Select {mediaType === 'video' ? 'video' : 'image'}</span>
             </button>
           )}
-          
+
           {file && (
             <div className="media-selected" id={previewId}>
               {mediaType === 'image' && file.previewUrl && (
@@ -192,7 +171,7 @@ export const MediaSelector = forwardRef<HTMLDivElement, MediaSelectorProps>(
                   <img src={file.previewUrl} alt={`Preview of ${file.name}`} />
                 </div>
               )}
-              
+
               {mediaType === 'video' && (
                 <div className="media-preview-video" aria-label="Video file preview placeholder">
                   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -201,14 +180,14 @@ export const MediaSelector = forwardRef<HTMLDivElement, MediaSelectorProps>(
                   </svg>
                 </div>
               )}
-              
+
               <div className="media-file-info">
                 <p className="media-file-name" title={file.name}>{file.name}</p>
                 <p className="media-file-details">
                   {formatFileSize(file.size)} · {file.type || 'Unknown type'}
                 </p>
               </div>
-              
+
               <button
                 type="button"
                 className="media-remove-btn"
@@ -224,7 +203,7 @@ export const MediaSelector = forwardRef<HTMLDivElement, MediaSelectorProps>(
             </div>
           )}
         </div>
-        
+
         {combinedError && <p id={errorId} className="field-error" role="alert">{combinedError}</p>}
         {helperText && !combinedError && <p id={helperId} className="field-helper">{helperText}</p>}
         <p className="media-note" aria-live="polite">
