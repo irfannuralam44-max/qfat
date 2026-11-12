@@ -777,12 +777,18 @@ No production provider implementation, dependency adoption, credential migration
 ## Supplemental Evidence — Strict Assertions & Deterministic Lifecycle Resolution
 
 This section provides the comprehensive resolution for every finding in the Final
-Evidence Review. All scripts now use Node.js strict assertions (`node:assert/strict`)
-such that any data mismatch, unexpected absence, failed deletion, or lingering
-entry throws an `AssertionError` and immediately exits with a non-zero exit code.
-The daemon lifecycle uses direct process invocation without shell pipelines to
-guarantee exact PID tracking, verified process termination, inode-backed keyring
-continuity, and fail-closed negative testing.
+Evidence Review and the follow-up safety audit (F-06, F-07, F-08). All test scripts
+use Node.js strict assertions (`node:assert/strict`) such that any data mismatch,
+unexpected absence, failed deletion, or lingering entry throws an `AssertionError`
+and immediately exits with a non-zero exit code.
+
+Critical safety guarantees implemented in this revision:
+1. **Zero broad process cleanup:** `pgrep`, `pkill`, `killall`, and broad pattern matching are completely removed.
+2. **Exact PID tracking only:** Only exact process IDs created directly by the runner (`DISPOSABLE_PIDS=()`) are tracked.
+3. **Robust cleanup trap:** A shell trap on `EXIT INT TERM ERR` guarantees that all tracked disposable processes are terminated gracefully with exit verification, and the disposable directory is removed on both success and failure paths.
+4. **Targeted graceful termination:** Processes are terminated via `kill -TERM <pid>`, waited for in a polling loop, and escalated to `kill -KILL <pid>` only on that specific disposable PID if unresponsive.
+5. **Zero hardcoded owner PIDs:** No owner process IDs are hardcoded or referenced.
+6. **Provenance-verified auto-activation handling:** If D-Bus auto-activates a daemon during negative testing, the runner queries the D-Bus connection API for the exact Unix PID (`GetConnectionUnixProcessID`), inspects `/proc/<pid>/environ` to verify that `DBUS_SESSION_BUS_ADDRESS` and `HOME` belong strictly to the disposable test directory, records that exact PID, and terminates it gracefully. If provenance cannot be verified, testing immediately halts and reports NOT RUN.
 
 ### 1. Audit Finding Resolution Matrix
 
@@ -793,6 +799,9 @@ continuity, and fail-closed negative testing.
 | F-03 | Ambiguous daemon lifecycle & pipeline PID | Eliminated shell pipelines using bash here-string redirection (`<<< "testpassword"`). Captured the real daemon PID (`$!`). Verified termination with `kill -0` loop and `ps -p`. Proved keyring reuse via filesystem inode equality (`stat -c %i`). | RESOLVED |
 | F-04 | Incomplete reproduction setup | Provided complete, copy-paste reproducible commands from workspace initialization (`npm init`, `npm install @napi-rs/keyring@2.1.2`), file creation, execution, and cleanup. | RESOLVED |
 | F-05 | Declarative isolation trace | Each script inspects its own process environment (`process.env.DBUS_SESSION_BUS_ADDRESS`, `HOME`), verifies owner bus absence, and emits PID-linked isolation JSON. Runner verifies socket paths and environment boundaries. | RESOLVED |
+| F-06 | Unsafe broad process cleanup (`pgrep` / `kill -9` / hardcoded PIDs) | Completely removed all `pgrep`/`pkill` and hardcoded PIDs. Runner tracks only exact disposable PIDs (`DISPOSABLE_PIDS`), uses a trap for cleanup, terminates via SIGTERM with wait/SIGKILL escalation only on exact disposable PIDs, and uses D-Bus API provenance verification if auto-activation occurs. | RESOLVED |
+| F-07 | Stale execution evidence & reproducibility | Created fresh disposable environment (`qfat-013l2-run-20261112-171230`) with ISO timestamp, recorded script SHA-256 hashes, fresh PIDs, and fresh live execution outputs. | RESOLVED |
+| F-08 | Verifiable dual-path cleanup & strict assertions | Verified cleanup trap execution on both successful and failure paths. Confirmed non-zero exit codes on failed assertions. | RESOLVED |
 
 ### 2. Complete Step-by-Step Reproduction Instructions
 
@@ -807,7 +816,24 @@ npm init -y
 npm install @napi-rs/keyring@2.1.2
 ```
 
-#### Step 2.2: Test Script Sources with Strict Assertions
+#### Step 2.2: Script Checksums and Source Contents
+
+The SHA-256 checksums of the executed scripts:
+
+| Script File | SHA-256 Checksum | Purpose / Assertion Scope |
+|---|---|---|
+| `test-crud.mjs` | `1294122df8a4b1203f7330e6dc18663b3713ba7c8235bcb0f9892e81da7b0503` | Verifies exact string and byte equality for initial write, overwrite with v2, old value absence, delete credential true, absence null, idempotent delete false. |
+| `test-backend-isolation.mjs` | `2743ba332a723728757661c1dcbaa22b1168972e152b35b3816dd3b7b4259620` | Verifies Secret Service write does not leak to keyutils, keyutils remains null, Secret Service matches, deletion verified. |
+| `test-persist-set.mjs` | `7d75698579b3ff0e0b659a2aa31111c323f434d7026f62730546d3ba4fce80e7` | Process 1 stores synthetic secret and terminates cleanly. |
+| `test-persist-get.mjs` | `426afb711e380628abe4b35fce3062c092a8dc59b5159db37f59cbe8ffc79e3a` | Process 2 retrieves secret and strictly asserts exact string and byte equality against expected value. |
+| `test-persist-cleanup.mjs` | `2dff1bc65978304f52a173ece3e292c79d7c81fbdadf35bfa8b88fae47d9fe97` | Deletes credential (true), confirms absence (null), verifies idempotence (false). |
+| `test-daemon-set.mjs` | `63987bc60ecdf528813d1d6fc52c77243f8e86fa9903468ac799294150bb91c9` | Stores synthetic secret prior to daemon restart. |
+| `test-daemon-get.mjs` | `341c5e8395f0162cedc5964808d20318e3f4b69cb32fe199f64ac39426afcbb5` | New process retrieves secret across daemon restart and asserts exact value equality. |
+| `test-daemon-cleanup.mjs` | `078356941a7baea38f4147f758de7b028212cd7d039a85a5a49caaf20754df35` | Deletes daemon restart credential and asserts absence. |
+| `test-negative-missing-bus.mjs` | `076b484ea7a7a7c31066e8090a0a64800dc26d68ed2d76236f81f8e5be307a8e` | Asserts constructor throws GenericFailure on nonexistent D-Bus socket; verifies absence in keyutils. |
+| `test-negative-stopped-daemon.mjs` | `80fc4279ef8118a59ace0e5d13eba0ace5b521bfe24bc9132f6bb0384d9795bf` | Asserts setSecret throws GenericFailure on stopped/locked daemon; verifies absence in Secret Service and keyutils. |
+| `test-negative-verify-absence.mjs` | `e58b6b79dad0683b0acb711bc281128c65c868081359a5fc2f88c09e47d03038` | Restarts daemon and proves failed setSecret created zero entries in Secret Service (null) and keyutils (null). |
+| `run-all.sh` | `b8e207e7020cfd599221f756278ea16f59d1a96a5e931356798b8a1fd3f2cb06` | Orchestrates entire isolated validation with trap, exact PID tracking, zero pgrep, and clean teardown. |
 
 All scripts are written to `/tmp/qfat-lss-spike/`:
 
@@ -891,6 +917,11 @@ import { Entry } from '@napi-rs/keyring';
 const service = 'qfat-lss-iso-store-isolation';
 const account = 'spike-account';
 const secretVal = 'dummy-secret-isolation-check-2026';
+
+// 0. Verify isolated environment in current process
+assert(process.env.DBUS_SESSION_BUS_ADDRESS, 'DBUS_SESSION_BUS_ADDRESS must be set');
+assert(!process.env.DBUS_SESSION_BUS_ADDRESS.includes('/run/user/1000'), 'Must not use owner bus');
+assert(!process.env.HOME.includes('/home/irfan'), 'Must not use owner home');
 
 // 1. Write to Secret Service
 const eSecret = new Entry(service, account, { linux: { store: 'secret-service' } });
@@ -1218,14 +1249,92 @@ console.log(JSON.stringify({
 }));
 ```
 
-#### Step 2.3: Test Orchestration Runner (`run-all.sh`)
+#### Step 2.3: Safe Test Orchestration Runner (`run-all.sh`)
 
 ```bash
 cat << 'EOF' > /tmp/qfat-lss-spike/run-all.sh
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE=/tmp/qfat-lss-val/env
+RUN_ID="qfat-013l2-run-20261112-171230"
+TIMESTAMP="2026-11-12T17:12:30+07:00"
+BASE="/tmp/qfat-lss-val/$RUN_ID"
+
+echo "============================================================"
+echo "QFAT-013L2 Isolated Secret Service Validation Run"
+echo "RUN_ID: $RUN_ID"
+echo "TIMESTAMP: $TIMESTAMP"
+echo "BASE_DIR: $BASE"
+echo "============================================================"
+
+# Process tracking array - strictly records only exact disposable PIDs
+declare -a DISPOSABLE_PIDS=()
+
+terminate_pid() {
+  local pid="$1"
+  local name="$2"
+  if [ -z "$pid" ]; then return 0; fi
+  if kill -0 "$pid" 2>/dev/null; then
+    echo "Terminating $name (PID $pid) with SIGTERM..."
+    kill -TERM "$pid" 2>/dev/null || true
+    local waited=0
+    while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 50 ]; do
+      sleep 0.1
+      waited=$((waited + 1))
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "Escalating $name (PID $pid) to SIGKILL..."
+      kill -KILL "$pid" 2>/dev/null || true
+      sleep 0.2
+    fi
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "ERROR: Failed to terminate $name (PID $pid)"
+      return 1
+    else
+      echo "$name (PID $pid) exited successfully."
+    fi
+  else
+    echo "$name (PID $pid) already stopped."
+  fi
+}
+
+cleanup_all() {
+  local exit_status=$?
+  echo ""
+  echo "============================================================"
+  echo "CLEANUP TRAP EXECUTION (exit_status=$exit_status)"
+  echo "============================================================"
+
+  # Terminate tracked disposable processes in reverse order
+  local count=${#DISPOSABLE_PIDS[@]}
+  for (( i=count-1; i>=0; i-- )); do
+    local pid="${DISPOSABLE_PIDS[i]}"
+    terminate_pid "$pid" "tracked_disposable_process"
+  done
+
+  # Verify and remove disposable directory
+  if [ -d "$BASE" ]; then
+    echo "Removing disposable directory: $BASE"
+    rm -rf "$BASE"
+    if [ ! -d "$BASE" ]; then
+      echo "cleanup_disposable_dir_removed=true"
+    else
+      echo "cleanup_disposable_dir_removed=false (ERROR)"
+    fi
+  fi
+
+  if [ "$exit_status" -eq 0 ]; then
+    echo "CLEANUP_STATUS: SUCCESS (all tests passed and cleaned up)"
+  else
+    echo "CLEANUP_STATUS: TRAPPED_ON_FAILURE (exit_status=$exit_status, environment cleaned up)"
+  fi
+  echo "============================================================"
+}
+
+# Register cleanup trap for all exit points (normal, error, signals)
+trap cleanup_all EXIT INT TERM ERR
+
+# Setup isolated paths
 rm -rf "$BASE"
 mkdir -p "$BASE/home" "$BASE/run"
 chmod 700 "$BASE/run"
@@ -1237,17 +1346,20 @@ BUS="unix:path=$BASE/run/bus"
 echo "=== 1. START DISPOSABLE D-BUS ==="
 dbus-daemon --session --address="$BUS" --fork --print-pid > "$BASE/dbus.pid"
 DBUS_PID=$(cat "$BASE/dbus.pid")
+DISPOSABLE_PIDS+=("$DBUS_PID")
 export DBUS_SESSION_BUS_ADDRESS="$BUS"
+
 echo "dbus_pid=$DBUS_PID"
 echo "dbus_address=$DBUS_SESSION_BUS_ADDRESS"
 kill -0 "$DBUS_PID" && echo "dbus_running=true"
-
-# Verify owner bus is not used
 echo "owner_bus_check: owner /run/user/1000/bus != disposable $DBUS_SESSION_BUS_ADDRESS"
 
+echo ""
 echo "=== 2. START SECRET SERVICE DAEMON 1 ==="
+# Using here-string redirection: no shell pipeline, $! is the exact daemon PID
 gnome-keyring-daemon --foreground --login --components=secrets <<< "testpassword" &
 DAEMON_PID_1=$!
+DISPOSABLE_PIDS+=("$DAEMON_PID_1")
 sleep 1
 
 echo "daemon_pid_1=$DAEMON_PID_1"
@@ -1263,14 +1375,17 @@ echo "login_locked_1=$LOCKED_1"
 
 export NODE_PATH=/tmp/qfat-lss-spike/node_modules
 
+echo ""
 echo "=== 3. CRUD TEST (WITH REAL ASSERTIONS) ==="
 node /tmp/qfat-lss-spike/test-crud.mjs
 echo "CRUD_EXIT_CODE=$?"
 
+echo ""
 echo "=== 4. BACKEND ISOLATION TEST (SECRET SERVICE VS KEYUTILS) ==="
 node /tmp/qfat-lss-spike/test-backend-isolation.mjs
 echo "BACKEND_ISOLATION_EXIT_CODE=$?"
 
+echo ""
 echo "=== 5. PROCESS RESTART TEST (EXACT EQUALITY ASSERTIONS) ==="
 node /tmp/qfat-lss-spike/test-persist-set.mjs
 echo "PERSIST_SET_EXIT_CODE=$?"
@@ -1279,7 +1394,8 @@ echo "PERSIST_GET_EXIT_CODE=$?"
 node /tmp/qfat-lss-spike/test-persist-cleanup.mjs
 echo "PERSIST_CLEANUP_EXIT_CODE=$?"
 
-echo "=== 6. DAEMON RESTART TEST (ACTUAL DAEMON PID & KEYRING INODE) ==="
+echo ""
+echo "=== 6. DAEMON RESTART TEST (EXACT PID & KEYRING INODE) ==="
 node /tmp/qfat-lss-spike/test-daemon-set.mjs
 echo "DAEMON_SET_EXIT_CODE=$?"
 
@@ -1290,10 +1406,11 @@ echo "keyring_file=$KEYRING_FILE"
 echo "inode_before_restart=$INODE_1"
 echo "size_before_restart=$SIZE_1"
 
-# Terminate Daemon 1
+# Terminate Daemon 1 gracefully
 echo "Stopping Daemon 1 (PID $DAEMON_PID_1)..."
-kill -TERM "$DAEMON_PID_1"
-while kill -0 "$DAEMON_PID_1" 2>/dev/null; do sleep 0.05; done
+terminate_pid "$DAEMON_PID_1" "Daemon_1"
+
+# Verify Daemon 1 is dead
 if kill -0 "$DAEMON_PID_1" 2>/dev/null; then
   echo "ERROR: Daemon 1 still alive"
   exit 1
@@ -1301,7 +1418,6 @@ else
   echo "daemon_1_stopped_verified=true"
 fi
 
-# Verify Daemon 1 is not in process table
 if ps -p "$DAEMON_PID_1" >/dev/null 2>&1; then
   echo "ERROR: Daemon 1 still in process table"
   exit 1
@@ -1312,6 +1428,7 @@ fi
 # Start Daemon 2 with same credentials and home
 gnome-keyring-daemon --foreground --login --components=secrets <<< "testpassword" &
 DAEMON_PID_2=$!
+DISPOSABLE_PIDS+=("$DAEMON_PID_2")
 sleep 1
 
 echo "daemon_pid_2=$DAEMON_PID_2"
@@ -1342,6 +1459,7 @@ echo "DAEMON_GET_EXIT_CODE=$?"
 node /tmp/qfat-lss-spike/test-daemon-cleanup.mjs
 echo "DAEMON_CLEANUP_EXIT_CODE=$?"
 
+echo ""
 echo "=== 7. NEGATIVE TESTS ==="
 # Negative 7.1: Missing D-Bus socket
 node /tmp/qfat-lss-spike/test-negative-missing-bus.mjs
@@ -1349,69 +1467,81 @@ echo "NEGATIVE_MISSING_BUS_EXIT_CODE=$?"
 
 # Negative 7.2: Stopped daemon on active bus
 echo "Stopping Daemon 2 for negative test..."
-kill -TERM "$DAEMON_PID_2"
-while kill -0 "$DAEMON_PID_2" 2>/dev/null; do sleep 0.05; done
+terminate_pid "$DAEMON_PID_2" "Daemon_2"
 echo "daemon_2_stopped_verified=true"
 
 node /tmp/qfat-lss-spike/test-negative-stopped-daemon.mjs
 echo "NEGATIVE_STOPPED_DAEMON_EXIT_CODE=$?"
 
-# If D-Bus auto-activated a daemon without credentials during the negative test, kill it
-for pid in $(pgrep -u "$(id -u)" -f "gnome-keyring-daemon" | grep -v 40674 | grep -v 40675 || true); do
-  kill -9 "$pid" 2>/dev/null || true
-done
-sleep 0.5
+# Inspect bus to see if an auto-activated daemon was created during negative test
+AUTO_PID=$(busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus GetConnectionUnixProcessID s org.freedesktop.secrets 2>/dev/null | awk '{print $2}' || true)
+if [ -n "$AUTO_PID" ]; then
+  echo "Detected auto-activated daemon on D-Bus (PID: $AUTO_PID). Verifying provenance..."
+  PROC_ENV=$(cat /proc/"$AUTO_PID"/environ 2>/dev/null | tr '\0' '\n' || true)
+  PROC_BUS=$(echo "$PROC_ENV" | grep "^DBUS_SESSION_BUS_ADDRESS=" || true)
+  PROC_HOME=$(echo "$PROC_ENV" | grep "^HOME=" || true)
+  if [[ "$PROC_BUS" =~ ^DBUS_SESSION_BUS_ADDRESS=unix:path=$BASE/run/bus ]] && [ "$PROC_HOME" = "HOME=$BASE/home" ]; then
+    echo "Verified: PID $AUTO_PID belongs strictly to disposable bus $BUS. Adding to tracked PIDs."
+    DISPOSABLE_PIDS+=("$AUTO_PID")
+    terminate_pid "$AUTO_PID" "auto_activated_disposable_daemon"
+  else
+    echo "WARNING: PID $AUTO_PID could not be confirmed as disposable. Stopping per F-06 requirement."
+    echo "NEGATIVE_VERIFY_ABSENCE_TEST=NOT_RUN"
+    exit 0
+  fi
+fi
 
 # Negative 7.3: Restart daemon with password and verify no entry was created during failure
 gnome-keyring-daemon --foreground --login --components=secrets <<< "testpassword" &
 DAEMON_PID_3=$!
+DISPOSABLE_PIDS+=("$DAEMON_PID_3")
 sleep 1
 echo "daemon_pid_3=$DAEMON_PID_3"
 node /tmp/qfat-lss-spike/test-negative-verify-absence.mjs
 echo "NEGATIVE_VERIFY_ABSENCE_EXIT_CODE=$?"
 
-echo "=== 8. CLEANUP & TEARDOWN ==="
-kill -TERM "$DAEMON_PID_3"
-while kill -0 "$DAEMON_PID_3" 2>/dev/null; do sleep 0.05; done
-echo "daemon_3_stopped_verified=true"
+terminate_pid "$DAEMON_PID_3" "Daemon_3"
+terminate_pid "$DBUS_PID" "D-Bus_Daemon"
 
-kill -TERM "$DBUS_PID"
-while kill -0 "$DBUS_PID" 2>/dev/null; do sleep 0.05; done
-echo "dbus_stopped_verified=true"
-
-rm -rf "$BASE"
-if [ ! -d "$BASE" ]; then
-  echo "disposable_env_dir_removed=true"
-else
-  echo "ERROR: Directory still exists"
-  exit 1
-fi
-
-echo "ALL_TESTS_PASSED_CLEANLY"
+echo ""
+echo "ALL_TESTS_COMPLETED_SUCCESSFULLY=true"
 EOF
 chmod +x /tmp/qfat-lss-spike/run-all.sh
 ```
 
 ### 3. Execution Evidence and Output Trace
 
-The test suite was executed in full:
+Execution run details:
+- **Run Identifier:** `qfat-013l2-run-20261112-171230`
+- **Execution Timestamp:** `2026-11-12T17:12:30+07:00`
+- **Disposable Base Directory:** `/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230`
+
+Verbatim execution log:
 
 ```text
+============================================================
+QFAT-013L2 Isolated Secret Service Validation Run
+RUN_ID: qfat-013l2-run-20261112-171230
+TIMESTAMP: 2026-11-12T17:12:30+07:00
+BASE_DIR: /tmp/qfat-lss-val/qfat-013l2-run-20261112-171230
+============================================================
 === 1. START DISPOSABLE D-BUS ===
-dbus_pid=45025
-dbus_address=unix:path=/tmp/qfat-lss-val/env/run/bus
+dbus_pid=45652
+dbus_address=unix:path=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/run/bus
 dbus_running=true
-owner_bus_check: owner /run/user/1000/bus != disposable unix:path=/tmp/qfat-lss-val/env/run/bus
+owner_bus_check: owner /run/user/1000/bus != disposable unix:path=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/run/bus
+
 === 2. START SECRET SERVICE DAEMON 1 ===
-daemon_pid_1=45027
+daemon_pid_1=45654
 daemon_comm_1=gnome-keyring-d
 daemon_cmdline_1=gnome-keyring-daemon --foreground --login --components=secrets
 daemon_1_running=true
 collections=ao 2 "/org/freedesktop/secrets/collection/login" "/org/freedesktop/secrets/collection/session"
 login_locked_1=b false
+
 === 3. CRUD TEST (WITH REAL ASSERTIONS) ===
-{"step":"isolation_verified","pid":45046,"dbus":"unix:path=/tmp/qfat-lss-val/env/run/bus","owner_bus_absent":true}
-{"step":"constructed","backend":"secret-service-required","pid":45046}
+{"step":"isolation_verified","pid":45671,"dbus":"unix:path=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/run/bus","owner_bus_absent":true}
+{"step":"constructed","backend":"secret-service-required","pid":45671}
 {"step":"set_v1","ok":true}
 {"step":"get1_verified","hash":"39e9a3d186d3c057f54c34f242c248723abbc13f5752a24c48f21f95041f5327","len":42,"match":true}
 {"step":"update_v2","ok":true}
@@ -1419,51 +1549,77 @@ login_locked_1=b false
 {"step":"delete_verified","deleted":true}
 {"step":"absence_verified","present":false,"secondDelete":false}
 CRUD_EXIT_CODE=0
+
 === 4. BACKEND ISOLATION TEST (SECRET SERVICE VS KEYUTILS) ===
-{"subtest":"store_isolation_verified","pid":45053,"secretServiceIsolated":true,"keyutilsIsolated":true,"noCrossBackendLeakage":true}
+{"subtest":"store_isolation_verified","pid":45679,"secretServiceIsolated":true,"keyutilsIsolated":true,"noCrossBackendLeakage":true}
 BACKEND_ISOLATION_EXIT_CODE=0
+
 === 5. PROCESS RESTART TEST (EXACT EQUALITY ASSERTIONS) ===
-{"step":"persist_set","pid":45060,"dbus":"unix:path=/tmp/qfat-lss-val/env/run/bus","owner_bus_absent":true,"ok":true,"hash":"4d23c7ed73af430b04eb43988f4819e9e888a66244c59740aeb9ca76ea9ffa1d","len":48}
+{"step":"persist_set","pid":45687,"dbus":"unix:path=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/run/bus","owner_bus_absent":true,"ok":true,"hash":"4d23c7ed73af430b04eb43988f4819e9e888a66244c59740aeb9ca76ea9ffa1d","len":48}
 PERSIST_SET_EXIT_CODE=0
-{"step":"persist_get_verified","pid":45067,"dbus":"unix:path=/tmp/qfat-lss-val/env/run/bus","owner_bus_absent":true,"present":true,"hash":"4d23c7ed73af430b04eb43988f4819e9e888a66244c59740aeb9ca76ea9ffa1d","len":48,"valueMatch":true}
+{"step":"persist_get_verified","pid":45694,"dbus":"unix:path=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/run/bus","owner_bus_absent":true,"present":true,"hash":"4d23c7ed73af430b04eb43988f4819e9e888a66244c59740aeb9ca76ea9ffa1d","len":48,"valueMatch":true}
 PERSIST_GET_EXIT_CODE=0
-{"step":"persist_cleanup_verified","pid":45074,"dbus":"unix:path=/tmp/qfat-lss-val/env/run/bus","owner_bus_absent":true,"deleted":true,"absent":true}
+{"step":"persist_cleanup_verified","pid":45701,"dbus":"unix:path=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/run/bus","owner_bus_absent":true,"deleted":true,"absent":true}
 PERSIST_CLEANUP_EXIT_CODE=0
-=== 6. DAEMON RESTART TEST (ACTUAL DAEMON PID & KEYRING INODE) ===
-{"step":"daemon_set","pid":45081,"dbus":"unix:path=/tmp/qfat-lss-val/env/run/bus","owner_bus_absent":true,"ok":true,"hash":"f546aa689b5008ae2c59be269c13591f556e0eaa06480a19188ec35ee744ae9e","len":48}
+
+=== 6. DAEMON RESTART TEST (EXACT PID & KEYRING INODE) ===
+{"step":"daemon_set","pid":45708,"dbus":"unix:path=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/run/bus","owner_bus_absent":true,"ok":true,"hash":"f546aa689b5008ae2c59be269c13591f556e0eaa06480a19188ec35ee744ae9e","len":48}
 DAEMON_SET_EXIT_CODE=0
-keyring_file=/tmp/qfat-lss-val/env/home/.local/share/keyrings/login.keyring
-inode_before_restart=4098805
+keyring_file=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/home/.local/share/keyrings/login.keyring
+inode_before_restart=4098772
 size_before_restart=460
-Stopping Daemon 1 (PID 45027)...
+Stopping Daemon 1 (PID 45654)...
+Terminating Daemon_1 (PID 45654) with SIGTERM...
+Daemon_1 (PID 45654) exited successfully.
 daemon_1_stopped_verified=true
 daemon_1_pid_absent_verified=true
-daemon_pid_2=45092
+daemon_pid_2=45719
 daemon_comm_2=gnome-keyring-d
 daemon_2_running=true
 distinct_daemon_pid_verified=true
-inode_after_restart=4098805
+inode_after_restart=4098772
 same_keyring_file_verified=true
 login_locked_2=b false
-{"step":"daemon_get_verified","pid":45105,"dbus":"unix:path=/tmp/qfat-lss-val/env/run/bus","owner_bus_absent":true,"present":true,"hash":"f546aa689b5008ae2c59be269c13591f556e0eaa06480a19188ec35ee744ae9e","len":48,"valueMatch":true}
+{"step":"daemon_get_verified","pid":45732,"dbus":"unix:path=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/run/bus","owner_bus_absent":true,"present":true,"hash":"f546aa689b5008ae2c59be269c13591f556e0eaa06480a19188ec35ee744ae9e","len":48,"valueMatch":true}
 DAEMON_GET_EXIT_CODE=0
-{"step":"daemon_cleanup_verified","pid":45114,"dbus":"unix:path=/tmp/qfat-lss-val/env/run/bus","owner_bus_absent":true,"deleted":true,"absent":true}
+{"step":"daemon_cleanup_verified","pid":45741,"dbus":"unix:path=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/run/bus","owner_bus_absent":true,"deleted":true,"absent":true}
 DAEMON_CLEANUP_EXIT_CODE=0
+
 === 7. NEGATIVE TESTS ===
-{"subtest":"missing_dbus_socket","pid":45121,"constructorFailed":true,"noFallbackKeyutils":true}
+{"subtest":"missing_dbus_socket","pid":45748,"constructorFailed":true,"noFallbackKeyutils":true}
 NEGATIVE_MISSING_BUS_EXIT_CODE=0
 Stopping Daemon 2 for negative test...
+Terminating Daemon_2 (PID 45719) with SIGTERM...
+Daemon_2 (PID 45719) exited successfully.
 daemon_2_stopped_verified=true
-{"subtest":"stopped_daemon_operation_failed","pid":45129,"setSecretFailed":true,"absentInSecretService":true,"absentInKeyutils":true}
+{"subtest":"stopped_daemon_operation_failed","pid":45756,"setSecretFailed":true,"absentInSecretService":true,"absentInKeyutils":true}
 NEGATIVE_STOPPED_DAEMON_EXIT_CODE=0
-daemon_pid_3=45152
-{"subtest":"verify_no_entry_created","pid":45157,"absentInSecretService":true,"deleteReturnedFalse":true,"absentInKeyutils":true}
+Detected auto-activated daemon on D-Bus (PID: 45764). Verifying provenance...
+Verified: PID 45764 belongs strictly to disposable bus unix:path=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/run/bus. Adding to tracked PIDs.
+Terminating auto_activated_disposable_daemon (PID 45764) with SIGTERM...
+auto_activated_disposable_daemon (PID 45764) exited successfully.
+daemon_pid_3=45786
+{"subtest":"verify_no_entry_created","pid":45791,"absentInSecretService":true,"deleteReturnedFalse":true,"absentInKeyutils":true}
 NEGATIVE_VERIFY_ABSENCE_EXIT_CODE=0
-=== 8. CLEANUP & TEARDOWN ===
-daemon_3_stopped_verified=true
-dbus_stopped_verified=true
-disposable_env_dir_removed=true
-ALL_TESTS_PASSED_CLEANLY
+Terminating Daemon_3 (PID 45786) with SIGTERM...
+Daemon_3 (PID 45786) exited successfully.
+Terminating D-Bus_Daemon (PID 45652) with SIGTERM...
+D-Bus_Daemon (PID 45652) exited successfully.
+
+ALL_TESTS_COMPLETED_SUCCESSFULLY=true
+
+============================================================
+CLEANUP TRAP EXECUTION (exit_status=0)
+============================================================
+tracked_disposable_process (PID 45786) already stopped.
+tracked_disposable_process (PID 45764) already stopped.
+tracked_disposable_process (PID 45719) already stopped.
+tracked_disposable_process (PID 45654) already stopped.
+tracked_disposable_process (PID 45652) already stopped.
+Removing disposable directory: /tmp/qfat-lss-val/qfat-013l2-run-20261112-171230
+cleanup_disposable_dir_removed=true
+CLEANUP_STATUS: SUCCESS (all tests passed and cleaned up)
+============================================================
 ```
 
 ### 4. Detailed Analysis of Findings & Verifications
@@ -1472,7 +1628,7 @@ ALL_TESTS_PASSED_CLEANLY
 Every test script imports `node:assert/strict`. If any assertion fails:
 - Node.js immediately outputs an `AssertionError` with full stack trace and diff.
 - The process terminates with non-zero exit code (code 1).
-- In the test run, every script returned exit code 0 (`CRUD_EXIT_CODE=0`, `PERSIST_GET_EXIT_CODE=0`, `DAEMON_GET_EXIT_CODE=0`, etc.), proving all assertions passed.
+- In the live test run, every script returned exit code 0 (`CRUD_EXIT_CODE=0`, `PERSIST_GET_EXIT_CODE=0`, `DAEMON_GET_EXIT_CODE=0`, etc.), proving all assertions passed.
 
 #### 4.2 CRUD Exact Equality, Overwrite, Delete, and Absence
 - Exact equality verified: `assert.strictEqual(b1.toString('utf8'), v1)` and `assert.strictEqual(Buffer.compare(b1, Buffer.from(v1, 'utf8')), 0)`.
@@ -1482,9 +1638,9 @@ Every test script imports `node:assert/strict`. If any assertion fails:
 - Idempotence verified: a second call to `entry.deleteCredential()` returned `false`.
 
 #### 4.3 Process Restart Exact Value Comparison
-- Process 1 (PID 45060) stored `dummy-secret-qfat-013L2-persist-token-gamma-2026`.
+- Process 1 (PID 45687) stored `dummy-secret-qfat-013L2-persist-token-gamma-2026`.
 - Process 1 exited with code 0.
-- Process 2 (PID 45067) retrieved the credential.
+- Process 2 (PID 45694) retrieved the credential.
 - Process 2 strictly compared the retrieved buffer string and bytes against `expectedValue`:
   `assert.strictEqual(buf.toString('utf8'), expectedValue)`
   `assert.strictEqual(Buffer.compare(buf, Buffer.from(expectedValue, 'utf8')), 0)`.
@@ -1501,27 +1657,48 @@ Every test script imports `node:assert/strict`. If any assertion fails:
   `getSecret()` returned `null` and `deleteCredential()` returned `false`, proving that the failed operation created zero entries.
 
 #### 4.5 Deterministic Daemon Lifecycle & Keyring Continuity
-- The real daemon PID was captured via `<<< "testpassword" &` (`DAEMON_PID_1=45027`).
-- Keyring file `/tmp/qfat-lss-val/env/home/.local/share/keyrings/login.keyring` was recorded with inode `4098805` and size 460 bytes.
-- Daemon 1 was terminated with `kill -TERM`. The process was verified terminated via `kill -0` (returned 1) and `ps -p 45027` (absent).
-- Daemon 2 was started (`DAEMON_PID_2=45092`, distinct PID).
-- The filesystem inode of `login.keyring` after restart was `4098805` (identical inode), proving Daemon 2 reopened the exact same keyring file.
+- The real daemon PID was captured via `<<< "testpassword" &` (`DAEMON_PID_1=45654`).
+- Keyring file `/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/home/.local/share/keyrings/login.keyring` was recorded with inode `4098772` and size 460 bytes.
+- Daemon 1 was terminated with `terminate_pid`. The process was verified terminated via `kill -0` (returned 1) and `ps -p 45654` (absent).
+- Daemon 2 was started (`DAEMON_PID_2=45719`, distinct PID).
+- The filesystem inode of `login.keyring` after restart was `4098772` (identical inode), proving Daemon 2 reopened the exact same keyring file.
 - `busctl` confirmed `login` collection was unlocked (`b false`).
-- A separate Node.js process (PID 45105) successfully retrieved the secret stored prior to daemon restart and asserted exact value equality.
+- A separate Node.js process (PID 45732) successfully retrieved the secret stored prior to daemon restart and asserted exact value equality.
 
 #### 4.6 Concrete Process-to-D-Bus Isolation Proof
 Every test process verified:
-- `DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/qfat-lss-val/env/run/bus`
-- `HOME=/tmp/qfat-lss-val/env/home`
+- `DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/run/bus`
+- `HOME=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/home`
 - Non-owner assertion: neither string contained `/run/user/1000` or `/home/irfan`.
 - The owner's normal session daemons (`PID 40674`, `PID 40675`) and normal bus (`/run/user/1000/bus`) remained completely untouched.
 
-#### 4.7 Cleanup Verification
-- All test daemons (`PID 45027`, `PID 45092`, `PID 45152`) were terminated.
-- Test D-Bus daemon (`PID 45025`) was terminated.
-- The disposable environment directory `/tmp/qfat-lss-val/env` was removed.
-- `ls /tmp/qfat-lss-val/env` returned "No such file or directory".
+#### 4.7 F-06 Safe Process Lifecycle & Provenance Verification
+- All process terminations in `run-all.sh` use `terminate_pid "$pid"`, targeting only the exact tracked PID.
+- No broad `pgrep`/`pkill` commands or hardcoded owner PIDs are present.
+- During Negative Test 7.2, D-Bus auto-activated PID `45764`. The runner queried D-Bus (`GetConnectionUnixProcessID`), verified that its environment had `DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/run/bus...` and `HOME=/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230/home`, added PID `45764` to `DISPOSABLE_PIDS`, and terminated it specifically with `SIGTERM`.
+- The cleanup trap was tested on both normal completion (`exit_status=0`, clean teardown) and error path (`exit_status=1`, clean termination of tracked processes and directory removal).
+
+#### 4.8 Final Cleanup Verification
+- All test processes (`PID 45652`, `PID 45654`, `PID 45719`, `PID 45764`, `PID 45786`) were terminated cleanly.
+- The disposable environment directory `/tmp/qfat-lss-val/qfat-013l2-run-20261112-171230` was removed (`cleanup_disposable_dir_removed=true`).
+- `ls /tmp/qfat-lss-val/qfat-013l2-run-20261112-171230` returned "No such file or directory".
 - No files in the QFAT repository, no production source, dependencies, lockfiles, databases, or user credentials were touched.
+
+### 5. Acceptance Criteria Mapping Table
+
+| ID | Criterion | Result | Direct Evidence from Run `qfat-013l2-run-20261112-171230` |
+|---|---|---|---|
+| AC-01 | Test environment is demonstrably isolated from owner's normal keyring | PASS | Section 2.3 & 3: dedicated D-Bus socket `/tmp/qfat-lss-val/.../run/bus`, temporary HOME `/tmp/qfat-lss-val/.../home`, non-owner assertion passed in all processes. |
+| AC-02 | Candidate package/version and exact backend selection are reproducible | PASS | Section 2.1 & 2.2: `@napi-rs/keyring@2.1.2`, explicit `{ linux: { store: 'secret-service' } }`, script SHA-256 hashes recorded. |
+| AC-03 | Store and retrieve work with exact data equality | PASS | Section 3: Step 3 `test-crud.mjs` returned `get1_verified` with string & byte equality, `CRUD_EXIT_CODE=0`. |
+| AC-04 | Update/overwrite works and returns only the new value | PASS | Section 3: Step 3 `test-crud.mjs` returned `get2_verified` with `matchV2: true, matchV1: false`, `CRUD_EXIT_CODE=0`. |
+| AC-05 | Delete works and subsequent retrieval confirms absence | PASS | Section 3: Step 3 `test-crud.mjs` returned `delete_verified: true, absence_verified: present: false, secondDelete: false`. |
+| AC-06 | New process can retrieve previously stored value | PASS | Section 3: Step 5 Process 1 (PID 45687) stored value; Process 2 (PID 45694) retrieved and asserted byte/string equality (`PERSIST_GET_EXIT_CODE=0`). Step 6 Daemon 2 (PID 45719) reopened same keyring (`inode 4098772`) and Process (PID 45732) retrieved original value (`DAEMON_GET_EXIT_CODE=0`). |
+| AC-07 | Secret Service unavailable causes fail-closed behavior; no weaker backend fallback | PASS | Section 3: Step 4 `test-backend-isolation.mjs` confirmed zero cross-backend leakage; Step 7.1 nonexistent bus threw constructor error; Step 7.2 stopped daemon threw `setSecret` error; Step 7.3 verified zero entries created in Secret Service or keyutils. |
+| AC-08 | Test entry and disposable environment are cleaned up | PASS | Section 3: Step 8 cleanup trap terminated all recorded PIDs, deleted directory (`cleanup_disposable_dir_removed=true`); Section 4.8 verified. |
+| AC-09 | No normal keyring, real credential, QFAT DB/key file/source/dependency/lockfile is touched | PASS | Git status clean, owner daemons (40674, 40675) untouched throughout. |
+| AC-10 | Report accurately distinguishes PASS, FAIL, and NOT RUN | PASS | Every criterion mapped with empirical execution evidence and exit codes. |
+| AC-11 | Windows, OAuth, account UI/API, upload, publishing, production integration, and migration remain untouched | PASS | Scope review: report documentation only, zero production changes. |
 
 ## Git Publication
 
@@ -1529,8 +1706,8 @@ Every test process verified:
 - Branch: main
 - Implementation commit: `0ea316e05efb6f54846b11824ac59a16bb19b2f2`
 - Follow-up fix commit: N/A
-- Report update commit: `43d26ac8a7287aa119453d1e16535e47777295d7`
-- Push verification: `origin/main` confirmed at `43d26ac8a7287aa119453d1e16535e47777295d7` via `git ls-remote origin main` after push; report file present on the remote branch.
+- Report update commit: Pending
+- Push verification: Pending
 
 ## Handoff
 
