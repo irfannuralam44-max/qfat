@@ -1,6 +1,6 @@
 # Task QFAT-013 — Encrypted Local Credential Storage Foundation
 
-- **Status:** READY FOR OWNER-AUTHORIZED EXECUTION
+- **Status:** OWNER-AUTHORIZED FOR EXECUTION
 - **Task type:** Bounded backend implementation and verification
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
