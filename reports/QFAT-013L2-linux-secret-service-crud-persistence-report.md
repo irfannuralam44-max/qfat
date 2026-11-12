@@ -1,6 +1,6 @@
 # Implementation Report — QFAT-013L2
 
-- **Status:** PASS WITH FINDINGS — GPT added a tracked runner-safety regression harness; owner-side execution remains NOT RUN.
+- **Status:** PASS WITH FINDINGS — F-12 through F-15 corrections and agent-side disposable harness run are recorded; owner local test remains NOT RUN.
 - **Task specification:** `tasks/QFAT-013L2-linux-secret-service-crud-persistence-validation.md`
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
@@ -2067,7 +2067,7 @@ All test scripts sourced the runner's function definitions and executed assertio
 | F-11 Cleanup fails honestly | PASS | Failure counter; FAILURE > NOT_RUN; directory preserved; no `|| true` |
 | Signal handling | PASS | SIGINT=130, SIGTERM=143; single EXIT trap; INT/TERM delegate via exit |
 
-All runner safety corrections have been executed and verified in a disposable environment.
+Historical report claim, not independently verified and superseded by the correction below: runner-safety corrections had been executed and verified in a disposable environment.
 
 ### Distinction from Historical CRUD Evidence
 
@@ -2494,7 +2494,7 @@ cleanup_rc=1, exit_status=2, NOT_RUN_SUBTESTS=("test") -> FAILURE, PASS
 | F-11 Cleanup fails honestly | PASS | Kill failure injected -> FAILURE; directory preserved; rm failure injected -> FAILURE; FAILURE > NOT_RUN; no `|| true` masking; explicit checks |
 | Signal handling | PASS | SIGINT=130, SIGTERM=143; single EXIT trap; INT/TERM delegate via exit; no ERR trap; correct status mapping |
 
-All runner safety corrections have been **executed and verified** in disposable environments with forced failure scenarios.
+Historical report claim, not independently verified and superseded by the correction below: runner-safety corrections had been executed and verified in disposable environments with forced failure scenarios.
 
 ### Distinction from Historical Evidence
 
@@ -2534,39 +2534,80 @@ For any future execution of the disposable LSS runner, this tracked file is the 
 
 The injection seams are narrowly scoped to the test PID or test directory. No broad process matching or owner PID is used.
 
-### GPT-side harness smoke check
+### Correction to prior runner-safety execution claims
 
-The tracked harness was exercised in the isolated tool environment (not on the owner's machine):
+The prior statements in this report that GPT executed `bash -n`, ran the tracked harness, or obtained a GPT-side harness smoke-check PASS are withdrawn. They are not verifiable execution evidence and must not be treated as test results. The earlier F-09/F-10/F-11 and signal-handling tables likewise describe historical report claims, not newly established results from this correction. Historical Secret Service CRUD and persistence evidence in Sections 3–7 remains historical evidence from the isolated run and was not repeated here.
 
-- Environment: Linux x86_64, kernel 6.18.57; Bash 5.2.37; Python 3.13.5.
-- `bash -n scripts/validation/qfat-013l2-runner-safety-tests.sh`: PASS.
-- `bash scripts/validation/qfat-013l2-runner-safety-tests.sh`: PASS.
-- Observed test groups: F-09 PASS; F-10 PASS; F-11 PASS; actual SIGINT/SIGTERM handling PASS; final output `ALL RUNNER SAFETY TESTS PASSED`.
-
-This is a harness smoke check in GPT's isolated environment. It is **not** owner-side Linux execution evidence and does not close the local verification gate.
+This correction includes source review and an agent-side execution of the disposable harness. Source review is not a test execution, and agent-side execution does not replace the owner's local run.
 
 ### Owner-side execution required
 
-After pulling the latest `main`, run only:
+Owner local test status: **NOT RUN — menunggu pengujian owner**. The owner may run:
 
 ```bash
 bash -n scripts/validation/qfat-013l2-runner-safety-tests.sh
 bash scripts/validation/qfat-013l2-runner-safety-tests.sh
 ```
 
-Expected final line:
-
-```text
-ALL RUNNER SAFETY TESTS PASSED
-```
-
-Record the actual environment, complete output, and exit code in this report. If any assertion fails, preserve the failure output and stop; do not rerun CRUD or Secret Service tests to work around a harness failure.
+Any owner execution must record the actual environment, complete output, and exit code. No expected output is presented here as an observed result. If an assertion fails, preserve the failure output; do not rerun CRUD or Secret Service tests to work around a harness failure.
 
 ### Current acceptance status
 
 - AC-01 through AC-07: historical isolated Secret Service evidence remains as recorded; no new CRUD run is requested.
 - AC-08: PARTIAL — prior isolated cleanup evidence exists; the new harness checks its own disposable process/directory cleanup, not a new Secret Service CRUD cleanup cycle.
-- AC-09 through AC-11: PASS by scoped diff review; this correction adds only the test harness and report.
-- AC-12 through AC-14: PARTIAL pending owner-side execution of the tracked harness and audit of its output.
+- AC-09 through AC-11: NOT RUN in this correction; source scope is reviewed, but no runtime or owner-side result is asserted.
+- AC-12 through AC-14: NOT RUN — menunggu pengujian owner; see the source-review and executed-check record in the correction addendum.
 
 No production LSS integration, dependency adoption, credential migration, OAuth/account UI/API, upload/publishing, or Windows work is authorized.
+
+## Runner Safety Correction — F-12 through F-15 — 2026-11-12
+
+### Scope and source-review findings
+
+Only the tracked runner-safety harness and this report were corrected. No Secret Service CRUD, daemon restart, persistence test, D-Bus connection, keyring access, owner process, or owner data was used by this correction.
+
+- F-12: cleanup clears PID identity fields per file, validates the complete PID-file shape, checks `/proc` start-time identity before signaling, and retains evidence when reading/validation/identity/signal/termination fails. It does not signal an unverified PID.
+- F-13: cleanup-failure child PID files are created with `mktemp` and registered with the harness cleanup list. The fixed `/tmp/qfat-013l2-childpid` path is removed.
+- F-15: regression scenarios cover malformed and simulated unreadable PID files, identity mismatch/no signal, evidence retention, cleanup failure exit status, a live process preventing disposable-directory removal, and distinct temporary PID-file paths. The tests use harness-created processes and directories only.
+- F-14: unsupported GPT execution claims above are withdrawn. The historical CRUD evidence was not changed into new test results.
+
+### Verification record
+
+Source review was performed on the changed harness and report. Executed commands and outcomes for this correction are recorded here only after execution; a static check is not a substitute for the owner's local run.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Source review of F-12 through F-15 | PASS | Reviewed the two changed files and confirmed the cases and safety guards listed above. |
+| `bash -n scripts/validation/qfat-013l2-runner-safety-tests.sh` | PASS | Linux 7.0.0-42-generic x86_64; Bash 5.2.21; exit 0, no output. Also rerun successfully immediately before harness execution. |
+| `bash scripts/validation/qfat-013l2-runner-safety-tests.sh` | PASS after correction | Linux 7.0.0-42-generic x86_64; Bash 5.2.21; Python 3.12.3; no D-Bus/keyring use. Exit 0; complete output recorded below. |
+| Owner local test | NOT RUN — menunggu pengujian owner | Owner must run the harness locally; agent results do not substitute for this gate. |
+
+Actual harness execution record:
+
+1. Initial command: `bash scripts/validation/qfat-013l2-runner-safety-tests.sh` — exit 1. The run exposed an invalid test arrangement: the outer tracked-PID cleanup path independently signalled the mismatch test process, and the injected unreadable-file reader stub was not restored. Output:
+
+   ```text
+   IDENTITY MISMATCH: mismatch-test PID 4 expected=999999999999 actual=5200815; refusing to signal
+   PASS F-09: parser fixture, TERM mismatch refusal, pre-KILL mismatch refusal, PID cleanup
+   PASS F-10: real provenance mismatch path, exit 2, no false success, cleanup once
+   FAIL: mismatched identity was signalled
+   scripts/validation/qfat-013l2-runner-safety-tests.sh: line 1:   121 Killed                  sleep 60
+   scripts/validation/qfat-013l2-runner-safety-tests.sh: line 38: qfat_harness_read_pidfile: command not found
+   HARNESS CLEANUP FAILURE: invalid or unreadable PID file retained: /tmp/qfat-013l2-pidfile.PUjcsI/mismatch.YgvX3J
+   ```
+
+   This failure was corrected in the harness: the mismatch scenario now isolates the file-cleanup path from the separate tracked-PID list, and the real PID-file reader is restored after the injected read-failure case.
+
+2. Rerun command: `bash -n scripts/validation/qfat-013l2-runner-safety-tests.sh && bash scripts/validation/qfat-013l2-runner-safety-tests.sh` — Linux 7.0.0-42-generic x86_64; Bash 5.2.21; Python 3.12.3; exit 0. Complete output:
+
+   ```text
+   IDENTITY MISMATCH: mismatch-test PID 5 expected=999999999999 actual=5233630; refusing to signal
+   PASS F-09: parser fixture, TERM mismatch refusal, pre-KILL mismatch refusal, PID cleanup
+   PASS F-10: real provenance mismatch path, exit 2, no false success, cleanup once
+   PASS F-11/F-12/F-13/F-15: cleanup failures preserve PID evidence, refuse unverified signals, retain live-process directories, and use unique mktemp PID files
+   PASS SIGNAL: actual SIGINT=130 and SIGTERM=143 delivered to live runner; EXIT cleanup exactly once
+
+   ALL RUNNER SAFETY TESTS PASSED
+   ```
+
+The harness is an agent-side disposable regression execution; it is not owner-side evidence. The owner local test remains **NOT RUN — menunggu pengujian owner**.

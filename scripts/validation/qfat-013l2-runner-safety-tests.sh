@@ -23,22 +23,75 @@ qfat_harness_forget_pid() {
   for entry in "${QFAT_HARNESS_PIDS[@]}"; do [[ "$entry" == "$target:"* ]] || kept+=("$entry"); done
   QFAT_HARNESS_PIDS=("${kept[@]}")
 }
+qfat_harness_read_pidfile() {
+  local pidfile="$1"
+  local -a pidfile_lines=()
+  pid=''; start=''; extra=''
+  mapfile -t pidfile_lines < "$pidfile" || return 1
+  [[ ${#pidfile_lines[@]} -eq 1 ]] || return 1
+  IFS=' ' read -r pid start extra <<< "${pidfile_lines[0]}"
+}
 qfat_harness_cleanup() {
-  local entry pid start pidfile
+  local entry pid start extra pidfile attempt
   trap - EXIT
   for pidfile in "${QFAT_HARNESS_PIDFILES[@]}"; do
+    pid=''
+    start=''
     if [[ -f "$pidfile" ]]; then
-      read -r pid start < "$pidfile" || true
-      if [[ "${pid:-}" =~ ^[0-9]+$ && "${start:-}" =~ ^[0-9]+$ ]] && qfat_verify_proc_identity "$pid" "$start"; then
-        command kill -KILL "$pid" 2>/dev/null || true
+      if ! qfat_harness_read_pidfile "$pidfile" || [[ -n "${extra:-}" ]]; then
+        printf 'HARNESS CLEANUP FAILURE: invalid or unreadable PID file retained: %s\n' "$pidfile" >&2
+        QFAT_CLEANUP_FAILURES=$((QFAT_CLEANUP_FAILURES + 1))
+        continue
       fi
-      rm -f "$pidfile"
+      if [[ ! "$pid" =~ ^[1-9][0-9]*$ || ! "$start" =~ ^[0-9]+$ ]]; then
+        printf 'HARNESS CLEANUP FAILURE: invalid PID identity retained: %s\n' "$pidfile" >&2
+        QFAT_CLEANUP_FAILURES=$((QFAT_CLEANUP_FAILURES + 1))
+        continue
+      fi
+      if ! qfat_verify_proc_identity "$pid" "$start"; then
+        printf 'HARNESS CLEANUP FAILURE: PID identity mismatch; retained: %s\n' "$pidfile" >&2
+        QFAT_CLEANUP_FAILURES=$((QFAT_CLEANUP_FAILURES + 1))
+        continue
+      fi
+      if ! command kill -KILL "$pid" 2>/dev/null && qfat_verify_proc_identity "$pid" "$start"; then
+        printf 'HARNESS CLEANUP FAILURE: could not signal verified PID; retained: %s\n' "$pidfile" >&2
+        QFAT_CLEANUP_FAILURES=$((QFAT_CLEANUP_FAILURES + 1))
+        continue
+      fi
+      for ((attempt = 0; attempt < 40; attempt++)); do
+        if ! qfat_verify_proc_identity "$pid" "$start"; then
+          if [[ -e "/proc/$pid" ]]; then
+            printf 'HARNESS CLEANUP FAILURE: PID identity changed during cleanup; retained: %s\n' "$pidfile" >&2
+            QFAT_CLEANUP_FAILURES=$((QFAT_CLEANUP_FAILURES + 1))
+            continue 2
+          fi
+          break
+        fi
+        sleep 0.025
+      done
+      if qfat_verify_proc_identity "$pid" "$start"; then
+        printf 'HARNESS CLEANUP FAILURE: verified PID still alive; retained: %s\n' "$pidfile" >&2
+        QFAT_CLEANUP_FAILURES=$((QFAT_CLEANUP_FAILURES + 1))
+        continue
+      fi
+      if [[ -e "/proc/$pid" ]]; then
+        printf 'HARNESS CLEANUP FAILURE: PID identity changed after cleanup; retained: %s\n' "$pidfile" >&2
+        QFAT_CLEANUP_FAILURES=$((QFAT_CLEANUP_FAILURES + 1))
+        continue
+      fi
+      if ! rm -f -- "$pidfile"; then
+        printf 'HARNESS CLEANUP FAILURE: could not remove PID file: %s\n' "$pidfile" >&2
+        QFAT_CLEANUP_FAILURES=$((QFAT_CLEANUP_FAILURES + 1))
+      fi
     fi
   done
   for entry in "${QFAT_HARNESS_PIDS[@]}"; do
     pid="${entry%%:*}"; start="${entry#*:}"
-    if qfat_verify_proc_identity "$pid" "$start"; then command kill -KILL "$pid" 2>/dev/null || true; fi
+    if qfat_verify_proc_identity "$pid" "$start"; then
+      command kill -KILL "$pid" 2>/dev/null || QFAT_CLEANUP_FAILURES=$((QFAT_CLEANUP_FAILURES + 1))
+    fi
   done
+  if [[ "$QFAT_CLEANUP_FAILURES" -gt 0 ]]; then return 1; fi
 }
 
 qfat_parse_proc_starttime_line() {
@@ -313,19 +366,24 @@ qfat_test_not_run() {
 }
 
 qfat_test_cleanup_failures() {
-  local base out marker pid rc content
+  local base out marker pidfile pid start rc content second_pidfile second_pid start unique_a_output unique_b_output unique_pid_a unique_pid_b
   base="$(mktemp -d /tmp/qfat-013l2-killfail.XXXXXX)"; out="$(mktemp)"; marker="$(mktemp)"; : > "$marker"
-  QFAT_HARNESS_PIDFILES+=("/tmp/qfat-013l2-childpid")
-  if qfat_run_child_scenario kill-failure "$base" "$out" /tmp/qfat-013l2-childpid "$marker"; then rc=0; else rc=$?; fi
+  pidfile="$(mktemp /tmp/qfat-013l2-childpid.XXXXXX)"
+  QFAT_HARNESS_PIDFILES+=("$pidfile")
+  if qfat_run_child_scenario kill-failure "$base" "$out" "$pidfile" "$marker"; then rc=0; else rc=$?; fi
   [[ "$rc" -eq 1 ]] || qfat_fail "termination failure exit=$rc, expected 1"
   content="$(cat "$out")"
   qfat_assert_contains "$content" 'CLEANUP_STATUS: FAILURE'
   qfat_assert_contains "$content" 'cleanup_disposable_dir_removed=NOT_RUN'
   [[ -d "$base" ]] || qfat_fail 'directory removed while tracked process remained alive'
-  read -r pid start < /tmp/qfat-013l2-childpid
+  pid=''; start=''
+  read -r pid start < "$pidfile"
   command kill -0 "$pid" 2>/dev/null || qfat_fail 'injected termination failure did not leave child alive'
   if qfat_verify_proc_identity "$pid" "$start"; then command kill -KILL "$pid" 2>/dev/null || true; fi
-  rm -f /tmp/qfat-013l2-childpid; rm -rf "$base"
+  for _ in {1..40}; do qfat_verify_proc_identity "$pid" "$start" || break; sleep 0.025; done
+  qfat_verify_proc_identity "$pid" "$start" && qfat_fail 'test child remained alive after harness-owned forced cleanup'
+  [[ -f "$pidfile" ]] || qfat_fail 'cleanup failure did not preserve PID file evidence'
+  rm -f -- "$pidfile"; rm -rf "$base"
   [[ "$(wc -l < "$marker")" -eq 1 ]] || qfat_fail 'termination-failure cleanup did not run exactly once'
   rm -f "$out" "$marker"
   base="$(mktemp -d /tmp/qfat-013l2-rmfail.XXXXXX)"; out="$(mktemp)"; marker="$(mktemp)"; : > "$marker"
@@ -344,7 +402,70 @@ qfat_test_cleanup_failures() {
   qfat_assert_not_contains "$content" 'CLEANUP_STATUS: NOT_RUN'
   [[ -d "$base" ]] || qfat_fail 'combined failure did not preserve directory'
   rm -rf "$base"; rm -f "$out" "$marker"
-  printf 'PASS F-11: real cleanup path reports kill/rm failures, preserves directory, FAILURE outranks NOT RUN\n'
+
+  # Invalid and unreadable PID files must never reuse a prior iteration's PID.
+  base="$(mktemp -d /tmp/qfat-013l2-pidfile.XXXXXX)"
+  out="$(mktemp)"; marker="$(mktemp)"; : > "$marker"
+  pidfile="$(mktemp "$base/invalid.XXXXXX")"
+  printf 'not-a-pid 12345\n' > "$pidfile"
+  QFAT_HARNESS_PIDFILES+=("$pidfile")
+  if qfat_harness_cleanup 2>"$out"; then qfat_fail 'invalid PID file cleanup unexpectedly succeeded'; fi
+  QFAT_CLEANUP_FAILURES=0; trap qfat_harness_cleanup EXIT
+  [[ -f "$pidfile" ]] || qfat_fail 'invalid PID file evidence was removed'
+  qfat_assert_contains "$(cat "$out")" 'invalid PID identity retained'
+  rm -f -- "$pidfile"
+  QFAT_HARNESS_PIDFILES=()
+
+  pidfile="$(mktemp "$base/unreadable.XXXXXX")"
+  printf '12345 67890\n' > "$pidfile"
+  QFAT_HARNESS_PIDFILES+=("$pidfile")
+  qfat_harness_read_pidfile() { pid=''; start=''; extra=''; return 1; }
+  if qfat_harness_cleanup 2>"$out"; then qfat_fail 'read failure cleanup unexpectedly succeeded'; fi
+  QFAT_CLEANUP_FAILURES=0; trap qfat_harness_cleanup EXIT
+  unset -f qfat_harness_read_pidfile
+  [[ -f "$pidfile" ]] || qfat_fail 'unreadable PID file evidence was removed'
+  qfat_assert_contains "$(cat "$out")" 'invalid or unreadable PID file retained'
+  rm -f -- "$pidfile"
+  QFAT_HARNESS_PIDFILES=()
+  qfat_harness_read_pidfile() {
+    local pidfile="$1"
+    local -a pidfile_lines=()
+    pid=''; start=''; extra=''
+    mapfile -t pidfile_lines < "$pidfile" || return 1
+    [[ ${#pidfile_lines[@]} -eq 1 ]] || return 1
+    IFS=' ' read -r pid start extra <<< "${pidfile_lines[0]}"
+  }
+
+  # An identity mismatch retains evidence and does not signal the live harness child.
+  sleep 60 & pid=$!
+  start="$(qfat_get_proc_starttime "$pid")" || qfat_fail 'cannot capture mismatch child identity'
+  qfat_harness_track_pid "$pid" || qfat_fail 'cannot register mismatch child for failure cleanup'
+  pidfile="$(mktemp "$base/mismatch.XXXXXX")"
+  printf '%s %s\n' "$pid" 999999999999 > "$pidfile"
+  QFAT_HARNESS_PIDFILES+=("$pidfile")
+  local -a saved_harness_pids=("${QFAT_HARNESS_PIDS[@]}")
+  QFAT_HARNESS_PIDS=()
+  if qfat_harness_cleanup 2>"$out"; then qfat_fail 'mismatched identity cleanup unexpectedly succeeded'; fi
+  QFAT_HARNESS_PIDS=("${saved_harness_pids[@]}")
+  QFAT_CLEANUP_FAILURES=0; trap qfat_harness_cleanup EXIT
+  command kill -0 "$pid" 2>/dev/null || qfat_fail 'mismatched identity was signalled'
+  [[ -f "$pidfile" ]] || qfat_fail 'mismatched PID file evidence was removed'
+  qfat_assert_contains "$(cat "$out")" 'PID identity mismatch; retained'
+  command kill -KILL "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  rm -f -- "$pidfile"
+  QFAT_HARNESS_PIDFILES=()
+
+  # Concurrent cases use distinct mktemp paths.
+  unique_a_output="$base/path-a"; unique_b_output="$base/path-b"
+  mktemp "$base/unique.XXXXXX" > "$unique_a_output" & unique_pid_a=$!
+  mktemp "$base/unique.XXXXXX" > "$unique_b_output" & unique_pid_b=$!
+  wait "$unique_pid_a" || qfat_fail 'first concurrent mktemp PID-file allocation failed'
+  wait "$unique_pid_b" || qfat_fail 'second concurrent mktemp PID-file allocation failed'
+  read -r pidfile < "$unique_a_output"; read -r second_pidfile < "$unique_b_output"
+  [[ "$pidfile" != "$second_pidfile" && -f "$pidfile" && -f "$second_pidfile" ]] || qfat_fail 'concurrent PID-file allocations collided'
+  rm -f -- "$pidfile" "$second_pidfile" "$unique_a_output" "$unique_b_output" "$out" "$marker"; rm -rf "$base"
+  printf 'PASS F-11/F-12/F-13/F-15: cleanup failures preserve PID evidence, refuse unverified signals, retain live-process directories, and use unique mktemp PID files\n'
 }
 
 qfat_test_signals() {
