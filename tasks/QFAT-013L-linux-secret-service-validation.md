@@ -1,6 +1,6 @@
 # Task QFAT-013L — Linux Secret Service Feasibility Validation
 
-- **Status:** READY FOR OWNER AUTHORIZATION — NOT YET AUTHORIZED FOR EXECUTION
+- **Status:** OWNER-AUTHORIZED FOR EXECUTION — Linux feasibility validation only
 - **Task type:** Linux-only credential-store investigation and isolated feasibility spike
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
