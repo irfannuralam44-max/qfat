@@ -27,6 +27,8 @@ export interface KeyFileOptions {
   platform?: NodeJS.Platform;
   /** Test seam for directory synchronization after key publication. */
   fsyncDirectory?: (directoryPath: string) => void;
+  /** Test seam for deterministically exercising an atomic-publication EEXIST race. */
+  linkFile?: typeof linkSync;
 }
 
 function fail(code: ConstructorParameters<typeof CredentialStorageError>[0], message: string): never {
@@ -220,6 +222,7 @@ function createKeyFile(
   keyPath: string,
   platform: NodeJS.Platform,
   fsyncDirectory: (directoryPath: string) => void = defaultFsyncDirectory,
+  linkFile: typeof linkSync = linkSync,
 ): Buffer {
   assertSupportedPlatform(platform);
   const keyDir = dirname(keyPath);
@@ -244,7 +247,7 @@ function createKeyFile(
       // link() is atomic and fails with EEXIST instead of replacing an
       // existing key. A concurrent first-time start therefore either wins or
       // loads the winner's key.
-      linkSync(tempPath, keyPath);
+      linkFile(tempPath, keyPath);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'EEXIST') {
@@ -332,5 +335,5 @@ export function loadOrCreateCredentialKey(
     );
   }
 
-  return createKeyFile(keyPath, platform, fsyncDirectory);
+  return createKeyFile(keyPath, platform, fsyncDirectory, options.linkFile);
 }
