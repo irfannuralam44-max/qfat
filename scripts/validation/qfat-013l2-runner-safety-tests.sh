@@ -366,7 +366,7 @@ while :; do sleep 0.05; done'''
     if not os.path.exists(ready): os.killpg(proc.pid, signal.SIGKILL); proc.wait(); raise SystemExit('FAIL: signal test child did not become ready')
     os.kill(proc.pid, sig)
     try: output, _ = proc.communicate(timeout=5)
-    except subprocess.TimeoutExpired: proc.kill(); raise SystemExit('FAIL: signal test child did not exit')
+    except subprocess.TimeoutExpired: os.killpg(proc.pid, signal.SIGKILL); proc.wait(); raise SystemExit('FAIL: signal test child did not exit')
     if proc.returncode != expected: raise SystemExit(f'FAIL: {sig.name} exit={proc.returncode}, expected {expected}; output={output}')
     with open(marker, encoding='utf-8') as f: lines = f.readlines()
     if len(lines) != 1: raise SystemExit(f'FAIL: {sig.name} cleanup count={len(lines)}, expected 1')
