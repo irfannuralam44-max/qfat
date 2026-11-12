@@ -1,6 +1,6 @@
 # Implementation Report — QFAT-013L2
 
-- **Status:** PASS
+- **Status:** PASS WITH FINDINGS — GPT audit correction applied; corrected runner scenarios still require execution on the owner's isolated Linux host.
 - **Task specification:** `tasks/QFAT-013L2-linux-secret-service-crud-persistence-validation.md`
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
@@ -1277,11 +1277,21 @@ CLEANUP_FAILURES=0
 # Get process start time (clock ticks) from /proc/<pid>/stat field 22
 get_proc_starttime() {
   local pid="$1"
-  if [ -r "/proc/$pid/stat" ]; then
-    awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || echo ""
-  else
-    echo ""
+  if [ ! -r "/proc/$pid/stat" ]; then
+    return 1
   fi
+  local stat_line rest
+  local -a stat_fields
+  IFS= read -r stat_line < "/proc/$pid/stat" || return 1
+  # comm (field 2) is parenthesized and may contain spaces or closing parentheses.
+  # Remove through the LAST ") "; remaining tokens begin at field 3.
+  rest="${stat_line##*) }"
+  read -r -a stat_fields <<< "$rest"
+  # starttime is field 22 overall, index 19 after field 2.
+  if [ "${#stat_fields[@]}" -lt 20 ] || [ -z "${stat_fields[19]:-}" ]; then
+    return 1
+  fi
+  printf '%s\n' "${stat_fields[19]}"
 }
 
 # Verify process identity: PID exists AND start_time matches recorded value
@@ -1337,7 +1347,15 @@ terminate_pid() {
 
   if kill -0 "$pid" 2>/dev/null; then
     echo "Terminating $name (PID $pid) with SIGTERM..."
-    kill -TERM "$pid" 2>/dev/null
+    if ! kill -TERM "$pid" 2>/dev/null; then
+      if verify_proc_identity "$pid" "$starttime"; then
+        echo "ERROR: SIGTERM failed while the same process is still present."
+        return 1
+      fi
+      echo "$name (PID $pid) exited before SIGTERM was delivered."
+      unrecord_disposable_pid "$pid"
+      return 0
+    fi
     local waited=0
     while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 50 ]; do
       sleep 0.1
@@ -1350,7 +1368,12 @@ terminate_pid() {
         return 1
       fi
       echo "Escalating $name (PID $pid) to SIGKILL..."
-      kill -KILL "$pid" 2>/dev/null
+      if ! kill -KILL "$pid" 2>/dev/null; then
+        if verify_proc_identity "$pid" "$starttime"; then
+          echo "ERROR: SIGKILL failed while the same process is still present."
+          return 1
+        fi
+      fi
       sleep 0.2
     fi
     if kill -0 "$pid" 2>/dev/null; then
@@ -1372,7 +1395,11 @@ terminate_pid() {
 signal_handler() {
   local sig="$1"
   echo "Received signal $sig, initiating controlled shutdown..."
-  exit 130  # 128 + SIGINT/SIGTERM
+  case "$sig" in
+    INT)  exit 130 ;;
+    TERM) exit 143 ;;
+    *)    exit 1 ;;
+  esac
 }
 
 # Single EXIT trap as primary cleanup path (F-11 trap design)
@@ -1413,14 +1440,22 @@ cleanup_all() {
     CLEANUP_FAILURES=$((CLEANUP_FAILURES + remaining))
   fi
 
-  # Verify and remove disposable directory
-  if [ -d "$BASE" ]; then
+  # Never remove the disposable directory while any tracked process remains.
+  # Preserve it for diagnosis if process cleanup already failed.
+  if [ "$remaining" -gt 0 ] || [ "$cleanup_rc" -ne 0 ]; then
+    echo "cleanup_disposable_dir_removed=NOT_RUN (active process or prior cleanup failure)"
+  elif [ -d "$BASE" ]; then
     echo "Removing disposable directory: $BASE"
-    rm -rf "$BASE"
-    if [ ! -d "$BASE" ]; then
-      echo "cleanup_disposable_dir_removed=true"
+    if rm -rf "$BASE"; then
+      if [ ! -e "$BASE" ]; then
+        echo "cleanup_disposable_dir_removed=true"
+      else
+        echo "cleanup_disposable_dir_removed=false (ERROR: path still exists)"
+        cleanup_rc=1
+        CLEANUP_FAILURES=$((CLEANUP_FAILURES + 1))
+      fi
     else
-      echo "cleanup_disposable_dir_removed=false (ERROR)"
+      echo "cleanup_disposable_dir_removed=false (ERROR: rm failed)"
       cleanup_rc=1
       CLEANUP_FAILURES=$((CLEANUP_FAILURES + 1))
     fi
@@ -1431,19 +1466,17 @@ cleanup_all() {
     echo "NOT_RUN_SUBTESTS: ${NOT_RUN_SUBTESTS[*]}"
   fi
 
-  if [ "$cleanup_rc" -eq 0 ] && [ "$exit_status" -eq 0 ] && [ ${#NOT_RUN_SUBTESTS[@]} -eq 0 ]; then
-    echo "CLEANUP_STATUS: SUCCESS (all tests passed and cleaned up)"
-  elif [ ${#NOT_RUN_SUBTESTS[@]} -gt 0 ]; then
-    echo "CLEANUP_STATUS: NOT_RUN (exit_status=$exit_status, ${#NOT_RUN_SUBTESTS[@]} subtest(s) not run, environment cleaned up)"
-    # F-10: NOT RUN must not become PASS — propagate non-zero if there were NOT RUN
-    if [ "$exit_status" -eq 0 ]; then
-      exit_status=2  # special status: NOT RUN
-    fi
-  else
+  # FAILURE has precedence over NOT RUN; neither may be reported as SUCCESS.
+  if [ "$cleanup_rc" -ne 0 ]; then
     echo "CLEANUP_STATUS: FAILURE (exit_status=$exit_status, cleanup_failures=$CLEANUP_FAILURES)"
-    if [ "$exit_status" -eq 0 ]; then
-      exit_status=1
-    fi
+    [ "$exit_status" -ne 0 ] || exit_status=1
+  elif [ "$exit_status" -ne 0 ] && [ "$exit_status" -ne 2 ]; then
+    echo "CLEANUP_STATUS: FAILURE (test runner exit_status=$exit_status)"
+  elif [ ${#NOT_RUN_SUBTESTS[@]} -gt 0 ] || [ "$exit_status" -eq 2 ]; then
+    echo "CLEANUP_STATUS: NOT_RUN (exit_status=$exit_status, ${#NOT_RUN_SUBTESTS[@]} subtest(s) not run)"
+    [ "$exit_status" -ne 0 ] || exit_status=2
+  else
+    echo "CLEANUP_STATUS: SUCCESS (all tests passed and cleaned up)"
   fi
   echo "============================================================"
   exit "$exit_status"
@@ -1852,13 +1885,13 @@ Evidence from the run: `CLEANUP_STATUS: SUCCESS (all tests passed and cleaned up
 | AC-05 | Delete works and subsequent retrieval confirms absence | PASS | Section 3: Step 3 `test-crud.mjs` returned `delete_verified: true, absence_verified: present: false, secondDelete: false`. |
 | AC-06 | New process can retrieve previously stored value | PASS | Section 3: Step 5 Process 1 (PID 45687) stored value; Process 2 (PID 45694) retrieved and asserted byte/string equality (`PERSIST_GET_EXIT_CODE=0`). Step 6 Daemon 2 (PID 45719) reopened same keyring (`inode 4098772`) and Process (PID 45732) retrieved original value (`DAEMON_GET_EXIT_CODE=0`). |
 | AC-07 | Secret Service unavailable causes fail-closed behavior; no weaker backend fallback | PASS | Section 3: Step 4 `test-backend-isolation.mjs` confirmed zero cross-backend leakage; Step 7.1 nonexistent bus threw constructor error; Step 7.2 stopped daemon threw `setSecret` error; Step 7.3 verified zero entries created in Secret Service or keyutils. |
-| AC-08 | Test entry and disposable environment are cleaned up | PASS | Section 3: Step 8 cleanup trap terminated all recorded PIDs, deleted directory (`cleanup_disposable_dir_removed=true`); Section 4.11 verified. |
+| AC-08 | Test entry and disposable environment are cleaned up | PARTIAL — prior-run evidence only; corrected runner not rerun | Section 3: Step 8 cleanup trap terminated all recorded PIDs, deleted directory (`cleanup_disposable_dir_removed=true`); Section 4.11 verified. |
 | AC-09 | No normal keyring, real credential, QFAT DB/key file/source/dependency/lockfile is touched | PASS | Git status clean, owner daemons (40674, 40675) untouched throughout. |
 | AC-10 | Report accurately distinguishes PASS, FAIL, and NOT RUN | PASS | Every criterion mapped with empirical execution evidence and exit codes. Runner F-10 logic ensures NOT RUN subtests produce exit status 2 and `CLEANUP_STATUS: NOT_RUN`, never PASS. |
 | AC-11 | Windows, OAuth, account UI/API, upload, publishing, production integration, and migration remain untouched | PASS | Scope review: report documentation only, zero production changes. |
-| AC-12 | Runner implements F-09 PID lifecycle safety (identity verification, no stale PIDs, no signals to unverified processes, termination logging) | PASS | Section 4.8: `verify_proc_identity` via `/proc/<pid>/stat` starttime; `unrecord_disposable_pid` on verified exit; identity-guarded SIGTERM/SIGKILL; per-termination logging. |
-| AC-13 | Runner implements F-10 NOT RUN must not become PASS (NOT RUN tracking, non-zero exit on NOT RUN, no false success message, cleanup status reflects NOT RUN) | PASS | Section 4.9: `NOT_RUN_SUBTESTS` array; `exit 2` on NOT RUN; conditional `ALL_TESTS_COMPLETED_SUCCESSFULLY`; `CLEANUP_STATUS: NOT_RUN`. |
-| AC-14 | Runner implements F-11 cleanup must fail honestly (failure collection, no masked failures, pre-deletion process verification, non-zero exit on cleanup failure, single EXIT trap) | PASS | Section 4.10: `CLEANUP_FAILURES` counter; unguarded `kill`/`rm` with explicit checks; pre-removal PID liveness scan; exit 1/2 on failure/NOT RUN; single `trap cleanup_all EXIT` with INT/TERM delegating. |
+| AC-12 | Runner implements F-09 PID lifecycle safety (identity verification, no stale PIDs, no signals to unverified processes, termination logging) | PARTIAL — source corrected; edge-case execution NOT RUN | Section 4.8: `verify_proc_identity` via `/proc/<pid>/stat` starttime; `unrecord_disposable_pid` on verified exit; identity-guarded SIGTERM/SIGKILL; per-termination logging. |
+| AC-13 | Runner implements F-10 NOT RUN must not become PASS (NOT RUN tracking, non-zero exit on NOT RUN, no false success message, cleanup status reflects NOT RUN) | NOT RUN — forced scenario not executed | Section 4.9: `NOT_RUN_SUBTESTS` array; `exit 2` on NOT RUN; conditional `ALL_TESTS_COMPLETED_SUCCESSFULLY`; `CLEANUP_STATUS: NOT_RUN`. |
+| AC-14 | Runner implements F-11 cleanup must fail honestly (failure collection, no masked failures, pre-deletion process verification, non-zero exit on cleanup failure, single EXIT trap) | PARTIAL — source corrected; forced cleanup failure NOT RUN | Section 4.10: `CLEANUP_FAILURES` counter; unguarded `kill`/`rm` with explicit checks; pre-removal PID liveness scan; exit 1/2 on failure/NOT RUN; single `trap cleanup_all EXIT` with INT/TERM delegating. |
 
 ## GPT Independent Audit — F-09/F-10/F-11 Resolution — 2026-11-12
 
@@ -1917,3 +1950,41 @@ A forced NOT RUN scenario (unverifiable auto-activated daemon) would demonstrate
 
 This validation is ready for GPT/owner audit. It is not owner acceptance and does
 not authorize production LSS integration or migration.
+
+## GPT Independent Audit — Direct Documentation Correction — 2026-11-12
+
+### Audit disposition
+
+**PASS WITH FINDINGS — NOT READY FOR OWNER ACCEPTANCE.**
+
+This correction is limited to the report's embedded disposable test runner and the accuracy of this report. No QFAT application source, dependency, lockfile, database, credential, or production configuration was changed.
+
+### Corrections applied to the embedded runner
+
+- `/proc/<pid>/stat` parsing now removes the parenthesized `comm` field through its final `) ` delimiter before selecting field 22. This handles process names containing spaces or parentheses; the previous `awk '{print $22}'` was not safe for that format.
+- SIGINT exits with 130 and SIGTERM exits with 143.
+- SIGTERM/SIGKILL delivery failures are checked rather than silently ignored.
+- The disposable directory is not removed if a tracked process remains alive or process cleanup has already failed.
+- Directory removal is checked inside a conditional, and a failed removal increments the cleanup failure count.
+- Cleanup failure takes precedence over NOT RUN. Neither condition can produce a SUCCESS cleanup status.
+
+### Evidence limitations — explicitly not verified by GPT
+
+GPT edited and source-reviewed the runner text in this report through GitHub. GPT did **not** execute the runner on the owner's Linux machine and did not recreate the disposable D-Bus/Secret Service environment.
+
+The previously recorded CRUD, process-restart, and daemon-restart logs belong to the earlier reported run. They do not prove execution of the corrected runner in this audit correction.
+
+The following runtime scenarios remain **NOT RUN** and must not be represented as PASS:
+- forced PID starttime mismatch and proof no signal is sent;
+- `/proc/<pid>/stat` parsing against a process name containing spaces/parentheses;
+- forced provenance failure producing NOT RUN and a non-zero exit;
+- forced process-termination failure proving the disposable directory is retained;
+- forced directory-removal failure and truthful non-zero exit;
+- SIGINT=130 and SIGTERM=143 with exactly one EXIT cleanup invocation;
+- complete CRUD/process/daemon restart suite using the corrected runner.
+
+Accordingly, AC-08 and AC-12 through AC-14 have been downgraded in the acceptance table. Earlier PASS evidence remains historical evidence for the earlier run only; it is not promoted to proof for this corrected runner.
+
+### Required next verification
+
+The owner-side OpenCode/Linux environment must run the corrected embedded runner in a fresh disposable environment, execute the forced failure scenarios above, record exact commands and actual exit codes, and update this report. Do not touch the owner's normal keyring. Until that evidence is published and independently audited, QFAT-013L2 remains unaccepted and production Secret Service integration/migration remains unauthorized.
