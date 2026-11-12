@@ -4,6 +4,7 @@ export const SESSION_COOKIE_NAME = 'qfat_session';
 export const CSRF_HEADER_NAME = 'x-csrf-token';
 export const SESSION_MAX_AGE_SECONDS = 1800;
 export const FRONTEND_PORT = 5173;
+export const MAX_SESSION_COUNT = 10_000;
 
 export interface ParsedAuthority {
   host: string;
@@ -23,20 +24,22 @@ function parseAuthority(authority: string): ParsedAuthority {
     return { host: '', port: 0, isValid: false, error: 'Missing authority' };
   }
 
-  const hostPortMatch = authority.match(/^\[([^\]]+)\](?::(\d+))?$|^([^:]+)(?::(\d+))?$/);
-  if (!hostPortMatch) {
+  const match = authority.match(/^\\[([^\\]]+)\\](?::(\\d+))?$|^([^:]+)(?::(\\d+))?$/);
+  if (!match) {
     return { host: '', port: 0, isValid: false, error: 'Malformed authority' };
   }
 
-  const host = hostPortMatch[1] || hostPortMatch[3];
-  const portStr = hostPortMatch[2] || hostPortMatch[4];
-
+  const host = match[1] || match[3];
+  const portText = match[2] || match[4];
   if (!host) {
     return { host: '', port: 0, isValid: false, error: 'Missing host' };
   }
 
-  const port = portStr ? parseInt(portStr, 10) : 80;
+  if (portText !== undefined && (!/^[1-9]\\d*$/.test(portText) || String(Number(portText)) !== portText)) {
+    return { host, port: 0, isValid: false, error: 'Malformed port' };
+  }
 
+  const port = portText === undefined ? 80 : Number(portText);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     return { host, port, isValid: false, error: `Invalid port: ${port}` };
   }
@@ -44,45 +47,32 @@ function parseAuthority(authority: string): ParsedAuthority {
   return { host, port, isValid: true };
 }
 
-function isPrivateIPv4(ip: string): boolean {
-  if (ip === '127.0.0.1' || ip.startsWith('127.')) {
-    return true;
-  }
+function parseIPv4(ip: string): [number, number, number, number] | null {
+  const parts = ip.split('.');
+  if (parts.length !== 4) return null;
 
-  const parts = ip.split('.').map(Number);
-  if (parts.length !== 4 || parts.some(p => !Number.isInteger(p) || p < 0 || p > 255)) {
-    return false;
-  }
+  const octets = parts.map((part) => {
+    if (!/^(0|[1-9]\\d{0,2})$/.test(part)) return -1;
+    const value = Number(part);
+    return value <= 255 ? value : -1;
+  });
 
-  const [a, b] = parts;
-
-  if (a === 10) {
-    return true;
-  }
-
-  if (a === 172 && b >= 16 && b <= 31) {
-    return true;
-  }
-
-  if (a === 192 && b === 168) {
-    return true;
-  }
-
-  if (a === 100 && b >= 64 && b <= 127) {
-    return true;
-  }
-
-  return false;
+  if (octets.some((value) => value < 0)) return null;
+  return octets as [number, number, number, number];
 }
 
-function isValidIPv4Literal(host: string): boolean {
-  if (!host) return false;
-  const parts = host.split('.');
-  if (parts.length !== 4) return false;
-  return parts.every(p => {
-    const n = Number(p);
-    return Number.isInteger(n) && n >= 0 && n <= 255 && String(n) === p;
-  });
+function isAllowedIPv4(ip: string): boolean {
+  const octets = parseIPv4(ip);
+  if (!octets) return false;
+
+  const [a, b] = octets;
+  return (
+    a === 127 ||
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127)
+  );
 }
 
 export function validateOriginHeader(origin: string | null | undefined): OriginValidationResult {
@@ -90,15 +80,13 @@ export function validateOriginHeader(origin: string | null | undefined): OriginV
     return { isValid: false, error: 'Missing Origin header' };
   }
 
-  const origins = origin.split(',').map(o => o.trim());
-  if (origins.length !== 1) {
-    return { isValid: false, error: 'Multiple Origin values not allowed' };
+  if (origin === 'null' || origin.includes(',')) {
+    return { isValid: false, error: 'Null or multiple Origin values not allowed' };
   }
 
-  const singleOrigin = origins[0];
   let parsedUrl: URL;
   try {
-    parsedUrl = new URL(singleOrigin);
+    parsedUrl = new URL(origin);
   } catch {
     return { isValid: false, error: 'Invalid Origin URL' };
   }
@@ -107,17 +95,30 @@ export function validateOriginHeader(origin: string | null | undefined): OriginV
     return { isValid: false, error: 'Only http scheme is allowed' };
   }
 
+  // A browser Origin header is a serialized origin, not a URL with credentials,
+  // a path, query, fragment, or a non-canonical authority representation.
+  if (
+    parsedUrl.username ||
+    parsedUrl.password ||
+    parsedUrl.pathname !== '/' ||
+    parsedUrl.search ||
+    parsedUrl.hash ||
+    origin !== parsedUrl.origin
+  ) {
+    return { isValid: false, error: 'Origin must be a canonical origin without path or credentials' };
+  }
+
   const authority = parseAuthority(parsedUrl.host);
   if (!authority.isValid) {
     return { isValid: false, error: authority.error };
   }
 
-  if (!isValidIPv4Literal(authority.host)) {
+  if (parseIPv4(authority.host) === null) {
     return { isValid: false, error: 'Host must be a numeric IPv4 literal' };
   }
 
-  if (!isPrivateIPv4(authority.host)) {
-    return { isValid: false, error: 'Origin must be a private IPv4 address (loopback, RFC1918, or Tailscale CGNAT)' };
+  if (!isAllowedIPv4(authority.host)) {
+    return { isValid: false, error: 'Origin must use loopback, RFC1918, or Tailscale CGNAT IPv4' };
   }
 
   if (authority.port !== FRONTEND_PORT) {
@@ -127,27 +128,22 @@ export function validateOriginHeader(origin: string | null | undefined): OriginV
   return { isValid: true, authority };
 }
 
-export function validateHostHeader(host: string | null | undefined, expectedOriginAuthority: ParsedAuthority): OriginValidationResult {
+export function validateHostHeader(host: string | null | undefined, expected: ParsedAuthority): OriginValidationResult {
   if (!host || typeof host !== 'string') {
     return { isValid: false, error: 'Missing Host header' };
   }
 
-  const hosts = host.split(',').map(h => h.trim());
-  if (hosts.length !== 1) {
+  if (host.includes(',')) {
     return { isValid: false, error: 'Multiple Host values not allowed' };
   }
 
-  const authority = parseAuthority(hosts[0]);
+  const authority = parseAuthority(host);
   if (!authority.isValid) {
     return { isValid: false, error: authority.error };
   }
 
-  if (authority.host !== expectedOriginAuthority.host) {
-    return { isValid: false, error: 'Host header host does not match Origin host' };
-  }
-
-  if (authority.port !== expectedOriginAuthority.port) {
-    return { isValid: false, error: 'Host header port does not match Origin port' };
+  if (authority.host !== expected.host || authority.port !== expected.port) {
+    return { isValid: false, error: 'Host header does not match Origin authority' };
   }
 
   return { isValid: true, authority };
@@ -162,12 +158,10 @@ export function generateCsrfToken(): string {
 }
 
 export function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  const bufA = new Uint8Array(Buffer.from(a));
-  const bufB = new Uint8Array(Buffer.from(b));
-  return timingSafeEqual(bufA, bufB);
+  const left = Buffer.from(a, 'utf8');
+  const right = Buffer.from(b, 'utf8');
+  if (left.length !== right.length) return false;
+  return timingSafeEqual(left, right);
 }
 
 export function hashSessionId(sessionId: string): string {
@@ -181,15 +175,23 @@ export interface SessionData {
 }
 
 export class SessionStore {
-  private sessions = new Map<string, SessionData>();
+  private readonly sessions = new Map<string, SessionData>();
   private cleanupInterval: NodeJS.Timeout | null = null;
 
-  constructor() {
-    this.cleanupInterval = setInterval(() => this.cleanup(), 60000);
+  constructor(private readonly maxSessions = MAX_SESSION_COUNT) {
+    if (!Number.isInteger(maxSessions) || maxSessions < 1) {
+      throw new Error('maxSessions must be a positive integer');
+    }
+    this.cleanupInterval = setInterval(() => this.cleanup(), 60_000);
     this.cleanupInterval.unref();
   }
 
   create(csrfToken: string): { sessionId: string; hashedId: string; csrfToken: string; expiresAt: number } {
+    this.cleanup();
+    if (this.sessions.size >= this.maxSessions) {
+      throw new Error('Session capacity reached');
+    }
+
     const sessionId = generateSessionId();
     const hashedId = hashSessionId(sessionId);
     const now = Date.now();
@@ -201,7 +203,7 @@ export class SessionStore {
   get(hashedId: string): SessionData | undefined {
     const session = this.sessions.get(hashedId);
     if (!session) return undefined;
-    if (Date.now() > session.expiresAt) {
+    if (Date.now() >= session.expiresAt) {
       this.sessions.delete(hashedId);
       return undefined;
     }
@@ -213,8 +215,7 @@ export class SessionStore {
     if (!session) return null;
 
     this.sessions.delete(hashedId);
-    const newCsrfToken = generateCsrfToken();
-    return this.create(newCsrfToken);
+    return this.create(generateCsrfToken());
   }
 
   destroy(hashedId: string): boolean {
@@ -224,9 +225,7 @@ export class SessionStore {
   cleanup(): void {
     const now = Date.now();
     for (const [hashedId, session] of this.sessions.entries()) {
-      if (now > session.expiresAt) {
-        this.sessions.delete(hashedId);
-      }
+      if (now >= session.expiresAt) this.sessions.delete(hashedId);
     }
   }
 
@@ -252,14 +251,13 @@ export function createClearSessionCookie(): string {
 export function parseSessionCookie(cookieHeader: string | null | undefined): string | null {
   if (!cookieHeader) return null;
 
-  const cookies = cookieHeader.split(';').map(c => c.trim());
-  for (const cookie of cookies) {
-    if (cookie.startsWith(`${SESSION_COOKIE_NAME}=`)) {
-      const value = cookie.slice(`${SESSION_COOKIE_NAME}=`.length);
-      if (value && value.length > 0) {
-        return value;
-      }
-    }
-  }
-  return null;
+  const matches = cookieHeader
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part.startsWith(`${SESSION_COOKIE_NAME}=`));
+
+  if (matches.length !== 1) return null;
+
+  const value = matches[0].slice(SESSION_COOKIE_NAME.length + 1);
+  return /^[A-Za-z0-9_-]{43}$/.test(value) ? value : null;
 }
