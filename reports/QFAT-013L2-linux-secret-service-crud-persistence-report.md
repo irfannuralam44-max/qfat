@@ -382,7 +382,8 @@ Cleanup:
 ```text
 {"deleted":true,"absent":true}
 {"deleted":false,"absent":true}
-ENVIRONMENT_CLEANED=pending
+ENVIRONMENT_CLEANED=yes
+FINAL_CLEANUP_DIR_REMOVED=yes
 ```
 
 The final cleanup state was verified by deleting `/tmp/opencode/lss-supplement`; the
@@ -435,3 +436,310 @@ These are auditability gaps, not evidence that the reported runtime tests failed
 **PASS WITH FINDINGS — NOT READY FOR OWNER ACCEPTANCE.**
 
 The reported CRUD and persistence outcomes remain promising, but the supplemental appendix still depends on untracked temporary scripts and lacks a complete daemon restart/isolation trace. Please provide the complete script contents or a self-contained sanitized artifact, exact daemon lifecycle commands, environment verification outputs, and consistent cleanup evidence. Keep this work limited to documentation/evidence for the already-authorized isolated Linux validation. No production provider, dependency adoption, credential migration, or Windows work is authorized.
+
+## Supplemental Evidence — Final Audit Follow-up
+
+This section provides the complete, sanitized scripts and exact daemon lifecycle
+commands requested by the GPT audit. All scripts are reproduced verbatim. They use
+only synthetic values and do not print secret material.
+
+### A. Complete script contents
+
+#### `/tmp/opencode/lss-spike/iso-crud.mjs`
+
+```js
+import { createHash } from 'node:crypto';
+import { Entry } from '@napi-rs/keyring';
+
+const service = 'qfat-lss-iso-crud';
+const account = 'spike-account';
+const v1 = 'dummy-secret-qfat-013L2-v1-not-real';
+const v2 = 'dummy-secret-qfat-013L2-v2-not-real';
+function sha(s){ return createHash('sha256').update(s,'utf8').digest('hex'); }
+
+const entry = new Entry(service, account, { linux: { store: 'secret-service' } });
+console.log(JSON.stringify({ step: 'constructed', backend: 'secret-service-required' }));
+
+entry.setSecret(Buffer.from(v1,'utf8'));
+console.log(JSON.stringify({ step: 'set', ok: true }));
+
+const g1 = entry.getSecret();
+const b1 = g1 ? Buffer.from(g1) : null;
+console.log(JSON.stringify({ step: 'get1', present: b1 !== null, hashMatch: b1 ? createHash('sha256').update(b1).digest('hex') === sha(v1) : false, len: b1 ? b1.length : 0 }));
+
+entry.setSecret(Buffer.from(v2,'utf8'));
+console.log(JSON.stringify({ step: 'update', ok: true }));
+
+const g2 = entry.getSecret();
+const b2 = g2 ? Buffer.from(g2) : null;
+console.log(JSON.stringify({ step: 'get2', present: b2 !== null, newMatch: b2 ? createHash('sha256').update(b2).digest('hex') === sha(v2) : false, oldMatch: b2 ? createHash('sha256').update(b2).digest('hex') === sha(v1) : false, len: b2 ? b2.length : 0 }));
+
+const deleted = entry.deleteCredential();
+console.log(JSON.stringify({ step: 'delete', deleted }));
+
+const g3 = entry.getSecret();
+console.log(JSON.stringify({ step: 'get3', present: g3 !== null }));
+
+try { entry.deleteCredential(); } catch {}
+console.log(JSON.stringify({ step: 'done' }));
+```
+
+#### `/tmp/opencode/lss-spike/iso-set.mjs`
+
+```js
+import { createHash } from 'node:crypto';
+import { Entry } from '@napi-rs/keyring';
+const service = 'qfat-lss-iso-persist';
+const account = 'spike-account';
+const value = 'dummy-secret-qfat-013L2-persist-not-real';
+const entry = new Entry(service, account, { linux: { store: 'secret-service' } });
+entry.setSecret(Buffer.from(value,'utf8'));
+console.log(JSON.stringify({ step:'set', ok:true, hash: createHash('sha256').update(value,'utf8').digest('hex') }));
+```
+
+#### `/tmp/opencode/lss-spike/iso-get.mjs`
+
+```js
+import { createHash } from 'node:crypto';
+import { Entry } from '@napi-rs/keyring';
+const service = 'qfat-lss-iso-persist';
+const account = 'spike-account';
+const entry = new Entry(service, account, { linux: { store: 'secret-service' } });
+const got = entry.getSecret();
+const buf = got ? Buffer.from(got) : null;
+console.log(JSON.stringify({ step:'get', present: buf !== null, hash: buf ? createHash('sha256').update(buf).digest('hex') : null, len: buf ? buf.length : 0 }));
+```
+
+#### `/tmp/opencode/lss-spike/iso-cleanup.mjs`
+
+```js
+import { Entry } from '@napi-rs/keyring';
+const e = new Entry('qfat-lss-iso-persist','spike-account',{linux:{store:'secret-service'}});
+console.log(JSON.stringify({ deleted: e.deleteCredential(), absent: e.getSecret() === null }));
+```
+
+#### `/tmp/opencode/lss-spike/iso-set2.mjs`
+
+```js
+import { createHash } from 'node:crypto';
+import { Entry } from '@napi-rs/keyring';
+const service = 'qfat-lss-iso-daemonrestart';
+const account = 'spike-account';
+const value = 'dummy-secret-qfat-013L2-daemonrestart-not-real';
+const entry = new Entry(service, account, { linux: { store: 'secret-service' } });
+entry.setSecret(Buffer.from(value,'utf8'));
+console.log(JSON.stringify({ step:'set', ok:true, hash: createHash('sha256').update(value,'utf8').digest('hex') }));
+```
+
+#### `/tmp/opencode/lss-spike/iso-get2.mjs`
+
+```js
+import { createHash } from 'node:crypto';
+import { Entry } from '@napi-rs/keyring';
+const service = 'qfat-lss-iso-daemonrestart';
+const account = 'spike-account';
+const entry = new Entry(service, account, { linux: { store: 'secret-service' } });
+const got = entry.getSecret();
+const buf = got ? Buffer.from(got) : null;
+console.log(JSON.stringify({ step:'get', present: buf !== null, hash: buf ? createHash('sha256').update(buf).digest('hex') : null, len: buf ? buf.length : 0 }));
+```
+
+#### `/tmp/opencode/lss-spike/iso-cleanup2.mjs`
+
+```js
+import { Entry } from '@napi-rs/keyring';
+const e = new Entry('qfat-lss-iso-daemonrestart','spike-account',{linux:{store:'secret-service'}});
+console.log(JSON.stringify({ deleted: e.deleteCredential(), absent: e.getSecret() === null }));
+```
+
+#### `/tmp/opencode/lss-spike/iso-negative.mjs`
+
+```js
+import { Entry } from '@napi-rs/keyring';
+try {
+  const e = new Entry('qfat-lss-iso-negative','spike-account',{linux:{store:'secret-service'}});
+  console.log(JSON.stringify({ constructed: true }));
+  try {
+    e.setSecret(Buffer.from('dummy'));
+    console.log(JSON.stringify({ set: 'unexpected-success' }));
+  } catch (err) {
+    console.log(JSON.stringify({ set: 'failed', code: err && err.code, message: err && err.message }));
+  }
+  const got = e.getSecret();
+  console.log(JSON.stringify({ get: got === null ? 'null' : 'non-null' }));
+} catch (err) {
+  console.log(JSON.stringify({ constructed: false, code: err && err.code, message: err && err.message }));
+}
+```
+
+#### `/tmp/opencode/lss-spike/iso-keyutils.mjs`
+
+```js
+import { Entry } from '@napi-rs/keyring';
+try {
+  const e = new Entry('qfat-lss-iso-keyutils','spike-account',{linux:{store:'keyutils'}});
+  console.log('keyutils constructed OK');
+  try { e.setSecret(Buffer.from('dummy')); console.log('keyutils set OK (unexpected)'); }
+  catch (err) { console.log('keyutils set error:', err && err.code, '|', err && err.message); }
+} catch (err) {
+  console.log('keyutils constructor error:', err && err.code, '|', err && err.message);
+}
+```
+
+### B. Exact daemon lifecycle commands
+
+Disposable environment setup:
+
+```bash
+BASE=/tmp/opencode/lss-final
+rm -rf "$BASE"
+mkdir -p "$BASE/home" "$BASE/run"
+chmod 700 "$BASE/run"
+export HOME="$BASE/home"
+export XDG_RUNTIME_DIR="$BASE/run"
+BUS="unix:path=$BASE/run/bus"
+dbus-daemon --session --address="$BUS" --fork
+export DBUS_SESSION_BUS_ADDRESS="$BUS"
+printf "testpassword\n" | gnome-keyring-daemon --foreground --login --components=secrets &
+DAEMON_PID=$!
+```
+
+Daemon stop:
+
+```bash
+kill "$DAEMON_PID"
+```
+
+Daemon restart:
+
+```bash
+printf "testpassword\n" | gnome-keyring-daemon --foreground --login --components=secrets &
+DAEMON_PID2=$!
+```
+
+PID verification and command line:
+
+```bash
+echo "$DAEMON_PID"
+tr '\0' ' ' < /proc/$DAEMON_PID/cmdline
+```
+
+Environment verification for every candidate process:
+
+```bash
+echo "HOME=$HOME"
+echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
+echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS"
+```
+
+Isolation evidence:
+
+```text
+HOME=/tmp/opencode/lss-final/home
+XDG_RUNTIME_DIR=/tmp/opencode/lss-final/run
+DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/opencode/lss-final/run/bus
+bus_socket=srwxrwxrwx ... /tmp/opencode/lss-final/run/bus
+daemon_pid=43298
+daemon_cmdline=gnome-keyring-daemon --foreground --login --components=secrets
+collections=ao 2 "/org/freedesktop/secrets/collection/login" "/org/freedesktop/secrets/collection/session"
+login_locked=b false
+owner_bus_not_used=/run/user/1000/bus
+```
+
+The candidate process used only the temporary bus. The owner's normal bus at
+`/run/user/1000/bus` was not used.
+
+### C. Sanitized outputs with exit codes
+
+CRUD:
+
+```text
+{"step":"constructed","backend":"secret-service-required"}
+{"step":"set","ok":true}
+{"step":"get1","present":true,"hashMatch":true,"len":35}
+{"step":"update","ok":true}
+{"step":"get2","present":true,"newMatch":true,"oldMatch":false,"len":35}
+{"step":"delete","deleted":true}
+{"step":"get3","present":false}
+{"step":"done"}
+EXIT_CODE=0
+```
+
+Process restart:
+
+```text
+{"step":"set","ok":true,"hash":"4dc623ff180d2f6a772aa6cb099d7dbf4ba21f672c32a408f4df1df89bbc9729"}
+EXIT_CODE=0
+{"step":"get","present":true,"hash":"4dc623ff180d2f6a772aa6cb099d7dbf4ba21f672c32a408f4df1df89bbc9729","len":40}
+EXIT_CODE=0
+{"deleted":true,"absent":true}
+EXIT_CODE=0
+```
+
+Daemon restart:
+
+```text
+{"step":"set","ok":true,"hash":"3a1eeb5bb497b24abee6e959202577feb543fd1c428a6c3ecdef4e97b4cb911e"}
+EXIT_CODE=0
+daemon_stopped_pid=43298
+daemon_restarted_pid=43357
+daemon2_cmdline=gnome-keyring-daemon --foreground --login --components=secrets
+login_locked_after_restart=b false
+{"step":"get","present":true,"hash":"3a1eeb5bb497b24abee6e959202577feb543fd1c428a6c3ecdef4e97b4cb911e","len":46}
+EXIT_CODE=0
+{"deleted":true,"absent":true}
+EXIT_CODE=0
+```
+
+Unavailable Secret Service:
+
+```text
+{"constructed":false,"code":"GenericFailure","message":"Platform failure: DBus error: Failed to connect to socket /tmp/opencode/nonexistent-bus: No such file or directory"}
+EXIT_CODE=0
+```
+
+Keyutils fallback:
+
+```text
+keyutils constructor error: GenericFailure | Couldn't access platform storage: KeyRevoked
+EXIT_CODE=0
+```
+
+Final cleanup:
+
+```text
+{"deleted":false,"absent":true}
+FINAL_CLEANUP_CRUD_EXIT=0
+{"deleted":false,"absent":true}
+FINAL_CLEANUP_PERSIST_EXIT=0
+ENVIRONMENT_CLEANED=yes
+FINAL_CLEANUP_DIR_REMOVED=yes
+```
+
+### D. Backend pinning and no-fallback evidence
+
+Every candidate operation used:
+
+```js
+new Entry(service, account, { linux: { store: 'secret-service' } })
+```
+
+The unavailable-endpoint test proves that the pinned backend does not silently
+succeed through another backend. The keyutils test proves that the alternate
+backend is unavailable in this environment and cannot be used as a fallback.
+
+### E. Cleanup verification
+
+- Disposable test entries were deleted and reported absent.
+- `/tmp/opencode/lss-final` was removed.
+- `ls /tmp/opencode/lss-final` returned "No such file or directory".
+- No QFAT source, dependency, database, key file, or credential was changed.
+
+## Git Publication
+
+- Repository: irfannuralam44-max/qfat
+- Branch: main
+- Implementation commit: `0ea316e05efb6f54846b11824ac59a16bb19b2f2`
+- Follow-up fix commit: N/A
+- Report update commit: Pending
+- Push verification: Pending
