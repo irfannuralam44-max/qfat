@@ -6,13 +6,15 @@
 - **Target branch:** `main`
 - **Original implementation:** `b3a1ad686afc54d0dea8f0816ba73a2ed16a9153`
 - **Remediation source commits:** see Git Publication below
-- **Verification commit:** `5142c346f09e1d4d58145e024985637e50245aa6`
+- **Verification-results report publication commit:** `9ad46384b922a259c18ac6d4606c28772962b23a`
+- **Follow-up TypeScript/test correction commit:** `d8436428ca330ed7b3b87f03d9bb9be0bbc11dde`
+- **Documentation update commit (not verification execution):** `5142c346f09e1d4d58145e024985637e50245aa6`
 
 ## Summary
 
 QFAT-011's original implementation was independently reviewed after publication. The review found gaps in bounded resource use, duplicate-cookie handling, destroy-route enforcement, strict Origin parsing, mutation-guard evidence, frontend client behavior, and proxy-path matching.
 
-Those source and test gaps have now been corrected directly on `main`. **All automated verification checks have been executed and passed** as of 2026-11-12. Physical LAN/Tailscale checks remain outstanding and require owner execution.
+Those source and test gaps have now been corrected directly on `main`. **All automated verification checks have been executed and passed** as of 2026-11-12. Physical LAN/Tailscale checks remain outstanding and require owner execution. **QFAT-011 is not owner-accepted.**
 
 ## Remediation applied
 
@@ -129,10 +131,14 @@ All remediation updates were committed directly to `main` through sequential Git
 - `a1fc4c7561ab0cf481053be8eea70155d3e613f7` — narrowly scoped proxy path and Host preservation.
 - `c238853d4dcaca8ca5dae5a1ec79351b7614d30f` — Vite proxy integration test.
 
-**Verification commit:** `5142c346f09e1d4d58145e024985637e50245aa6` (report update with verification results)
+**Verification-results report publication commit:** `9ad46384b922a259c18ac6d4606c28772962b23a` (publishes the report containing automated verification results; this commit did not execute tests)
 
-**Current source/report state:** remediation is published on `main`; all automated verification checks passed. Physical LAN/Tailscale checks remain for owner execution before QFAT-011 can be accepted.
+**Follow-up TypeScript/test correction commit:** `d8436428ca330ed7b3b87f03d9bb9be0bbc11dde` (resolves the two local modifications documented in the investigation report: `Buffer`→`Uint8Array` fix in `apps/server/src/security/index.ts` and three test assertion corrections in `apps/server/test/security.test.ts`)
+
+**Documentation update commit (not verification execution):** `5142c346f09e1d4d58145e024985637e50245aa6` (updates the original implementation SHA and publication details only; did not execute tests)
+
+**Current source/report state:** remediation is published on `main`; all automated verification checks passed. Physical LAN/Tailscale checks remain for owner execution before QFAT-011 can be accepted. QFAT-011 is not owner-accepted.
 
 ## Handoff
 
-QFAT-011 **implementation and automated verification are complete**. All backend (90 tests), frontend, typecheck, build, audit, and diff checks pass. Physical LAN/Tailscale browser checks remain for owner execution. Sync `main`, perform the available LAN and Tailscale browser checks, and report any failures for a focused follow-up. Do not start QFAT-012 until QFAT-011 is accepted.
+QFAT-011 **implementation and automated verification are complete**. All backend (90 tests), frontend, typecheck, build, audit, and diff checks pass. Physical LAN/Tailscale browser checks remain for owner execution. **QFAT-011 is not owner-accepted.** Sync `main`, perform the available LAN and Tailscale browser checks, and report any failures for a focused follow-up. Do not start QFAT-012 until QFAT-011 is accepted.

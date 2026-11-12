@@ -82,6 +82,38 @@ export function constantTimeEqual(a: string, b: string): boolean {
 
 ---
 
+## Resolution and Publication
+
+**Commit:** `d8436428ca330ed7b3b87f03d9bb9be0bbc11dde`
+**Message:** `fix(security): preserve timingSafeEqual typing and test assertions`
+
+### Changes Included
+
+1. **`apps/server/src/security/index.ts`** — `constantTimeEqual` function:
+   - Changed `const left = Buffer.from(a, 'utf8')` to `const left = new Uint8Array(Buffer.from(a, 'utf8'))`
+   - Changed `const right = Buffer.from(b, 'utf8')` to `const right = new Uint8Array(Buffer.from(b, 'utf8'))`
+   - Resolves `TS2345: Argument of type 'Buffer' is not assignable to parameter of type 'ArrayBufferView'` in TypeScript 5.x strict mode.
+
+2. **`apps/server/test/security.test.ts`** — Three test assertion corrections:
+   - **Multiple Origin error message:** `'Multiple Origin'` → `'multiple Origin'` (matches actual lowercase output from `validateOriginHeader`)
+   - **Public IPv4 rejection message:** `'private IPv4'` → `'loopback, RFC1918, or Tailscale CGNAT'` (matches actual error from `validateOriginHeader`)
+   - **Host header port mismatch message:** `'port does not match'` → `'does not match Origin authority'` (matches actual error from `validateHostHeader`)
+
+### Outcome
+
+- Both identified local modifications were **retained and published**, not discarded.
+- The changes were committed directly to `main` as part of the QFAT-011 follow-up correction.
+- `npm run typecheck` and `npm test` (90 tests) pass with these changes.
+
+### Current Repository State (as of investigation resolution)
+
+- **Branch:** `main`
+- **HEAD:** `d8436428ca330ed7b3b87f03d9bb9be0bbc11dde`
+- **Remote:** `origin/main` synchronized
+- **Working tree:** Clean (no uncommitted changes)
+
+---
+
 ## Recommendation
 
 **Do not discard these changes.** Both are legitimate and required:
@@ -89,4 +121,6 @@ export function constantTimeEqual(a: string, b: string): boolean {
 1. The `index.ts` fix resolves a TypeScript compilation error that blocks `npm run typecheck` and `npm run build`.
 2. The `security.test.ts` corrections align test expectations with the actual QFAT-011 security implementation error messages.
 
-These changes should be committed as part of the QFAT-011 verification flow (they were likely created during the verification step when running tests/typecheck). They do not introduce any behavioral changes — only fix compilation and test alignment.
+These changes were committed as part of the QFAT-011 verification flow in commit `d8436428ca330ed7b3b87f03d9bb9be0bbc11dde`. They do not introduce any behavioral changes — only fix compilation and test alignment.
+
+**Note:** This investigation report documents historical local state before publication. It does not itself prove that tests were executed; the verification results are reported separately in `QFAT-011-browser-session-csrf-security-report.md`.
