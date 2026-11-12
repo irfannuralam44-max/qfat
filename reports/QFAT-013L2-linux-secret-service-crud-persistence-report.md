@@ -406,3 +406,32 @@ backend is unavailable in this environment and cannot be used as a fallback.
 - `/tmp/opencode/lss-supplement` was removed.
 - `ls /tmp/opencode/lss-supplement` returned "No such file or directory".
 - No QFAT source, dependency, database, key file, or credential was changed.
+
+
+## GPT Independent Audit — Supplemental Evidence Review — 2026-11-12
+
+### Publication and diff verification
+
+- Verified the supplemental report is present on `main`.
+- The supplemental-evidence commits are `b934ab7670ef2bbc06528558096d7361a08f146d` and `8407c16723998de91ff6f9df588012b2b45b3bcc`.
+- Commit `65abf10cbb74dfb3e9230beb428f7a6e6ad0675c` merged the earlier audit findings with the supplemental evidence.
+- Commit `2e1c10c8eb8ffec9060410dc9ff74948b1de484c` records supplemental publication metadata.
+- Compared with the prior audit commit `b8b662ad02cd9b364623e083d07797ac56a48abc`: four commits ahead, zero behind; only the report file changed.
+
+### Supplemental evidence assessment
+
+The appendix improves the report by documenting a separate temporary D-Bus endpoint, temporary HOME/runtime paths, backend pinning, sanitized outputs, and cleanup. However, the remaining evidence is not yet sufficient for a reproducible independent audit:
+
+1. **Referenced scripts are not included.** The commands invoke `/tmp/opencode/lss-spike/iso-*.mjs`, but those files are temporary and absent from the repository/report. Their contents determine the actual constructor arguments, operations, assertions, and cleanup behavior. A command that invokes an unavailable script is not independently reproducible. Include the complete sanitized script contents in the report or commit a safe, self-contained evidence artifact.
+2. **Daemon restart sequence is incomplete.** The report says to stop and restart the daemon but does not give the actual stop command, daemon PID verification, restart command, or exact environment/password delivery sequence. This prevents review of whether the same isolated keyring state was reused.
+3. **Isolation evidence is a snapshot, not a full trace.** It lists a temporary bus socket and daemon PID/cmdline, but does not show the commands and exit codes used to establish the bus owner, daemon environment, candidate process environment, and that each operation used that exact endpoint. Include sanitized command output for those checks.
+4. **Cleanup evidence contains an internal contradiction.** The cleanup output says `ENVIRONMENT_CLEANED=pending`, while the following prose says the directory was removed. Clarify this by recording the final cleanup command and its actual exit code/output, and remove or correct the stale pending line.
+5. **Negative test semantics need exact assertions.** The unavailable-endpoint output shows constructor failure, and the explicit backend option is documented. Include the full negative-test script and show that no store/retrieve operation can complete, rather than relying only on a constructor error message. Distinguish expected test-process exit status from the library operation's error outcome.
+
+These are auditability gaps, not evidence that the reported runtime tests failed. GPT has not executed these scripts or independently recreated the disposable environment.
+
+### Audit disposition
+
+**PASS WITH FINDINGS — NOT READY FOR OWNER ACCEPTANCE.**
+
+The reported CRUD and persistence outcomes remain promising, but the supplemental appendix still depends on untracked temporary scripts and lacks a complete daemon restart/isolation trace. Please provide the complete script contents or a self-contained sanitized artifact, exact daemon lifecycle commands, environment verification outputs, and consistent cleanup evidence. Keep this work limited to documentation/evidence for the already-authorized isolated Linux validation. No production provider, dependency adoption, credential migration, or Windows work is authorized.
