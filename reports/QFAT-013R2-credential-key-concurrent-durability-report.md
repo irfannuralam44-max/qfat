@@ -5,7 +5,7 @@
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
 - **Commit message:** `feat(QFAT-013R2): close credential key durability race`
-- **Commit SHA:** Pending
+- **Commit SHA:** `0fd014089bff54697a2ef6717af2cde4bdc6b64c`
 
 ## Scope
 
@@ -120,7 +120,7 @@ host was available and no Windows ACL work was performed.
 
 - Repository: irfannuralam44-max/qfat
 - Branch: main
-- Implementation commit: Pending
+- Implementation commit: `0fd014089bff54697a2ef6717af2cde4bdc6b64c`
 - Follow-up fix commit: N/A
 - Report update commit: Pending
 - Push verification: Pending
