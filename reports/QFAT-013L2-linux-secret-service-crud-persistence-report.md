@@ -1,0 +1,218 @@
+# Implementation Report — QFAT-013L2
+
+- **Status:** PASS WITH FINDINGS
+- **Task specification:** `tasks/QFAT-013L2-linux-secret-service-crud-persistence-validation.md`
+- **Repository:** `irfannuralam44-max/qfat`
+- **Target branch:** `main`
+- **Commit message:** `docs(QFAT-013L2): add isolated Secret Service CRUD and persistence validation report`
+- **Commit SHA:** Pending
+
+## Scope
+
+Investigation only. No QFAT production source, package manifest, lockfile, database,
+key file, credential record, or user credential data was changed. No Windows work
+was performed. No production LSS provider or migration was implemented.
+
+## 1. Isolation proof
+
+A genuinely isolated Secret Service environment was created and destroyed for this
+task. It did not use the owner's normal `login` or `session` collections.
+
+Isolation method:
+- Temporary home directory: `/tmp/opencode/lss-iso/home`
+- Temporary runtime directory: `/tmp/opencode/lss-iso/run` (mode 0700)
+- A dedicated D-Bus session bus on
+  `unix:path=/tmp/opencode/lss-iso/run/bus`
+- A dedicated GNOME Keyring daemon started with `--login` and an isolated
+  keyring under the temporary home
+- A known non-production password was supplied only to the disposable daemon
+  through stdin; it was not written to any QFAT file or report
+- All test entries used the unique service namespace `qfat-lss-iso-*`
+
+Proof of isolation:
+- The dedicated bus socket was under the temporary runtime directory, not
+  `/run/user/1000/bus`.
+- The disposable daemon was started and stopped within the test commands.
+- Candidate operations used `DBUS_SESSION_BUS_ADDRESS` pointing only to the
+  temporary bus.
+- The owner's normal daemon at `/run/user/1000` was not restarted or modified.
+- The temporary home, runtime directory, bus, and keyring files were deleted
+  after verification.
+
+Cleanup verification:
+- `/tmp/opencode/lss-iso` was removed after testing.
+- `ls /tmp/opencode/lss-iso` returned "No such file or directory".
+- Disposable Secret Service entries were deleted before environment destruction.
+
+## 2. Environment and package details
+
+- Distribution: Linux Mint 22.3 (Zena)
+- Kernel: Linux 7.0.0-42-generic
+- Architecture: x86_64
+- Node.js: v24.22.2
+- npm: 11.19.1
+- Session type: SSH/TUI, no desktop session
+- Secret Service implementation: GNOME Keyring 46.1
+- Candidate package: `@napi-rs/keyring` version `2.1.2`
+- Native binary loaded: `@napi-rs/keyring-linux-x64-gnu` (prebuilt `.node`)
+- Backend selection in all candidate tests:
+  `{ linux: { store: 'secret-service' } }`
+
+Sources:
+- Package metadata and README, accessed 2026-11-12:
+  https://www.npmjs.com/package/@napi-rs/keyring
+- Repository: https://github.com/Brooooooklyn/keyring-node
+- Installed package README and TypeScript declarations in the isolated spike
+  workspace
+
+## 3. Candidate CRUD validation
+
+All operations used the explicit `secret-service` backend and synthetic values.
+Secret values were not printed; only SHA-256 hashes and boolean equality were
+recorded.
+
+Executed test: store, retrieve, update, delete, and absence verification.
+
+Sanitized output:
+
+```text
+{"step":"constructed","backend":"secret-service-required"}
+{"step":"set","ok":true}
+{"step":"get1","present":true,"hashMatch":true,"len":35}
+{"step":"update","ok":true}
+{"step":"get2","present":true,"newMatch":true,"oldMatch":false,"len":35}
+{"step":"delete","deleted":true}
+{"step":"get3","present":false}
+{"step":"done"}
+```
+
+Result: PASS.
+
+## 4. Process-restart persistence
+
+A synthetic value was stored in one Node.js process, that process exited, and a
+separate Node.js process retrieved it in the same isolated Secret Service
+session.
+
+Sanitized output:
+
+```text
+process 1: {"step":"set","ok":true,"hash":"4dc623ff180d2f6a772aa6cb099d7dbf4ba21f672c32a408f4df1df89bbc9729"}
+process 2: {"step":"get","present":true,"hash":"4dc623ff180d2f6a772aa6cb099d7dbf4ba21f672c32a408f4df1df89bbc9729","len":40}
+```
+
+The retrieved hash exactly matched the stored hash. Result: PASS.
+
+## 5. Daemon restart persistence
+
+The disposable daemon was stopped and restarted with the same keyring password.
+A previously stored value was retrieved successfully by a new process.
+
+Sanitized output:
+
+```text
+store: {"step":"set","ok":true,"hash":"3a1eeb5bb497b24abee6e959202577feb543fd1c428a6c3ecdef4e97b4cb911e"}
+retrieve: {"step":"get","present":true,"hash":"3a1eeb5bb497b24abee6e959202577feb543fd1c428a6c3ecdef4e97b4cb911e","len":46}
+cleanup: {"deleted":true,"absent":true}
+```
+
+Result: PASS. This proves persistence across daemon restart in the isolated
+environment; it does not by itself prove persistence across host reboot.
+
+## 6. Fail-closed and fallback negative tests
+
+### 6.1 Unavailable Secret Service endpoint
+
+With `DBUS_SESSION_BUS_ADDRESS` pointing to a nonexistent socket and the backend
+explicitly pinned to `secret-service`:
+
+Sanitized output:
+
+```text
+constructor error code: GenericFailure
+constructor error message: Platform failure: DBus error: Failed to connect to socket /tmp/opencode/nonexistent-bus: No such file or directory
+```
+
+Result: PASS (fail-closed; no successful storage occurred).
+
+### 6.2 Keyutils fallback unavailability
+
+With the backend explicitly pinned to `keyutils` in the isolated environment:
+
+Sanitized output:
+
+```text
+keyutils constructor error: GenericFailure | Couldn't access platform storage: KeyRevoked
+```
+
+Result: PASS (keyutils is unavailable in this environment and cannot be used as
+a fallback).
+
+## 7. Collection/default-collection limitation
+
+The candidate library does not expose collection selection. In the isolated
+environment, a `login` collection had to be created and unlocked through the
+disposable daemon before candidate operations succeeded. This confirms that
+default collection behavior remains a deployment and operability limitation for
+a future QFAT provider.
+
+## 8. Findings and architecture implications
+
+1. `@napi-rs/keyring` can explicitly require the Secret Service backend.
+2. Explicit Secret Service selection fails closed when the service or collection
+   is unavailable.
+3. CRUD operations passed with exact data equality in the isolated environment.
+4. Update/overwrite returned only the new value.
+5. Delete succeeded and subsequent retrieval reported absence.
+6. Process-restart and daemon-restart persistence passed in the isolated
+   environment.
+7. Keyutils is unavailable in this environment and must never be accepted as a
+   fallback.
+8. Native packaging and license review remain required before production adoption.
+9. The library's default collection behavior is not configurable, which may
+   require a direct Secret Service implementation if QFAT needs collection
+   control.
+10. Error mapping is string-based and must be wrapped in typed QFAT errors.
+
+## 9. Recommendation
+
+The candidate is suitable for a separate implementation proposal, subject to:
+- Owner approval of production integration.
+- A typed error-mapping layer.
+- Collection/default-collection strategy resolution.
+- License and supply-chain review.
+- A migration design that preserves existing encrypted records.
+
+This task does not implement the provider or migration.
+
+## Acceptance criteria status
+
+| ID | Criterion | Result | Evidence |
+|---|---|---|---|
+| AC-01 | Isolated environment proven | PASS | Section 1 |
+| AC-02 | Candidate/version/backend reproducible | PASS | Section 2 |
+| AC-03 | Store and retrieve exact equality | PASS | Section 3 |
+| AC-04 | Update/overwrite exact equality | PASS | Section 3 |
+| AC-05 | Delete and absence verification | PASS | Section 3 |
+| AC-06 | New process retrieves prior value | PASS | Section 4 |
+| AC-07 | Unavailable service fails closed; no weaker fallback | PASS | Section 6 |
+| AC-08 | Test entry and environment cleaned up | PASS | Section 1 |
+| AC-09 | No normal keyring/real credential/QFAT data touched | PASS | Scope and Git status |
+| AC-10 | Report distinguishes PASS/FAIL/NOT RUN | PASS | This report |
+| AC-11 | Windows/OAuth/UI/upload/publishing untouched | PASS | Scope review |
+
+## Git Publication
+
+- Repository: irfannuralam44-max/qfat
+- Branch: main
+- Implementation commit: Pending
+- Follow-up fix commit: N/A
+- Report update commit: Pending
+- Push verification: Pending
+
+## Handoff
+
+This validation is ready for GPT/owner audit. It is not owner acceptance and does
+not authorize production LSS integration or migration.
+EOF
+echo done
