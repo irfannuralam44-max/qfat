@@ -113,6 +113,7 @@ export function FacebookEditor({ initialMetadata = {}, onChange, disabled = fals
           currentFile={media}
           helperText={helperText}
           error={mediaCompatibilityError}
+          resetKey={resetKey}
           disabled={disabled}
         />
 
