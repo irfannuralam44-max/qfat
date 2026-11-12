@@ -14,7 +14,25 @@ export interface SecurityClientState {
   expiresAt: number | null;
 }
 
-class SecurityClient {
+function readError(response: Response, fallback: string): Promise<SecurityErrorResponse> {
+  return response.json().catch(() => ({ error: fallback }));
+}
+
+function validateBootstrapResponse(data: SecurityBootstrapResponse): SecurityBootstrapResponse {
+  if (
+    !data ||
+    typeof data.csrfToken !== 'string' ||
+    !/^[A-Za-z0-9_-]{43}$/.test(data.csrfToken) ||
+    typeof data.expiresAt !== 'number' ||
+    !Number.isFinite(data.expiresAt) ||
+    data.expiresAt <= Date.now()
+  ) {
+    throw new Error('Security bootstrap returned an invalid response.');
+  }
+  return data;
+}
+
+export class SecurityClient {
   private state: SecurityClientState = {
     csrfToken: null,
     expiresAt: null,
@@ -23,62 +41,62 @@ class SecurityClient {
   private bootstrapPromise: Promise<SecurityBootstrapResponse> | null = null;
 
   private get isTokenValid(): boolean {
-    if (!this.state.csrfToken || this.state.expiresAt === null) {
-      return false;
-    }
-    return Date.now() < this.state.expiresAt - 5000;
+    return Boolean(
+      this.state.csrfToken &&
+      this.state.expiresAt !== null &&
+      Date.now() < this.state.expiresAt - 5_000
+    );
   }
 
   async bootstrap(): Promise<SecurityBootstrapResponse> {
-    if (this.bootstrapPromise) {
-      return this.bootstrapPromise;
-    }
+    if (this.bootstrapPromise) return this.bootstrapPromise;
 
     this.bootstrapPromise = (async () => {
       const response = await fetch(`${API_BASE}/security/bootstrap`, {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Bootstrap failed' }));
-        throw new Error(errorData.error || `Bootstrap failed with status ${response.status}`);
+        const errorData = await readError(response, 'Security bootstrap failed.');
+        throw new Error(errorData.error || `Security bootstrap failed (${response.status}).`);
       }
 
-      const data = await response.json() as SecurityBootstrapResponse;
+      const data = validateBootstrapResponse(await response.json() as SecurityBootstrapResponse);
       this.state.csrfToken = data.csrfToken;
       this.state.expiresAt = data.expiresAt;
       return data;
     })();
 
     try {
-      const result = await this.bootstrapPromise;
-      return result;
+      return await this.bootstrapPromise;
+    } catch (error) {
+      this.clear();
+      throw error;
     } finally {
       this.bootstrapPromise = null;
     }
   }
 
   async refresh(): Promise<SecurityBootstrapResponse> {
+    const csrfToken = await this.getCsrfTokenOrBootstrap();
     const response = await fetch(`${API_BASE}/security/session/refresh`, {
       method: 'POST',
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRF-Token': this.state.csrfToken || '',
+        'X-CSRF-Token': csrfToken,
       },
     });
 
     if (!response.ok) {
       this.clear();
-      const errorData = await response.json().catch(() => ({ error: 'Refresh failed' }));
-      throw new Error(errorData.error || `Refresh failed with status ${response.status}`);
+      const errorData = await readError(response, 'Security session refresh failed.');
+      throw new Error(errorData.error || `Security session refresh failed (${response.status}).`);
     }
 
-    const data = await response.json() as SecurityBootstrapResponse;
+    const data = validateBootstrapResponse(await response.json() as SecurityBootstrapResponse);
     this.state.csrfToken = data.csrfToken;
     this.state.expiresAt = data.expiresAt;
     return data;
@@ -86,14 +104,19 @@ class SecurityClient {
 
   async destroy(): Promise<void> {
     try {
-      await fetch(`${API_BASE}/security/session/destroy`, {
+      const csrfToken = await this.getCsrfTokenOrBootstrap();
+      const response = await fetch(`${API_BASE}/security/session/destroy`, {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': this.state.csrfToken || '',
+          'X-CSRF-Token': csrfToken,
         },
       });
+      if (!response.ok) {
+        const errorData = await readError(response, 'Security session destroy failed.');
+        throw new Error(errorData.error || `Security session destroy failed (${response.status}).`);
+      }
     } finally {
       this.clear();
     }
@@ -117,52 +140,49 @@ class SecurityClient {
   }
 
   async getCsrfTokenOrBootstrap(): Promise<string> {
-    if (this.isTokenValid) {
-      return this.state.csrfToken!;
-    }
-    const result = await this.bootstrap();
-    return result.csrfToken;
+    if (this.isTokenValid) return this.state.csrfToken!;
+    return (await this.bootstrap()).csrfToken;
   }
 
-  async requestWithCsrf<T>(
-    url: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const csrfToken = await this.getCsrfTokenOrBootstrap();
+  async requestRead<T>(url: string): Promise<T> {
+    const response = await fetch(url, { method: 'GET', credentials: 'include' });
+    if (!response.ok) {
+      const errorData = await readError(response, 'Request failed.');
+      throw new Error(errorData.error || `Request failed (${response.status}).`);
+    }
+    return response.json() as Promise<T>;
+  }
 
-    const response = await fetch(url, {
-      ...options,
-      credentials: 'include',
-      headers: {
-        ...options.headers,
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': csrfToken,
-      },
-    });
+  async requestWithCsrf<T>(url: string, options: RequestInit = {}): Promise<T> {
+    const method = (options.method || 'GET').toUpperCase();
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      throw new Error('CSRF helper only supports state-changing HTTP methods.');
+    }
 
+    const send = async (csrfToken: string): Promise<Response> => {
+      const headers = new Headers(options.headers);
+      if (options.body !== undefined && !headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+      }
+      headers.set('X-CSRF-Token', csrfToken);
+      return fetch(url, {
+        ...options,
+        method,
+        credentials: 'include',
+        headers,
+      });
+    };
+
+    let response = await send(await this.getCsrfTokenOrBootstrap());
     if (response.status === 401) {
       this.clear();
-      const retryCsrfToken = await this.bootstrap();
-      const retryResponse = await fetch(url, {
-        ...options,
-        credentials: 'include',
-        headers: {
-          ...options.headers,
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': retryCsrfToken.csrfToken,
-        },
-      });
-
-      if (!retryResponse.ok) {
-        const errorData = await retryResponse.json().catch(() => ({ error: 'Request failed after re-authentication' }));
-        throw new Error(errorData.error || `Request failed with status ${retryResponse.status}`);
-      }
-      return retryResponse.json() as Promise<T>;
+      const refreshed = await this.bootstrap();
+      response = await send(refreshed.csrfToken);
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
-      throw new Error(errorData.error || `Request failed with status ${response.status}`);
+      const errorData = await readError(response, 'Request failed.');
+      throw new Error(errorData.error || `Request failed (${response.status}).`);
     }
 
     return response.json() as Promise<T>;
@@ -173,22 +193,22 @@ export const securityClient = new SecurityClient();
 
 export function createApiHelper() {
   return {
-    async get<T>(url: string): Promise<T> {
-      return securityClient.requestWithCsrf<T>(url, { method: 'GET' });
+    get<T>(url: string): Promise<T> {
+      return securityClient.requestRead<T>(url);
     },
-    async post<T>(url: string, body: unknown): Promise<T> {
+    post<T>(url: string, body: unknown): Promise<T> {
       return securityClient.requestWithCsrf<T>(url, {
         method: 'POST',
         body: JSON.stringify(body),
       });
     },
-    async patch<T>(url: string, body: unknown): Promise<T> {
+    patch<T>(url: string, body: unknown): Promise<T> {
       return securityClient.requestWithCsrf<T>(url, {
         method: 'PATCH',
         body: JSON.stringify(body),
       });
     },
-    async delete<T>(url: string): Promise<T> {
+    delete<T>(url: string): Promise<T> {
       return securityClient.requestWithCsrf<T>(url, { method: 'DELETE' });
     },
   };
