@@ -1,206 +1,151 @@
-# QFAT-012 — Web Frontend Completion and API Integration
+# QFAT-012 — Web Frontend (Scope Draft)
 
-- **Status:** GPT-AUTHORED TASK — READY FOR OWNER AUTHORIZATION
+- **Status:** DRAFT — NEEDS OWNER SCOPE CONFIRMATION; NOT AUTHORIZED FOR IMPLEMENTATION
 - **Repository:** `irfannuralam44-max/qfat`
-- **Target branch:** `main`
-- **Task type:** Web frontend implementation and integration
-- **Expected report:** `reports/QFAT-012-web-frontend-report.md`
-- **Product authority:** `docs/PRD-QFAT-MVP.md`
-- **Architecture authority:** `docs/ARCHITECTURE-QFAT-MVP.md`
-- **Beta access authority:** `docs/PRD-QFAT-BETA-ACCESS-ADDENDUM.md`
-- **Workflow:** GitHub-first; one OpenCode agent serially; GPT audit and owner acceptance
+- **Target branch:** `main` (proposed; no implementation branch authorized)
+- **Task type:** IMPLEMENTATION — proposed, not yet READY
+- **Owner:** QFAT project owner
+- **Executor:** OpenCode local agent — proposed
+- **Mode:** HYBRID (GPT task author/auditor; OpenCode implementation)
+- **GPS standard:** `irfannuralam44-max/gps@main`, version 1.2.0
+- **Expected report if approved:** `reports/QFAT-012-web-frontend-report.md`
 
-## 1. Objective
+> This document is a scope draft only. It is not an instruction to start implementation. Do not execute until the Owner confirms the scope and the task is promoted to READY / OWNER-AUTHORIZED.
 
-Advance the existing QFAT React/Vite frontend toward the MVP web application defined by the PRD.
+## 1. Objective — proposed
 
-The repository already contains work from QFAT-008 (design foundation, shell, Overview), QFAT-009 (separate YouTube and Facebook metadata editors), and QFAT-010 (local video/single-image selection). Preserve and build on that work; do not recreate it.
+Continue the QFAT MVP web frontend in accordance with the owner-approved PRD, while preserving the frontend work already delivered in QFAT-008, QFAT-009, and QFAT-010.
 
-This task must first establish the actual frontend/backend integration boundary. The currently documented backend work includes health and browser-session/CSRF security. Do not assume that account, media-library, job, queue, history, or settings APIs exist. Inspect the current server source and tests before implementing any frontend integration.
+The historical QFAT-002 architecture validation plan identifies QFAT-012 as “Web Frontend” (`apps/web/`, React/Vite/Tailwind, pages per PRD). That plan predates the later frontend tasks QFAT-008 through QFAT-010 and must not be treated as a complete current implementation brief.
 
-The frontend must show only real backend capabilities. No fabricated accounts, media records, upload completion, publishing jobs, progress, or history may be presented as real.
+The exact remaining frontend deliverable must be confirmed against the current source and owner-approved designs before implementation scope can be finalized.
 
-## 2. Mandatory repository inspection
+## 2. Context and baseline
 
-Before editing:
+- Repository: `irfannuralam44-max/qfat`
+- Branch: `main`
+- Task-draft commit: `0ab65af2372cb6435d7dcc2780b94537025397db`
+- GPS: `irfannuralam44-max/gps@main`, version 1.2.0
+- Product requirements: `docs/PRD-QFAT-MVP.md`
+- Beta access requirements: `docs/PRD-QFAT-BETA-ACCESS-ADDENDUM.md`
+- Architecture proposal: `docs/ARCHITECTURE-QFAT-MVP.md`
+- Repository agent instructions: `AGENTS.md`
+- Repository workflow: `docs/AI-DEVELOPMENT-WORKFLOW.md`
 
-1. Read `AGENTS.md` and `docs/AI-DEVELOPMENT-WORKFLOW.md` in full.
-2. Read the PRD, architecture proposal, beta access addendum, and relevant ADRs.
-3. Read task specifications and reports for QFAT-008, QFAT-009, QFAT-010, and QFAT-011.
-4. Inspect the current `apps/web/` source, routes, components, tests, package manifest, and lockfile.
-5. Inspect the current `apps/server/` route registration, schemas, security hooks, tests, and API response contracts.
-6. Inspect the current `packages/` contracts, if present.
-7. Verify current Git branch, HEAD, working tree, and remote synchronization. Preserve all local changes.
+### Verified existing work
 
-Produce an endpoint inventory before implementation. For each endpoint, record method, path, purpose, request/response schema, security requirement, and test evidence. Distinguish implemented endpoints from proposed endpoints in documentation.
+- QFAT-008: design foundations, responsive shell, themes, Overview, and truthful health status.
+- QFAT-009: separate YouTube and Facebook metadata editors.
+- QFAT-010: browser-local media selection and validation, including Facebook single image.
+- QFAT-011: browser session, CSRF, dynamic Origin/Host, and proxy security foundation. Its automated tests are reported as passing.
 
-If the current source materially differs from the task assumptions, stop and report the discrepancy.
+### QFAT-011 acceptance gate — unresolved in repository evidence
 
-## 3. Scope
+The current `reports/QFAT-011-browser-session-csrf-security-report.md` states that physical LAN/Tailscale browser checks and direct backend-port refusal checks were NOT RUN, and explicitly says QFAT-011 is not owner-accepted until those checks are completed.
 
-### 3.1 Frontend foundation preservation
+The prior chat contains an Owner direction to proceed to QFAT-012. That direction is relevant Owner context, but the repository report has not been updated with the physical-check evidence or a formal acceptance record. Before implementation, reconcile this difference: record the Owner's acceptance and its evidence, or keep QFAT-012 blocked by the QFAT-011 gate. Do not silently mark QFAT-011 accepted.
 
-- Preserve QFAT-008 design tokens, app shell, dark/light/system theme behavior, responsive navigation, and truthful Overview health status.
-- Preserve QFAT-009 separate YouTube and Facebook editors and their independent metadata state.
-- Preserve QFAT-010 video and Facebook single-image selection behavior, preview cleanup, validation, and memory-only handling before explicit upload.
-- Preserve QFAT-011 session, CSRF, dynamic Origin/Host, and same-origin proxy behavior.
-- Do not introduce a second UI design system or replace existing components without evidence and justification.
+## 3. Facts, decisions, assumptions, and open questions
 
-### 3.2 API client and server-state boundary
+### Facts
 
-- Inspect whether a reusable typed API client already exists; reuse or minimally improve it.
-- State-changing requests must use the existing QFAT-011 security client and CSRF token mechanism.
-- Keep API URLs relative/same-origin. Never hardcode localhost, LAN IP, Tailscale IP, or backend port in browser code.
-- Use the actual server response schemas and error envelope. Do not invent API routes or silently assume response shapes.
-- Use TanStack Query, React Hook Form, or other dependencies only if already installed or clearly justified by the existing architecture. Do not add dependencies merely because they are recommended.
-- Handle loading, empty, success, unavailable, and error states distinctly.
-- Refresh/reload must recover server-authoritative data where a real read API exists. Do not treat component memory as persistent backend state.
+- The PRD is the product requirements source of truth.
+- The current frontend already contains meaningful work from QFAT-008, QFAT-009, and QFAT-010.
+- The QFAT-002 architecture report's original QFAT-012 label is historical and predates those frontend tasks.
+- QFAT-011 automated verification is reported PASS, while physical network/browser validation remains unrecorded in its report.
+- Current backend capabilities must be established from current source and tests, not inferred from the PRD or architecture proposal.
 
-### 3.3 Product pages and navigation
+### Owner decisions already recorded
 
-Review all PRD pages:
+- QFAT is a local-first web application.
+- YouTube and Facebook have separate metadata editors.
+- Facebook single-image posts are in MVP; albums are post-MVP.
+- Browser access uses the frontend LAN/Tailscale entrypoint; backend remains loopback-only.
+- QFAT-008, QFAT-009, and QFAT-010 have been implemented in their respective approved scopes.
 
-1. Overview
-2. Accounts
-3. Media Library / Select Media
-4. Create Content
-5. Queue / Active Uploads
-6. History / Job Details
-7. Settings
+### Assumptions — NOT APPROVED
 
-For each page, compare the required behavior with the actual backend API inventory.
+- That QFAT-012 should implement the remaining PRD frontend pages rather than another functional slice.
+- That all remaining frontend pages can be completed without additional backend APIs.
+- That a frontend-only implementation is the best next increment after QFAT-011.
 
-- Keep already implemented Overview and Create Content behavior intact.
-- Implement a page interaction only when its required backend contract exists and is tested.
-- Where the backend contract does not exist, keep the destination clearly marked as unavailable/coming soon or show a truthful explanatory state. Do not create fake records or pretend that the feature is operational.
-- Do not add backend routes, database tables, migrations, OAuth, upload processing, job orchestration, or platform publishing as part of this frontend task.
-- Do not build decorative charts or sample activity.
+### Open questions requiring Owner confirmation
 
-### 3.4 Media selection and upload boundary
+1. Should QFAT-012 retain the historical “Web Frontend” stage, with its exact remaining scope derived from the current PRD, designs, source, and API inventory?
+2. Or does the Owner intend to redefine QFAT-012 as a different next functional increment? Any such change must be explicitly approved and reflected in the task title, scope, and roadmap.
+3. Is QFAT-011 formally accepted based on the Owner's physical LAN/Tailscale checks? If yes, the check results and acceptance need to be recorded. If not, QFAT-012 remains blocked by its predecessor gate.
 
-- Preserve QFAT-010 local file selection.
-- Inspect whether a real, tested media-intake API exists in the current server.
-- If and only if a real upload contract exists, integrate it using QFAT-011 CSRF protection and truthful upload states.
-- If no media-intake endpoint exists, do not invent one or display a working upload action. Keep the selected file clearly identified as local-only and document media upload as blocked by missing backend capability.
-- Do not persist file contents in browser storage or send files to an unverified endpoint.
+## 4. Required sources before task finalization
 
-### 3.5 Accounts and publishing boundary
+GPT must retrieve the minimum relevant sources from the canonical repositories and verify their current revisions:
 
-- Do not implement OAuth or credential handling.
-- Do not display connected accounts unless returned by a real server API.
-- Do not implement publishing, destination selection, scheduling, queue mutation, retry, cancellation, or reconciliation unless the corresponding real API contract already exists and is in scope.
-- Keep publish controls disabled or unavailable until the actual server capability exists.
-- No live Google or Meta requests and no real publishing.
+### GPS — universal operating standard
 
-### 3.6 Responsive and accessible behavior
+- `core/GPT-PROJECT-SOURCE-INDEX.md`
+- `core/GPT-AGENTS.md`
+- `core/GPT-WORKFLOW.md`
+- `core/GPT-CONTEXT-MANAGEMENT.md`
+- `core/GPT-TASK-TEMPLATE.md`
+- `standards/DOCUMENTATION-STANDARD.md`
+- `standards/QUALITY-AND-AUDIT.md`
+- `standards/DECISION-MANAGEMENT.md`
 
-Verify and preserve:
+### QFAT — project-specific authority
 
-- 360 px, 768 px, and 1440 px viewports without horizontal overflow.
-- Dark, light, and system themes.
-- Keyboard navigation, visible focus, semantic labels, and accessible status/error announcements.
-- Reduced-motion behavior.
-- Direct loading and browser refresh for implemented routes.
-- Mobile browser use through the existing LAN/Tailscale frontend entrypoint.
+- `AGENTS.md`
+- `docs/AI-DEVELOPMENT-WORKFLOW.md`
+- `docs/PRD-QFAT-MVP.md`
+- `docs/PRD-QFAT-BETA-ACCESS-ADDENDUM.md`
+- `docs/ARCHITECTURE-QFAT-MVP.md`
+- `tasks/QFAT-008-design-foundations-app-shell.md` and its report
+- `tasks/QFAT-009-create-content-metadata-editors.md` and its report
+- `tasks/QFAT-010-media-selection-local-validation.md` and its report
+- `tasks/QFAT-011-browser-session-csrf-security.md` and its reports
+- Relevant approved design/Figma handoff, if it is intended to govern implementation.
 
-Do not claim PWA installability or secure-context support for plain HTTP IP origins.
+### Executor access requirement
 
-## 4. Explicit exclusions
+GPT's ability to read a GitHub file does not prove OpenCode can access it. Before implementation, OpenCode must report the exact repository, branch, task path, and source paths/revisions it actually read. If any essential source is unavailable, use the GPS traceable self-contained task-packet fallback or stop BLOCKED. Do not claim an executor read a source merely because this document links to it.
 
-Do NOT implement:
+## 5. Proposed scope boundary — not yet approved
 
-- Backend API routes, Fastify plugins, database tables, or migrations.
-- Media intake/storage if no tested endpoint exists.
-- YouTube/Meta OAuth, credential storage, or account authorization.
-- Platform upload adapters or live uploads.
-- Publishing jobs, queue workers, SSE publishing progress, retry, cancellation, or reconciliation.
-- Facebook albums/multiple-image posts.
-- Scheduling or calendar publishing.
-- Video/image editing, transcoding, compression, or thumbnail generation.
-- Public hosting, router port forwarding, Tailscale-specific integration, HTTPS, PWA, Electron, or Tauri.
-- CI/GitHub Actions.
-- Broad dependency upgrades, unrelated refactors, or Spoolcast CLI behavior changes.
+The likely work area is `apps/web/`, but no implementation files are authorized yet.
 
-If a required frontend feature is blocked by a missing backend capability, record it as a dependency for a separately scoped future task. Do not expand QFAT-012 to implement that backend capability.
+Potential work may include only frontend behavior explicitly mapped to approved PRD requirements and supported by real backend contracts. The final task must identify exact pages, user flows, API contracts, affected files, and measurable outcomes after a source-based gap analysis.
 
-## 5. Acceptance criteria
+Do not assume an API exists because a page appears in the PRD. Verify route registration, schemas, and tests in the current backend. Do not fabricate accounts, media, jobs, progress, history, or publishing outcomes.
 
-| ID | Criterion |
-|---|---|
-| AC-01 | Existing QFAT-008 Overview, shell, themes, and health behavior remain functional. |
-| AC-02 | Existing QFAT-009 YouTube and Facebook editors retain their separate fields and state. |
-| AC-03 | Existing QFAT-010 video and Facebook single-image selection behavior remains functional. |
-| AC-04 | Existing QFAT-011 session/CSRF client and security behavior are preserved for all mutations. |
-| AC-05 | A documented endpoint inventory accurately distinguishes implemented and missing backend APIs. |
-| AC-06 | Frontend API calls use relative same-origin paths and actual server contracts only. |
-| AC-07 | No fabricated account, media, queue, history, job, progress, or publishing data is shown. |
-| AC-08 | Product navigation routes lead to a real implemented page or a truthful unavailable/coming-soon state; no broken or blank route. |
-| AC-09 | Media upload is enabled only if a real, tested server media-intake endpoint exists; otherwise the UI remains explicitly local-only. |
-| AC-10 | Loading, empty, unavailable, success, and error states are truthful and accessible wherever applicable. |
-| AC-11 | Direct route load and browser refresh work for implemented routes. |
-| AC-12 | Responsive layouts work at 360/768/1440 px without horizontal overflow. |
-| AC-13 | Dark/light/system themes, keyboard access, visible focus, semantic labels, and reduced motion remain correct. |
-| AC-14 | No backend, OAuth, credential, publishing, queue, scheduling, or external platform behavior is introduced. |
-| AC-15 | Frontend tests, typecheck, build, dependency audits, and `git diff --check` pass, or findings are documented accurately. |
-| AC-16 | LAN/Tailscale same-origin frontend access and backend loopback-only boundary remain unchanged. |
+## 6. Prohibited actions unless a later approved task explicitly permits them
 
-## 6. Verification
+- No backend route, database, migration, media intake, or server behavior changes under a frontend-only scope.
+- No OAuth, credentials, live Google/Meta API requests, real uploads, or publishing.
+- No fake/demo/sample records or fake operational status.
+- No scheduling, Facebook album support, or unrelated product expansion.
+- No CI/GitHub Actions, public hosting, router port forwarding, Tailscale-specific integration, PWA claims, Electron, or Tauri.
+- No broad dependency upgrades or unrelated refactors.
+- Preserve all Spoolcast upstream attribution and existing CLI compatibility.
+- Preserve user changes; never reset, clean, stash, overwrite, rebase, amend published commits, or force-push.
 
-Run checks on the designated Linux PC and record OS, architecture, Node, npm, and browser versions.
+## 7. Readiness and approval gate
 
-At minimum:
+This draft is **NOT READY** because the remaining frontend scope and the QFAT-011 acceptance record require reconciliation.
 
-1. Safe synchronization with `origin/main`; record base SHA and initial Git status.
-2. `npm ci` in `apps/web/`.
-3. `npm audit` and `npm audit --omit=dev` in `apps/web/`.
-4. `npm run typecheck` and `npm run build` in `apps/web/`.
-5. Run all available frontend tests.
-6. Run relevant backend tests without modifying backend behavior.
-7. Verify the endpoint inventory against actual route registration and tests.
-8. Verify implemented routes, direct loading, refresh, and truthful unavailable states.
-9. Verify existing editor switching, metadata preservation, media selection, and preview cleanup.
-10. Verify security-client behavior for state-changing requests; do not expose tokens in logs or test output.
-11. Verify no unsupported endpoint is called and no external Google/Meta request is introduced.
-12. Verify responsive breakpoints, themes, keyboard operation, focus, and reduced motion.
-13. Inspect browser console and network requests.
-14. Run `git diff --check` and inspect all changed/staged files.
+Before implementation can begin, GPT must:
 
-Do not use live platform credentials, authorize accounts, upload to Google/Meta, or publish content. Do not use GitHub Actions/CI.
+1. Resolve the open Owner decisions above.
+2. Inspect the current frontend source and current backend API inventory.
+3. Map each proposed feature to an approved PRD/design requirement and a real API contract where one is required.
+4. Define exact in-scope and out-of-scope behavior.
+5. Add measurable acceptance criteria, verification commands/environment, evidence requirements, report path, Git permissions, and stop conditions using GPS `GPT-TASK-TEMPLATE.md`.
+6. Review the task for contradictions, missing requirements, unsupported assumptions, and executor source-access gaps.
+7. Present the completed task to the Owner for explicit authorization.
 
-## 7. Implementation report
+Only after those steps may the status be changed to `READY — OWNER AUTHORIZED FOR IMPLEMENTATION`.
 
-Create `reports/QFAT-012-web-frontend-report.md`.
+## 8. Stop condition
 
-Include:
+Until the Owner confirms the intended QFAT-012 scope and the predecessor gate is reconciled:
 
-- Task path, repository, branch, base SHA, implementation commit message, and full commit SHA.
-- Initial Git state and synchronization evidence.
-- Endpoint inventory with implemented/missing status and source/test references.
-- Files changed and rationale.
-- Acceptance criteria table with PASS / FAIL / NOT RUN and concrete evidence.
-- Exact commands, environment, and actual outcomes.
-- Frontend behavior and responsive/accessibility evidence.
-- Dependency audit results and unresolved advisories.
-- Explicit list of frontend features blocked by missing backend APIs.
-- Confirmation that no fake data, unauthorized backend functionality, OAuth, external API calls, or live publishing were introduced.
-- Findings, limitations, and residual risks.
-- Commit and push verification.
-
-## 8. Git and publication
-
-- Target branch is `main`.
-- Preserve all pre-existing local changes.
-- Do not use reset, restore, clean, stash, rebase, amend published commits, or force push.
-- Do not create a new branch.
-- Review `git diff`, `git status`, and staged paths before committing.
-- Commit only QFAT-012 task-related changes.
-- Suggested implementation commit message: `feat(web): complete QFAT MVP frontend integration`.
-- Push to `main` and verify the remote commit and report.
-
-## 9. Stop condition
-
-After implementation, verification, report publication, and remote verification:
-
-STOP.
-
-Do not start QFAT-013 or another task. Return the minimal GitHub handoff required by `docs/AI-DEVELOPMENT-WORKFLOW.md` and wait for GPT audit and owner acceptance.
+- Do not send this draft to OpenCode as an implementation instruction.
+- Do not begin coding, create implementation commits, or start QFAT-013.
+- GPT may continue source inspection, task planning, and documentation correction only within the Owner's request.
