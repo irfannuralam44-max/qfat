@@ -113,9 +113,14 @@ All remediation updates were committed directly to `main` through sequential Git
 - `777226ce7a3e5f6e28b35052450d4afb74715ae0` — bound sessions and hardened Origin/cookie parsing.
 - `fbaa2d3fbcb6941c425b0b464bb603d3ae9768e6` — enforced session/CSRF on destroy and bounded rate limiting.
 - `b0cf94881bb62218a460fc2598934790c7e7b2c6` — hardened frontend in-memory CSRF client and one-retry behavior.
+- `4c08804aec7f1ab947649c9440f188b3adc08b08` — prevented security client calls outside QFAT API paths.
+- `34aaa4586f0533a67ff874790edca86855536ba0` — rejected malformed duplicate session cookie names.
+- `b587f89a608792ca47d63561aae355a5f98ab70b` — corrected strict authority and IPv4 parser regexes.
 - `26fe6079b66f42f8adc33b2416c80f175c283fbd` — backend security regression tests.
 - `debedec0a5fcee0947a8b882e5a0104632f94543` — exported bounded session store for tests.
 - `997d799e46769db10ab8f4d9ea14c8769bac841d` — frontend client tests.
+- `6e462fbab481d916ffcab60834a9a45958f631f9` — external URL CSRF-exfiltration regression test.
+- `4f71ed43338fcc99dc56da410dd82b9f607eb78f` — malformed duplicate-cookie regression test.
 - `5af6bda6f171cce2db6196d7de37afcc4174bf94` — frontend test script.
 - `c3e3d9457fc80b39ecc34223bf8ff5744e9d25be` — secure session-cookie test fixture.
 - `a1fc4c7561ab0cf481053be8eea70155d3e613f7` — narrowly scoped proxy path and Host preservation.
