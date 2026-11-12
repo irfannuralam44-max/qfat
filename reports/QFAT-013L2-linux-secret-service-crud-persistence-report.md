@@ -196,7 +196,7 @@ This task does not implement the provider or migration.
 | AC-05 | Delete and absence verification | PASS | Section 3 |
 | AC-06 | New process retrieves prior value | PASS | Section 4 |
 | AC-07 | Unavailable service fails closed; no weaker fallback | PASS | Section 6 |
-| AC-08 | Test entry and environment cleaned up | PASS | Section 1 |
+| AC-08 | Test entry and environment cleaned up | PARTIAL — earlier cleanup evidence only; corrected runner not rerun | GPT follow-up audit below |
 | AC-09 | No normal keyring/real credential/QFAT data touched | PASS | Scope and Git status |
 | AC-10 | Report distinguishes PASS/FAIL/NOT RUN | PASS | This report |
 | AC-11 | Windows/OAuth/UI/upload/publishing untouched | PASS | Scope review |
@@ -1887,7 +1887,7 @@ Evidence from the run: `CLEANUP_STATUS: SUCCESS (all tests passed and cleaned up
 | AC-07 | Secret Service unavailable causes fail-closed behavior; no weaker backend fallback | PASS | Section 3: Step 4 `test-backend-isolation.mjs` confirmed zero cross-backend leakage; Step 7.1 nonexistent bus threw constructor error; Step 7.2 stopped daemon threw `setSecret` error; Step 7.3 verified zero entries created in Secret Service or keyutils. |
 | AC-08 | Test entry and disposable environment are cleaned up | PARTIAL — prior-run evidence only; corrected runner not rerun | Section 3: Step 8 cleanup trap terminated all recorded PIDs, deleted directory (`cleanup_disposable_dir_removed=true`); Section 4.11 verified. |
 | AC-09 | No normal keyring, real credential, QFAT DB/key file/source/dependency/lockfile is touched | PASS | Git status clean, owner daemons (40674, 40675) untouched throughout. |
-| AC-10 | Report accurately distinguishes PASS, FAIL, and NOT RUN | PASS | Every criterion mapped with empirical execution evidence and exit codes. Runner F-10 logic ensures NOT RUN subtests produce exit status 2 and `CLEANUP_STATUS: NOT_RUN`, never PASS. |
+| AC-10 | Report accurately distinguishes PASS, FAIL, and NOT RUN | PASS | The report explicitly marks unexecuted corrected-runner scenarios as NOT RUN/PARTIAL rather than PASS. |
 | AC-11 | Windows, OAuth, account UI/API, upload, publishing, production integration, and migration remain untouched | PASS | Scope review: report documentation only, zero production changes. |
 | AC-12 | Runner implements F-09 PID lifecycle safety (identity verification, no stale PIDs, no signals to unverified processes, termination logging) | PARTIAL — source corrected; edge-case execution NOT RUN | Section 4.8: `verify_proc_identity` via `/proc/<pid>/stat` starttime; `unrecord_disposable_pid` on verified exit; identity-guarded SIGTERM/SIGKILL; per-termination logging. |
 | AC-13 | Runner implements F-10 NOT RUN must not become PASS (NOT RUN tracking, non-zero exit on NOT RUN, no false success message, cleanup status reflects NOT RUN) | NOT RUN — forced scenario not executed | Section 4.9: `NOT_RUN_SUBTESTS` array; `exit 2` on NOT RUN; conditional `ALL_TESTS_COMPLETED_SUCCESSFULLY`; `CLEANUP_STATUS: NOT_RUN`. |
