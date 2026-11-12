@@ -208,8 +208,8 @@ Focused tests cover:
 - Branch: main
 - Implementation commit: `972e490574709c71f54215c8098a46fc157a4911`
 - Follow-up fix commit: N/A
-- Report update commit: Pending
-- Push verification: Pending
+- Report update commit: `bdb82e6182ffb9d93cbe3273abb29003cc925a1e`
+- Push verification: `origin/main` confirmed at `bdb82e6182ffb9d93cbe3273abb29003cc925a1e` via `git ls-remote origin main` after push; report file present on the remote branch.
 
 ## Handoff
 
