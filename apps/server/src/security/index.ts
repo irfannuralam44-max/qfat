@@ -251,13 +251,15 @@ export function createClearSessionCookie(): string {
 export function parseSessionCookie(cookieHeader: string | null | undefined): string | null {
   if (!cookieHeader) return null;
 
-  const matches = cookieHeader
+  const sessionParts = cookieHeader
     .split(';')
     .map((part) => part.trim())
-    .filter((part) => part.startsWith(`${SESSION_COOKIE_NAME}=`));
+    .filter((part) => part === SESSION_COOKIE_NAME || part.startsWith(`${SESSION_COOKIE_NAME}=`));
 
-  if (matches.length !== 1) return null;
+  if (sessionParts.length !== 1 || !sessionParts[0].startsWith(`${SESSION_COOKIE_NAME}=`)) {
+    return null;
+  }
 
-  const value = matches[0].slice(SESSION_COOKIE_NAME.length + 1);
+  const value = sessionParts[0].slice(SESSION_COOKIE_NAME.length + 1);
   return /^[A-Za-z0-9_-]{43}$/.test(value) ? value : null;
 }
