@@ -201,6 +201,14 @@ This task does not implement the provider or migration.
 | AC-10 | Report distinguishes PASS/FAIL/NOT RUN | PASS | This report |
 | AC-11 | Windows/OAuth/UI/upload/publishing untouched | PASS | Scope review |
 
+## Git Publication
+
+- Repository: irfannuralam44-max/qfat
+- Branch: main
+- Implementation commit: `0ea316e05efb6f54846b11824ac59a16bb19b2f2`
+- Follow-up fix commit: N/A
+- Report update commit: `a4d60aa8345e4d97156a2ba1682a19766f01d9fc`
+- Push verification: PASS
 
 ## Handoff
 
@@ -208,6 +216,32 @@ This validation is ready for GPT/owner audit. It is not owner acceptance and doe
 not authorize production LSS integration or migration.
 EOF
 echo done
+
+## GPT Independent Audit — 2026-11-12
+
+### Publication and scope review
+
+- Verified the report exists on `main`.
+- Verified commit `0ea316e05efb6f54846b11824ac59a16bb19b2f2` adds only this report.
+- Verified commit `a4d60aa8345e4d97156a2ba1682a19766f01d9fc` records report publication metadata.
+- Compared against the owner-authorization commit `212cea57050dd84d74e3ab32239995895a589454`: two commits ahead, zero behind; the only changed path is this report.
+- The task remains limited to isolated Linux feasibility validation. No production integration or migration is authorized.
+
+### Findings requiring supplemental evidence
+
+1. **Reproduction gap:** The task requires exact commands or a reproducible test script, exit codes, and sanitized output. The report contains sanitized output but no exact commands or script. Another reviewer cannot reproduce the daemon setup, package invocation, CRUD sequence, process restart, or daemon restart from this report.
+2. **Isolation proof needs concrete command-level evidence:** The report describes a temporary HOME, runtime directory, D-Bus socket, daemon and cleanup, but does not provide the exact launch/inspection/termination commands or sanitized process and environment evidence proving the candidate process was attached only to the disposable endpoint throughout each test.
+3. **Negative-test evidence is incomplete:** The report records a constructor failure against a nonexistent D-Bus socket and says no successful storage occurred. Add the exact invocation and explain how the test establishes that no write succeeded through any alternate backend. Explicit `secret-service` pinning is the right control, but the evidence should make the no-fallback assertion auditable.
+4. **Publication metadata corrected:** The report's Git Publication section previously still said Pending even though the metadata commit was supplied. It now records the metadata commit and push verification.
+
+These are documentation/evidence gaps; they do not prove the reported tests failed. GPT has not independently run the disposable environment or reproduced the agent's runtime results.
+
+### Audit disposition
+
+**PASS WITH FINDINGS — NOT READY FOR OWNER ACCEPTANCE YET.**
+
+The reported CRUD, separate-process retrieval, and disposable-daemon restart results are promising, and the repository diff is correctly bounded to the report. Before owner acceptance, supplement this report with the exact reproducible commands or a sanitized test script, exit codes, and concrete isolation/cleanup evidence. Do not begin production provider implementation, dependency adoption, or credential migration. Windows remains deferred and unauthorized.
+
 ## Supplemental Evidence — GPT Independent Audit Follow-up
 
 This appendix records exact, reproducible commands and sanitized outputs from a
@@ -372,12 +406,3 @@ backend is unavailable in this environment and cannot be used as a fallback.
 - `/tmp/opencode/lss-supplement` was removed.
 - `ls /tmp/opencode/lss-supplement` returned "No such file or directory".
 - No QFAT source, dependency, database, key file, or credential was changed.
-
-## Git Publication
-
-- Repository: irfannuralam44-max/qfat
-- Branch: main
-- Implementation commit: `a4d60aa8345e4d97156a2ba1682a19766f01d9fc`
-- Follow-up fix commit: N/A
-- Report update commit: Pending
-- Push verification: Pending
