@@ -52,6 +52,7 @@ Those source and test gaps have now been corrected directly on `main`. This repo
    - Keeps the proof in module memory only.
    - Uses the standard `Headers` API so caller-supplied header forms are handled safely.
    - Restricts the CSRF helper to state-changing methods (POST, PUT, PATCH, DELETE); GET uses a read-only helper and does not attach CSRF.
+   - Both read and mutation helpers reject non-relative URLs outside `/api/v1`, preventing accidental cross-origin CSRF-token disclosure.
    - A 401 causes at most one fresh bootstrap and one retry. A second failure is returned to the caller.
    - Bootstrap failure clears in-memory state and surfaces a recoverable error.
 
@@ -73,6 +74,7 @@ Those source and test gaps have now been corrected directly on `main`. This repo
   - CSRF header on mutations and rejection of GET by mutation helper;
   - exactly one re-bootstrap retry;
   - no repeated retry after second 401;
+  - external URL rejection before bootstrap/token transmission;
   - recoverable bootstrap failure and state clearing.
 - **Proxy:** `apps/web/test/vite-proxy.test.ts`
   - boots the configured Vite proxy against a local echo server and verifies the backend receives the original browser-facing Host and Origin.
