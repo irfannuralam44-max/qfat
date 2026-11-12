@@ -1,149 +1,126 @@
-# Implementation Report — QFAT-011
+# Implementation and Remediation Report — QFAT-011
 
-- **Status:** PASS
-- **Task specification:** tasks/QFAT-011-browser-session-csrf-security.md
-- **Repository:** irfannuralam44-max/qfat
-- **Target branch:** main
-- **Commit message:** feat(web/server): implement browser session, CSRF, and dynamic origin protection
-- **Commit SHA:** b3a1ad686afc54d0dea8f0816ba73a2ed16a9153
+- **Status:** REMEDIATION COMMITTED — OWNER VALIDATION PENDING
+- **Task specification:** `tasks/QFAT-011-browser-session-csrf-security.md`
+- **Repository:** `irfannuralam44-max/qfat`
+- **Target branch:** `main`
+- **Original implementation:** `b3a1ad686afc54d0dea8f0816ba73a2ed16a9153`
+- **Remediation source commits:** see Git Publication below
 
-## Scope
+## Summary
 
-Implemented the first security foundation for QFAT's private-network web workflow. This includes dynamic browser-facing authority validation, server-side session with synchronizer CSRF token, reusable mutation guard, and frontend bootstrap client. All changes are confined to the security layer — no media intake, OAuth, publishing, or other product features were added.
+QFAT-011's original implementation was independently reviewed after publication. The review found gaps in bounded resource use, duplicate-cookie handling, destroy-route enforcement, strict Origin parsing, mutation-guard evidence, frontend client behavior, and proxy-path matching.
 
-### Features Implemented
+Those source and test gaps have now been corrected directly on `main`. This report intentionally does **not** mark QFAT-011 accepted: the newly added tests and builds have not yet been executed in the owner's local environment, and the physical LAN/Tailscale checks remain outstanding.
 
-1. **Dynamic Origin/Host Validation** — Accepts loopback (127.0.0.0/8), RFC1918 (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), and Tailscale CGNAT (100.64.0.0/10) IPv4 literals on port 5173 with http scheme. Rejects DNS names, public IPs, IPv6, wrong ports, non-http schemes, missing/multiple Origin or Host headers, and Origin/Host mismatches.
+## Remediation applied
 
-2. **Server-Side Session & CSRF** — Cryptographically random session IDs (32 bytes, base64url) and CSRF tokens. Session stored in HttpOnly, SameSite=Strict, host-only cookie (no Domain attribute, no Secure flag for HTTP MVP). Session bound to CSRF token in server memory. Bootstrap returns only CSRF token and expiry; session ID never exposed to frontend.
+### Backend session and authority handling
 
-3. **Security Routes** — `POST /api/v1/security/bootstrap` (rate-limited, validates Origin/Host, creates session, sets cookie, returns CSRF), `POST /api/v1/security/session/refresh` (requires session + CSRF + valid Origin/Host, rotates both), `POST /api/v1/security/session/destroy` (requires session + CSRF + valid Origin/Host, invalidates session, clears cookie).
+1. **Bounded session store**
+   - Added a hard capacity of 10,000 active sessions.
+   - Expired sessions are cleaned before allocation and by the existing periodic cleanup.
+   - A full store rejects new bootstrap with HTTP 503 rather than growing without bound or evicting a live session.
+   - Session rotation frees the previous slot before allocating the replacement.
 
-4. **Reusable Mutation Guard** — Fastify preHandler requiring valid session, valid Origin/Host, and session-bound `X-CSRF-Token` header. Ready for future mutating API routes.
+2. **Strict Origin and Host parsing**
+   - Accepts only canonical serialized HTTP origins with no credentials, path, query, or fragment.
+   - Requires numeric IPv4 literals in loopback, RFC1918, or Tailscale CGNAT ranges and port 5173.
+   - Rejects non-canonical IPv4 forms, malformed/leading-zero ports, public IPs, DNS names, IPv6, null/multiple Origin values, and Host mismatches.
+   - Header access fails closed when a header is represented as multiple values.
+   - No forwarded-host or forwarded-client-IP header is trusted.
 
-5. **Vite Proxy Configuration** — Proxies `/api/v1/*` to `http://127.0.0.1:3001` with `changeOrigin: false` and preserves the original browser-facing `Host` header via `proxyReq` hook. No general-purpose proxy.
+3. **Cookie handling**
+   - Session cookie parser requires exactly one `qfat_session` cookie.
+   - Duplicate, empty, and malformed session values are rejected.
+   - The expected generated 32-byte base64url session identifier format is enforced.
 
-6. **Frontend Security Client** — Module-scope `SecurityClient` class that bootstraps on app start, keeps CSRF token in memory only, attaches `X-CSRF-Token` to state-changing requests via reusable API helper, handles 401 by single re-bootstrap retry, never uses browser storage for security values.
+4. **Destroy and mutation guard**
+   - Destroy now requires a valid session and matching CSRF token. Missing/invalid session or CSRF returns HTTP 401 and does not report success.
+   - The reusable mutation guard uses the same strict validation path and reports consistent authentication failures.
+   - Added an integration test that mounts the guard as an actual Fastify `preHandler`.
 
-## Implementation
+5. **Bounded bootstrap rate limiter**
+   - Replaced the attacker-growable per-key map with a single fixed-window process-local counter (10 valid bootstrap attempts per minute).
+   - This is deliberately process-wide because the backend only sees the local Vite proxy as its TCP peer. The implementation does not trust spoofable forwarded client-IP headers.
+   - Origin validation runs before consuming an attempt.
 
-### Key Technical Changes
+### Frontend client and proxy
 
-1. **Created `apps/server/src/security/index.ts`** — Core security utilities:
-   - `validateOriginHeader()` / `validateHostHeader()` with strict IPv4 literal parsing and private range checking
-   - `generateSessionId()`, `generateCsrfToken()`, `constantTimeEqual()`, `hashSessionId()`
-   - `SessionStore` class with in-memory Map, TTL cleanup, create/get/rotate/destroy
-   - Cookie utilities: `createSessionCookie()`, `createClearSessionCookie()`, `parseSessionCookie()`
+1. **Frontend CSRF client**
+   - Validates bootstrap response shape before storing the CSRF proof.
+   - Keeps the proof in module memory only.
+   - Uses the standard `Headers` API so caller-supplied header forms are handled safely.
+   - Restricts the CSRF helper to state-changing methods (POST, PUT, PATCH, DELETE); GET uses a read-only helper and does not attach CSRF.
+   - A 401 causes at most one fresh bootstrap and one retry. A second failure is returned to the caller.
+   - Bootstrap failure clears in-memory state and surfaces a recoverable error.
 
-2. **Created `apps/server/src/security/routes.ts`** — Security route handlers:
-   - Rate limiting on bootstrap (10 attempts/minute per IP)
-   - `validateRequestOriginAndHost()` and `validateSessionAndCsrf()` helpers
-   - Three security routes with proper error responses (no token/session leakage)
-   - `createMutationGuard()` preHandler for future routes
+2. **Vite proxy**
+   - API proxy now matches only `/api/v1` and its path descendants using `^/api/v1(?:/|$)`.
+   - `changeOrigin: false` preserves the browser-facing Host; no forwarded header is used as a substitute.
+   - Upstream remains fixed at `127.0.0.1:3001`; frontend remains bound to `0.0.0.0:5173`.
 
-3. **Updated `apps/server/src/index.ts`** — Integrated security routes, added session store shutdown on graceful exit, exported security utilities.
+## Added regression tests
 
-4. **Updated `apps/web/vite.config.ts`** — Changed proxy from single health endpoint to `/api/v1/*` with `changeOrigin: false` and Host header preservation.
+- **Backend:** `apps/server/test/security-hardening.test.ts`
+  - canonical Origin acceptance/rejection;
+  - duplicate and malformed cookie rejection;
+  - bounded session capacity and expiry cleanup;
+  - destroy rejection for missing/wrong CSRF and duplicate cookies, plus valid destroy;
+  - real Fastify mutation-guard preHandler acceptance/rejection.
+- **Frontend:** `apps/web/test/security-client.test.ts`
+  - in-memory-only token handling and static no-storage check;
+  - CSRF header on mutations and rejection of GET by mutation helper;
+  - exactly one re-bootstrap retry;
+  - no repeated retry after second 401;
+  - recoverable bootstrap failure and state clearing.
+- **Proxy:** `apps/web/test/vite-proxy.test.ts`
+  - boots the configured Vite proxy against a local echo server and verifies the backend receives the original browser-facing Host and Origin.
+- Added `npm test` to `apps/web/package.json` using Node's built-in test runner and the supported Node 22.12+ TypeScript strip-types flag.
+- Updated the existing cookie parser fixture to use a correctly generated session identifier.
 
-5. **Created `apps/web/src/security/client.ts`** — Frontend `SecurityClient` with bootstrap, refresh, destroy, in-memory CSRF storage, `requestWithCsrf()` helper with single re-bootstrap retry on 401.
+## Verification status
 
-6. **Updated `apps/web/src/App.tsx`** — Added security bootstrap on app mount.
+| Check | Status | Notes |
+|---|---|---|
+| Source-level review of remediation | COMPLETE | Changes inspected through GitHub source |
+| Backend regression tests | ADDED — NOT RUN HERE | Run `npm test` in `apps/server` |
+| Frontend client and Vite proxy tests | ADDED — NOT RUN HERE | Run `npm test` in `apps/web` |
+| Server typecheck/build | NOT RUN HERE | Run `npm run typecheck` and `npm run build` in `apps/server` |
+| Web typecheck/build | NOT RUN HERE | Run `npm run typecheck` and `npm run build` in `apps/web` |
+| Dependency audits | NOT RE-RUN | Existing report findings remain: 4 moderate dev-only esbuild findings in server toolchain and 2 moderate React Router findings in web |
+| `git diff --check` | NOT RUN HERE | GitHub file updates were used; run locally after syncing |
+| Physical LAN/Tailscale browser checks | NOT RUN | Requires owner's second device/network |
+| Backend direct port 3001 from second device | NOT RUN | Must remain refused |
 
-7. **Created `apps/server/test/security.test.ts`** — 85 tests covering:
-   - Origin/Host validation (accepted/rejected cases)
-   - Crypto utilities
-   - SessionStore operations
-   - Cookie utilities
-   - Full integration tests for bootstrap, refresh, destroy, rate limiting, error response leakage
+Do not treat added tests as passing until they have been executed. Existing advisory findings are unchanged and were not expanded into unrelated dependency upgrades.
 
-## Files Changed
+## Known limitations
 
-| File | Purpose |
-|------|---------|
-| `apps/server/src/security/index.ts` | Core security utilities (validation, crypto, session store, cookies) |
-| `apps/server/src/security/routes.ts` | Security route handlers and mutation guard |
-| `apps/server/src/index.ts` | Server entry point with security integration |
-| `apps/server/test/security.test.ts` | Comprehensive security test suite (85 tests) |
-| `apps/web/vite.config.ts` | Vite proxy configuration with Host header preservation |
-| `apps/web/src/security/client.ts` | Frontend security client |
-| `apps/web/src/App.tsx` | Security bootstrap on app mount |
+- IPv6 remains unsupported by this task.
+- HTTP on a normal LAN is unencrypted; the cookie intentionally omits `Secure` for the HTTP MVP. Tailscale encrypts traffic within its tunnel.
+- Origin/Host and CSRF checks are not user authentication and do not protect against same-origin XSS, a malicious local process, or an on-path LAN observer.
+- Sessions remain in memory and are invalidated by backend restart.
+- Bootstrap rate limiting is process-wide because the proxy hides the true remote TCP peer; no forwarded client identity is trusted.
+- Browser access via LAN/Tailscale remains distinct from PWA/HTTPS support.
 
-## Acceptance Criteria
+## Git publication
 
-| Criterion | Result | Evidence |
-|-----------|--------|----------|
-| AC-01: Dynamic LAN and Tailscale IPv4 origins work without hardcoded IPs | PASS | Validation accepts 127.x, 10.x, 172.16-31.x, 192.168.x, 100.64-127.x on port 5173 |
-| AC-02: Arbitrary DNS names, public IPs, malformed origins, unexpected ports rejected | PASS | Tests verify rejection of localhost, 8.8.8.8, IPv6, wrong ports, non-http schemes |
-| AC-03: Backend remains loopback-only and frontend proxy narrowly scoped | PASS | Server binds 127.0.0.1:3001; proxy only `/api/v1/*` with Host preservation |
-| AC-04: Session ID only in HttpOnly host-only cookie and server memory | PASS | Cookie: `HttpOnly; SameSite=Strict; Path=/; Max-Age=1800` (no Domain, no Secure) |
-| AC-05: CSRF token session-bound, returned only at bootstrap, held in frontend memory, required on mutations | PASS | Bootstrap returns CSRF; refresh/destroy require `X-CSRF-Token`; client keeps in memory |
-| AC-06: Refresh rotates session and CSRF; destroy invalidates session | PASS | Integration tests verify rotation and invalidation |
-| AC-07: Reusable mutation guard available and tested | PASS | `createMutationGuard()` exported; integration tests exercise via refresh/destroy |
-| AC-08: Health route remains read-only and unchanged in purpose | PASS | Health endpoint unchanged; no session cookie set |
-| AC-09: No media intake or unrelated product feature implemented | PASS | Only security routes added |
-| AC-10: Required tests/build/typecheck/audits recorded truthfully | PASS | All commands executed and recorded below |
+All remediation updates were committed directly to `main` through sequential GitHub contents commits. Relevant commits:
 
-## Verification
+- `777226ce7a3e5f6e28b35052450d4afb74715ae0` — bound sessions and hardened Origin/cookie parsing.
+- `fbaa2d3fbcb6941c425b0b464bb603d3ae9768e6` — enforced session/CSRF on destroy and bounded rate limiting.
+- `b0cf94881bb62218a460fc2598934790c7e7b2c6` — hardened frontend in-memory CSRF client and one-retry behavior.
+- `26fe6079b66f42f8adc33b2416c80f175c283fbd` — backend security regression tests.
+- `debedec0a5fcee0947a8b882e5a0104632f94543` — exported bounded session store for tests.
+- `997d799e46769db10ab8f4d9ea14c8769bac841d` — frontend client tests.
+- `5af6bda6f171cce2db6196d7de37afcc4174bf94` — frontend test script.
+- `c3e3d9457fc80b39ecc34223bf8ff5744e9d25be` — secure session-cookie test fixture.
+- `a1fc4c7561ab0cf481053be8eea70155d3e613f7` — narrowly scoped proxy path and Host preservation.
+- `c238853d4dcaca8ca5dae5a1ec79351b7614d30f` — Vite proxy integration test.
 
-| Command / Check | Result | Notes |
-|-----------------|--------|-------|
-| `git pull --ff-only origin main` | PASS | Fast-forward to 59db856 |
-| `npm ci` (apps/server) | PASS | Clean install |
-| `npm ci` (apps/web) | PASS | Clean install |
-| `npm audit` (apps/server) | PASS WITH FINDINGS | 4 moderate in esbuild via drizzle-kit (dev dependency) |
-| `npm audit --omit=dev` (apps/server) | PASS | 0 vulnerabilities |
-| `npm audit` (apps/web) | PASS WITH FINDINGS | 2 moderate in react-router (GHSA-wrjc-x8rr-h8h6, GHSA-337j-9hxr-rhxg) — upstream v6 issues |
-| `npm audit --omit=dev` (apps/web) | PASS WITH FINDINGS | Same 2 moderate |
-| `npm run typecheck` (apps/server) | PASS | Exit code 0 |
-| `npm run typecheck` (apps/web) | PASS | Exit code 0 |
-| `npm run build` (apps/server) | PASS | Compiles to `dist/` |
-| `npm run build` (apps/web) | PASS | 206 kB JS, 33 kB CSS |
-| `npm test` (apps/server) | PASS | 85 tests pass (29 existing + 56 security) |
-| `git diff --check` | PASS | No whitespace errors |
-| Dev server startup (server) | PASS | Listens on 127.0.0.1:3001 |
-| Dev server startup (web) | PASS | Serves on 0.0.0.0:5173, proxy to 127.0.0.1:3001 |
-| Bootstrap via proxy (curl) | PASS | Returns CSRF token, sets HttpOnly cookie |
-| Refresh via proxy (curl) | PASS | Rotates CSRF and session cookie |
-| Destroy via proxy (curl) | PASS | Clears cookie, invalidates session |
-| Health via proxy (curl) | PASS | Returns status ok, no session cookie |
-
-## Manual / API Evidence
-
-- **Environment:** Linux (Ubuntu 24.04), Node.js v24.22.2, npm 11.19.1
-- **Browser proxy verification:** Tested via curl with explicit Origin/Host headers simulating browser requests from 127.0.0.1:5173
-- **Physical device checks:** NOT RUN — no secondary LAN/Tailscale device available in test environment. Manual verification from localhost/127.0.0.1 successful.
-
-## Findings and Limitations
-
-1. **React Router vulnerabilities** — 2 moderate-severity vulnerabilities persist in `@remix-run/router` via `react-router-dom@6.30.6`. No fix available without breaking v7 upgrade.
-
-2. **esbuild vulnerability in dev dependency** — 4 moderate vulnerabilities in esbuild via `drizzle-kit` (dev dependency only). Not present in production build.
-
-3. **No IPv6 support** — IPv6 authorities explicitly rejected per task scope. Documented as known limitation.
-
-4. **HTTP only (no TLS)** — Cookie lacks `Secure` flag. HTTP on LAN is not encrypted; Tailscale encrypts within tunnel. On-path network observer can see cookies. Documented per task security constraints.
-
-5. **No session persistence across process restart** — In-memory `SessionStore` loses all sessions on backend restart. Per task scope, SQLite persistence not required.
-
-6. **Rate limiting is per-process, in-memory** — Resets on process restart. Sufficient for MVP bootstrap protection.
-
-7. **Frontend security client not exercised by UI mutations** — No mutating product APIs exist yet. Client is a tested utility ready for future use.
-
-8. **Origin/Host validation uses exact port 5173** — Hardcoded per task. If frontend port changes, validation must be updated.
-
-9. **No automated browser tests** — Project has no test suite for browser interaction; verification via curl and code inspection.
-
-## Git Publication
-
-- **Remote:** `origin` → `https://github.com/irfannuralam44-max/qfat.git`
-- **Branch:** `main`
-- **Commit message:** `feat(web/server): implement browser session, CSRF, and dynamic origin protection`
-- **Files changed:** 8 files (5 modified, 3 new)
-- **Full commit SHA:** `b3a1ad686afc54d0dea8f0816ba73a2ed16a9153`
-- **Push verification:** Verified — remote `main` points to `b3a1ad686afc54d0dea8f0816ba73a2ed16a9153`
+**Current source/report state:** remediation is published on `main`; this report update is the final documentation change in this remediation pass. Owner execution and physical checks are still required before QFAT-011 can be accepted.
 
 ## Handoff
 
-Work is ready for GPT/owner audit. Implementation completes all acceptance criteria for QFAT-011. No media intake, OAuth, publishing, database session persistence, IPv6, HTTPS, PWA, CI, or unrelated upgrades were added. Backend remains bound to 127.0.0.1:3001, frontend on 0.0.0.0:5173.
-
-**Next task:** QFAT-012 (not started; awaiting owner approval)
+QFAT-011 is **not yet owner-accepted**. Sync `main`, execute the listed test/typecheck/build commands, then perform the available LAN and Tailscale browser checks. Report any failures for a focused follow-up; do not start QFAT-012 until QFAT-011 is accepted.
