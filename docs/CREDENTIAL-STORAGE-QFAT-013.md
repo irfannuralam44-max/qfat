@@ -24,7 +24,7 @@ otherwise `~/.qfat`.
 | Platform | Database | Key file | Effective status |
 |---|---|---|---|
 | Linux | `~/.qfat/qfat.db` (or `$QFAT_DATA_DIR/qfat.db`) | `~/.qfat/keys/credential.key` (or `$QFAT_DATA_DIR/keys/credential.key`) | Implemented and tested with POSIX permissions |
-| Windows | `%USERPROFILE%\.qfat\qfat.db` (or `%QFAT_DATA_DIR%\qfat.db`) | `%USERPROFILE%\.qfat\keys\credential.key` (or `%QFAT_DATA_DIR%\keys\credential.key`) | **Fails closed at provider construction**; Windows ACL verification is not implemented/validated in this build |
+| Windows | `%USERPROFILE%\\.qfat\\qfat.db` (or `%QFAT_DATA_DIR%\\qfat.db`) | `%USERPROFILE%\\.qfat\\keys\\credential.key` (or `%QFAT_DATA_DIR%\\keys\\credential.key`) | **DEFERRED — after Linux completion**; remains fail-closed; Windows ACL verification is not implemented/validated |
 
 The key file is deliberately in a separate directory from the SQLite database.
 It is not stored in SQLite, source code, Git, environment variables, logs, API
