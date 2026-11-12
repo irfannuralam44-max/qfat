@@ -47,6 +47,7 @@ describe('QFAT-011 security hardening', () => {
     const valid = 'A'.repeat(43);
     assert.equal(parseSessionCookie(`qfat_session=${valid}; theme=dark`), valid);
     assert.equal(parseSessionCookie(`qfat_session=${valid}; qfat_session=${valid}`), null);
+    assert.equal(parseSessionCookie(`qfat_session=${valid}; qfat_session`), null);
     assert.equal(parseSessionCookie('qfat_session=; theme=dark'), null);
     assert.equal(parseSessionCookie('qfat_session=not-a-session-id'), null);
     assert.equal(parseSessionCookie('theme=dark'), null);
