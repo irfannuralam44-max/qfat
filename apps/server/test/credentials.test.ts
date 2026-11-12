@@ -8,6 +8,7 @@ import {
   existsSync,
   fsyncSync,
   lstatSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   openSync,
@@ -758,6 +759,33 @@ describe('Credential key durability invariant (QFAT-013R2)', () => {
     }
   });
 
+  test('EEXIST loser validates the winner key and fsyncs before returning it', async () => {
+    const f = await openFixture();
+    try {
+      const competingKey = randomBytes(32);
+      const fsyncCalls: string[] = [];
+      const key = loadOrCreateCredentialKey(f.keyPath, {
+        platform: 'linux',
+        hasEncryptedRecords: false,
+        fsyncDirectory: (dir) => { fsyncCalls.push(dir); },
+        linkFile: (temporaryPath, finalPath) => {
+          // Simulate another initializer winning the atomic publication just
+          // before this initializer's link(). The real linkSync must therefore
+          // raise EEXIST and execute the production loser branch.
+          writeFileSync(finalPath, competingKey, { mode: 0o600 });
+          chmodSync(finalPath, 0o600);
+          linkSync(temporaryPath, finalPath);
+        },
+      });
+
+      assert.deepEqual(key, competingKey, 'loser must return the already-published winner key');
+      assert.deepEqual(readFileSync(f.keyPath), competingKey);
+      assert.deepEqual(fsyncCalls, [f.keyDir], 'EEXIST loser must synchronize the containing directory');
+    } finally {
+      f.close();
+    }
+  });
+
   test('creator path fails closed when directory fsync fails and commits no ciphertext', async () => {
     const f = await openFixture();
     try {
@@ -792,7 +820,7 @@ describe('Credential key durability invariant (QFAT-013R2)', () => {
     }
   });
 
-  test('deterministic competing reader performs its own fsync before returning key bytes', async () => {
+  test('competing reader fails closed when its own fsync fails while creator is paused', async () => {
     const f = await openFixture();
     const children: ReturnType<typeof spawn>[] = [];
     try {
@@ -800,28 +828,24 @@ describe('Credential key durability invariant (QFAT-013R2)', () => {
       const publishedPath = join(f.dir, 'published.marker');
       const releasePath = join(f.dir, 'release.marker');
       const creatorDone = join(f.dir, 'creator.done');
-      const readerDone = join(f.dir, 'reader.done');
       const creatorOut = join(f.dir, 'creator.hex');
-      const readerOut = join(f.dir, 'reader.hex');
-      const logPath = join(f.dir, 'fsync.log');
 
       const creatorScript = join(f.dir, 'creator.ts');
       writeFileSync(creatorScript, `
-import { existsSync, writeFileSync, appendFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { openSync, fsyncSync, closeSync, constants } from 'node:fs';
 import { loadOrCreateCredentialKey } from ${JSON.stringify(resolve(process.cwd(), 'src/credentials/key-file.js'))};
 
-const [keyPath, publishedPath, releasePath, donePath, outPath, logPath] = process.argv.slice(2);
+const [keyPath, publishedPath, releasePath, donePath, outPath] = process.argv.slice(2);
 
 function fsyncDirectory(dir: string) {
+  // The marker is emitted only after link() published the final key path.
   writeFileSync(publishedPath, 'published');
   while (!existsSync(releasePath)) {
-    // deterministic busy-wait barrier; no timing-based correctness assertion
+    // Hold the creator between publication and its directory fsync.
   }
   const fd = openSync(dir, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
-  fsyncSync(fd);
-  closeSync(fd);
-  appendFileSync(logPath, 'creator\\n');
+  try { fsyncSync(fd); } finally { closeSync(fd); }
 }
 
 const key = loadOrCreateCredentialKey(keyPath, { platform: 'linux', hasEncryptedRecords: false, fsyncDirectory });
@@ -829,50 +853,43 @@ writeFileSync(outPath, key.toString('hex'));
 writeFileSync(donePath, 'done');
 `);
 
-      const readerScript = join(f.dir, 'reader.ts');
-      writeFileSync(readerScript, `
-import { existsSync, writeFileSync, appendFileSync } from 'node:fs';
-import { openSync, fsyncSync, closeSync, constants } from 'node:fs';
-import { loadOrCreateCredentialKey } from ${JSON.stringify(resolve(process.cwd(), 'src/credentials/key-file.js'))};
-
-const [keyPath, publishedPath, donePath, outPath, logPath] = process.argv.slice(2);
-
-while (!existsSync(publishedPath)) {
-  // wait for publication
-}
-
-const key = loadOrCreateCredentialKey(keyPath, { platform: 'linux', hasEncryptedRecords: false });
-writeFileSync(outPath, key.toString('hex'));
-writeFileSync(donePath, 'done');
-`);
-
-      const creator = spawn(process.execPath, [tsxCli, creatorScript, f.keyPath, publishedPath, releasePath, creatorDone, creatorOut, logPath], { stdio: ['ignore', 'ignore', 'pipe'] });
-      const reader = spawn(process.execPath, [tsxCli, readerScript, f.keyPath, publishedPath, readerDone, readerOut, logPath], { stdio: ['ignore', 'ignore', 'pipe'] });
-      children.push(creator, reader);
-
+      const creator = spawn(
+        process.execPath,
+        [tsxCli, creatorScript, f.keyPath, publishedPath, releasePath, creatorDone, creatorOut],
+        { stdio: ['ignore', 'ignore', 'pipe'] },
+      );
+      children.push(creator);
       let stderr = '';
-      creator.stderr?.on('data', (c) => { stderr += String(c); });
-      reader.stderr?.on('data', (c) => { stderr += String(c); });
+      creator.stderr?.on('data', (chunk) => { stderr += String(chunk); });
 
       const waitForFile = async (path: string, timeoutMs: number) => {
         const deadline = Date.now() + timeoutMs;
         while (!existsSync(path)) {
           if (Date.now() > deadline) throw new Error(`timed out waiting for ${path}: ${stderr}`);
-          await new Promise((r) => setTimeout(r, 5));
+          await new Promise((resolveWait) => setTimeout(resolveWait, 5));
         }
       };
 
       await waitForFile(publishedPath, 10_000);
-      await waitForFile(readerDone, 10_000);
+      assert.equal(existsSync(creatorDone), false, 'creator must still be paused before its fsync');
 
-      // Reader returned before creator completed its fsync; verify it produced a valid key.
-      assert.equal(readFileSync(readerOut, 'utf8').length, 64);
+      // This provider is a separate process-equivalent reader. Its own fsync
+      // fails while the creator is still paused, so it must not persist a row.
+      const competingReader = new KeyFileCredentialProvider(f.db, {
+        keyPath: f.keyPath,
+        fsyncDirectory: () => { throw new Error('competing reader fsync failed'); },
+      });
+      await expectCode(
+        competingReader.store(CONTEXT, Buffer.from(DUMMY_TOKEN)),
+        'KEY_DIRECTORY_SYNC_FAILED',
+      );
+      assert.equal(rows(f).length, 0, 'failed competing reader must not persist ciphertext');
+      assert.equal(existsSync(creatorDone), false, 'creator must remain paused during reader failure');
 
-      // Release creator.
       writeFileSync(releasePath, 'go');
       await waitForFile(creatorDone, 10_000);
-
-      assert.equal(readFileSync(creatorOut, 'utf8'), readFileSync(readerOut, 'utf8'));
+      assert.equal(readFileSync(creatorOut, 'utf8').length, 64);
+      assert.equal(readFileSync(f.keyPath).length, 32);
     } finally {
       for (const child of children) {
         if (child.exitCode === null) child.kill('SIGKILL');
