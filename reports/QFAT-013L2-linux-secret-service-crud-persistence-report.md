@@ -2516,7 +2516,7 @@ The previous agent-reported F-09/F-10/F-11 PASS claims above are superseded. The
 
 This is a Linux-only test harness containing the runner-safety primitives and exercising them through real child processes and EXIT/signal handling. When sourced, it exposes the `qfat_*` lifecycle functions without starting the tests; when executed directly, it runs the regression suite.
 
-The test artifact does **not**:
+For any future execution of the disposable LSS runner, this tracked file is the canonical source of the runner-safety lifecycle functions: source it and call its `qfat_*` functions. The earlier inline lifecycle-function copies in Section 2.3 are superseded and must not be reused as a separate implementation. Running this harness directly validates the safety functions without repeating Secret Service CRUD.\n\nThe test artifact does **not**:
 - connect to D-Bus or GNOME Keyring / Secret Service;
 - read or unlock the owner's keyring;
 - access QFAT's database, credential key, encrypted records, or platform credentials;
