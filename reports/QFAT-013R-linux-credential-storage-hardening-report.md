@@ -5,7 +5,7 @@
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
 - **Commit message:** `feat(QFAT-013R): harden Linux credential storage`
-- **Commit SHA:** Pending
+- **Commit SHA:** `3de74770869309a5d6ef0d2d33ea482b51e17dd3`
 
 ## Scope
 
@@ -101,7 +101,7 @@ fail-closed behavior remains unchanged.
 
 - Repository: irfannuralam44-max/qfat
 - Branch: main
-- Implementation commit: Pending
+- Implementation commit: `3de74770869309a5d6ef0d2d33ea482b51e17dd3`
 - Follow-up fix commit: N/A
 - Report update commit: Pending
 - Push verification: Pending
