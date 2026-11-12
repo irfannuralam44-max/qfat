@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, type ChangeEvent, forwardRef } from 'react';
+import { useState, useCallback, useEffect, useId, type ChangeEvent, forwardRef } from 'react';
 
 export type MediaType = 'video' | 'image';
 
@@ -26,6 +26,7 @@ interface MediaSelectorProps {
   error?: string;
   required?: boolean;
   id?: string;
+  resetKey?: number;
 }
 
 function formatFileSize(bytes: number): string {
@@ -76,7 +77,8 @@ function validateFile(file: File | null, accept: string, mediaType: MediaType): 
 }
 
 export const MediaSelector = forwardRef<HTMLDivElement, MediaSelectorProps>(
-  ({ label, accept, mediaType, onChange, disabled = false, currentFile, helperText, error: propError, required, id: providedId }, ref) => {
+  ({ label, accept, mediaType, onChange, disabled = false, currentFile, helperText, error: propError, required, id: providedId, resetKey = 0 }, ref) => {
+    const [inputError, setInputError] = useState<string | undefined>(undefined);
     const generatedId = useId();
     const id = providedId || generatedId;
     const inputId = `${id}-input`;
@@ -84,11 +86,15 @@ export const MediaSelector = forwardRef<HTMLDivElement, MediaSelectorProps>(
     const helperId = `${id}-helper`;
     const previewId = `${id}-preview`;
 
-    const combinedError = propError;
+    const combinedError = propError || inputError;
     const file = currentFile || null;
 
     // The parent owns the File and its object URL. Revoke the URL whenever that
     // selection is replaced, cleared, or this selector unmounts.
+    useEffect(() => {
+      setInputError(undefined);
+    }, [resetKey]);
+
     useEffect(() => {
       const ownedPreviewUrl = currentFile?.previewUrl;
       return () => {
@@ -101,12 +107,14 @@ export const MediaSelector = forwardRef<HTMLDivElement, MediaSelectorProps>(
       e.target.value = '';
 
       if (!selectedFile) {
+        setInputError(undefined);
         onChange(null);
         return;
       }
 
       const validationError = validateFile(selectedFile, accept, mediaType);
       if (validationError) {
+        setInputError(validationError);
         onChange(null);
         return;
       }
@@ -120,10 +128,12 @@ export const MediaSelector = forwardRef<HTMLDivElement, MediaSelectorProps>(
         previewUrl,
       };
 
+      setInputError(undefined);
       onChange(mediaFile);
     }, [accept, mediaType, onChange]);
 
     const handleRemove = useCallback(() => {
+      setInputError(undefined);
       onChange(null);
     }, [onChange]);
 
