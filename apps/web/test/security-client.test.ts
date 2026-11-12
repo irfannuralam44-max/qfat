@@ -64,10 +64,16 @@ describe('SecurityClient', () => {
       return validBootstrap();
     };
 
-    await assert.rejects(
-      client.requestWithCsrf('https://example.com/collect', { method: 'POST' }),
-      /relative QFAT API path/,
-    );
+    for (const url of [
+      'https://example.com/collect',
+      '/api/v1/../../outside',
+      '/api/v1/%2e%2e/%2e%2e/outside',
+    ]) {
+      await assert.rejects(
+        client.requestWithCsrf(url, { method: 'POST' }),
+        /relative QFAT API path/,
+      );
+    }
     assert.equal(fetchCount, 0);
   });
 
