@@ -103,3 +103,10 @@ After successful push and remote verification, keep the chat handoff limited to:
 4. Report path
 
 GPT audits the pushed code and report directly on GitHub. GPT/owner decides PASS, requests changes, or authorizes the next task/stage. Stop after publishing the report; do not begin another task or stage without explicit approval.
+
+## 10. QFAT UI and design authority
+
+- Figma is cancelled for QFAT. Do not use Figma, request a Figma handoff, or make Figma access/design files a task prerequisite unless the Owner explicitly reverses this decision.
+- UI/design authority is the existing QFAT source and established UI patterns, the owner-approved PRD, and explicit owner-approved product decisions recorded in repository documentation.
+- GPT owns routine UI gap analysis and UX decisions within those authorities. Escalate only material product/scope trade-offs or decisions that cannot be resolved safely from approved sources.
+- Do not restart the visual design process from zero or block implementation waiting for external design artifacts.
