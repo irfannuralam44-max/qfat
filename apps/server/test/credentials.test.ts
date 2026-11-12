@@ -786,6 +786,33 @@ describe('Credential key durability invariant (QFAT-013R2)', () => {
     }
   });
 
+  test('EEXIST loser fails closed on fsync failure and commits no ciphertext', async () => {
+    const f = await openFixture();
+    try {
+      const competingKey = randomBytes(32);
+      const provider = new KeyFileCredentialProvider(f.db, {
+        keyPath: f.keyPath,
+        fsyncDirectory: () => { throw new Error('EEXIST loser fsync failed'); },
+        linkFile: (temporaryPath, finalPath) => {
+          // Publish a valid competing key immediately before the real link.
+          // The real linkSync must raise EEXIST and enter the loser branch.
+          writeFileSync(finalPath, competingKey, { mode: 0o600 });
+          chmodSync(finalPath, 0o600);
+          linkSync(temporaryPath, finalPath);
+        },
+      });
+
+      await expectCode(
+        provider.store(CONTEXT, Buffer.from(DUMMY_TOKEN)),
+        'KEY_DIRECTORY_SYNC_FAILED',
+      );
+      assert.deepEqual(readFileSync(f.keyPath), competingKey);
+      assert.equal(rows(f).length, 0, 'failed EEXIST loser must not persist ciphertext');
+    } finally {
+      f.close();
+    }
+  });
+
   test('creator path fails closed when directory fsync fails and commits no ciphertext', async () => {
     const f = await openFixture();
     try {
