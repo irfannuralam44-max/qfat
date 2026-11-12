@@ -215,8 +215,7 @@ case "$QFAT_SCENARIO" in
       exit 1
     fi
     QFAT_NOT_RUN_SUBTESTS+=("auto_activated_daemon_provenance_unverified")
-    printf 'ALL_TESTS_COMPLETED_SUCCESSFULLY=false (NOT_RUN: %s)\n' "${QFAT_NOT_RUN_SUBTESTS[*]}"
-    exit 2
+    qfat_finish_test_run
     ;;
   rm-failure)
     QFAT_TEST_RM_FAIL=1
