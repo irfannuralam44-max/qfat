@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TextInput, Textarea, TagInput, RadioGroup, type RadioOption } from './FieldPrimitives';
 
 export interface YouTubeMetadata {
@@ -12,23 +12,39 @@ export interface YouTubeEditorProps {
   initialMetadata?: Partial<YouTubeMetadata>;
   onChange: (metadata: YouTubeMetadata) => void;
   disabled?: boolean;
+  resetKey?: number;
 }
 
 const YOUTUBE_TITLE_MAX = 100;
-const YOUTUBE_DESCRIPTION_MAX = 5000;
-const YOUTUBE_TAGS_MAX = 500;
-const YOUTUBE_MAX_TAGS = 30;
+const YOUTUBE_DESCRIPTION_MAX_BYTES = 5000;
+const YOUTUBE_TAGS_MAX_LENGTH = 500;
+const YOUTUBE_TAGS_AGGREGATE_MAX = 500;
 
 const contentIntentOptions: RadioOption[] = [
   { value: 'video', label: 'Standard video', description: 'Horizontal or any aspect ratio; full-length content' },
   { value: 'short', label: 'Shorts', description: 'Vertical (9:16), up to 3 minutes; auto-detected by YouTube' },
 ];
 
-export function YouTubeEditor({ initialMetadata = {}, onChange, disabled = false }: YouTubeEditorProps) {
+function getByteLength(str: string): number {
+  return new TextEncoder().encode(str).length;
+}
+
+function getTagsAggregateLength(tags: string[]): number {
+  return tags.join(',').length;
+}
+
+export function YouTubeEditor({ initialMetadata = {}, onChange, disabled = false, resetKey = 0 }: YouTubeEditorProps) {
   const [title, setTitle] = useState(initialMetadata.title || '');
   const [description, setDescription] = useState(initialMetadata.description || '');
-  const [tags, setTags] = useState(initialMetadata.tags || []);
+  const [tags, setTags] = useState<string[]>(initialMetadata.tags || []);
   const [contentIntent, setContentIntent] = useState<'video' | 'short'>(initialMetadata.contentIntent || 'video');
+
+  useEffect(() => {
+    setTitle(initialMetadata.title || '');
+    setDescription(initialMetadata.description || '');
+    setTags(initialMetadata.tags || []);
+    setContentIntent(initialMetadata.contentIntent || 'video');
+  }, [resetKey, initialMetadata.title, initialMetadata.description, initialMetadata.tags, initialMetadata.contentIntent]);
 
   const validateTitle = (value: string) => {
     if (!value.trim()) return 'Title is required';
@@ -37,13 +53,13 @@ export function YouTubeEditor({ initialMetadata = {}, onChange, disabled = false
   };
 
   const validateDescription = (value: string) => {
-    if (value.length > YOUTUBE_DESCRIPTION_MAX) return `Description must be ${YOUTUBE_DESCRIPTION_MAX} characters or fewer`;
+    if (getByteLength(value) > YOUTUBE_DESCRIPTION_MAX_BYTES) return `Description must be ${YOUTUBE_DESCRIPTION_MAX_BYTES} bytes or fewer`;
     return undefined;
   };
 
   const validateTags = (tagList: string[]) => {
-    if (tagList.length > YOUTUBE_MAX_TAGS) return `Maximum ${YOUTUBE_MAX_TAGS} tags allowed`;
-    if (tagList.some((t) => t.length > YOUTUBE_TAGS_MAX)) return `Each tag must be ${YOUTUBE_TAGS_MAX} characters or fewer`;
+    if (tagList.some((t) => t.length > YOUTUBE_TAGS_MAX_LENGTH)) return `Each tag must be ${YOUTUBE_TAGS_MAX_LENGTH} characters or fewer`;
+    if (getTagsAggregateLength(tagList) > YOUTUBE_TAGS_AGGREGATE_MAX) return `Total tags must be ${YOUTUBE_TAGS_AGGREGATE_MAX} characters or fewer (combined)`;
     return undefined;
   };
 
@@ -111,10 +127,9 @@ export function YouTubeEditor({ initialMetadata = {}, onChange, disabled = false
           onChange={handleDescriptionChange}
           placeholder="Tell viewers about your video"
           rows={5}
-          maxLength={YOUTUBE_DESCRIPTION_MAX}
           showCharCount
           error={descriptionError}
-          helperText="Supports line breaks, hashtags, and links. First two lines appear before 'Show more'."
+          helperText="Supports line breaks, hashtags, and links. First two lines appear before 'Show more'. Limit: 5,000 bytes."
           disabled={disabled}
         />
 
@@ -123,10 +138,9 @@ export function YouTubeEditor({ initialMetadata = {}, onChange, disabled = false
           tags={tags}
           onChange={handleTagsChange}
           placeholder="Add a tag and press Enter"
-          maxTags={YOUTUBE_MAX_TAGS}
-          maxTagLength={YOUTUBE_TAGS_MAX}
+          maxTagLength={YOUTUBE_TAGS_MAX_LENGTH}
           error={tagsError}
-          helperText="Descriptive keywords help discovery. Separate with commas or press Enter."
+          helperText="Descriptive keywords help discovery. Separate with commas or press Enter. Total combined limit: 500 characters."
           disabled={disabled}
         />
 

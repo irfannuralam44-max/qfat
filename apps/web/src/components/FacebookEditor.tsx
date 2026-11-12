@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Textarea, RadioGroup, type RadioOption } from './FieldPrimitives';
 
 export interface FacebookMetadata {
@@ -10,6 +10,7 @@ export interface FacebookEditorProps {
   initialMetadata?: Partial<FacebookMetadata>;
   onChange: (metadata: FacebookMetadata) => void;
   disabled?: boolean;
+  resetKey?: number;
 }
 
 const FACEBOOK_CAPTION_MAX = 63206;
@@ -20,9 +21,14 @@ const mediaIntentOptions: RadioOption[] = [
   { value: 'image', label: 'Single image', description: 'Single photo post with caption' },
 ];
 
-export function FacebookEditor({ initialMetadata = {}, onChange, disabled = false }: FacebookEditorProps) {
+export function FacebookEditor({ initialMetadata = {}, onChange, disabled = false, resetKey = 0 }: FacebookEditorProps) {
   const [caption, setCaption] = useState(initialMetadata.caption || '');
   const [mediaIntent, setMediaIntent] = useState<'video' | 'reel' | 'image'>(initialMetadata.mediaIntent || 'video');
+
+  useEffect(() => {
+    setCaption(initialMetadata.caption || '');
+    setMediaIntent(initialMetadata.mediaIntent || 'video');
+  }, [resetKey, initialMetadata.caption, initialMetadata.mediaIntent]);
 
   const validateCaption = (value: string) => {
     if (value.length > FACEBOOK_CAPTION_MAX) return `Caption must be ${FACEBOOK_CAPTION_MAX} characters or fewer`;

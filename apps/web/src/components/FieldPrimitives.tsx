@@ -1,4 +1,4 @@
-import { useId, type ChangeEvent, type FocusEvent, type KeyboardEvent, type RefObject, forwardRef } from 'react';
+import { useId, type ChangeEvent, type FocusEvent, type KeyboardEvent, type RefObject, forwardRef, useState } from 'react';
 
 interface BaseFieldProps {
   id?: string;
@@ -141,33 +141,70 @@ export const TagInput = forwardRef<HTMLDivElement, TagInputProps>(
     const listId = `${id}-list`;
     const describedBy = [error && errorId, helperText && helperId, ariaDescribedBy].filter(Boolean).join(' ') || undefined;
 
+    const [inputValue, setInputValue] = useState('');
+    const [inputError, setInputError] = useState<string | undefined>(undefined);
+
+    const validateTagInput = (value: string, currentTags: string[]): string | undefined => {
+      const trimmed = value.trim();
+      if (!trimmed) return undefined;
+      if (maxTagLength && trimmed.length > maxTagLength) {
+        return `Tag must be ${maxTagLength} characters or fewer`;
+      }
+      if (currentTags.includes(trimmed)) {
+        return 'This tag already exists';
+      }
+      if (maxTags && currentTags.length >= maxTags) {
+        return `Maximum ${maxTags} tags allowed`;
+      }
+      return undefined;
+    };
+
     const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
       if (disabled) return;
       const value = e.currentTarget.value.trim();
       if (e.key === 'Enter' && value) {
         e.preventDefault();
         const newTag = maxTagLength ? value.slice(0, maxTagLength) : value;
+        const validationError = validateTagInput(newTag, tags);
+        if (validationError) {
+          setInputError(validationError);
+          return;
+        }
         if (!tags.includes(newTag) && (!maxTags || tags.length < maxTags)) {
           onChange([...tags, newTag]);
+          setInputValue('');
+          setInputError(undefined);
         }
-        e.currentTarget.value = '';
       } else if (e.key === 'Backspace' && !value && tags.length > 0) {
         e.preventDefault();
         onChange(tags.slice(0, -1));
+        setInputError(undefined);
       }
     };
 
     const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
       if (!disabled) {
-        e.currentTarget.value = e.target.value;
+        const newValue = e.target.value;
+        setInputValue(newValue);
+        const validationError = validateTagInput(newValue, tags);
+        if (validationError !== inputError) {
+          setInputError(validationError);
+        }
       }
+    };
+
+    const handleBlur = () => {
+      setInputError(undefined);
     };
 
     const removeTag = (index: number) => {
       if (!disabled) {
         onChange(tags.filter((_, i) => i !== index));
+        setInputError(undefined);
       }
     };
+
+    const combinedError = error || inputError;
 
     return (
       <div className="field-wrapper" ref={ref}>
@@ -175,7 +212,7 @@ export const TagInput = forwardRef<HTMLDivElement, TagInputProps>(
           {label}
           {required && <span className="field-required" aria-hidden="true">*</span>}
         </label>
-        <div className={`tag-input-wrapper ${error ? 'tag-input-wrapper--error' : ''} ${disabled ? 'tag-input-wrapper--disabled' : ''}`} role="listbox" aria-label={label} aria-multiselectable="true" id={listId} aria-describedby={describedBy}>
+        <div className={`tag-input-wrapper ${combinedError ? 'tag-input-wrapper--error' : ''} ${disabled ? 'tag-input-wrapper--disabled' : ''}`} role="listbox" aria-label={label} aria-multiselectable="true" id={listId} aria-describedby={describedBy}>
           <ul className="tag-list" role="presentation">
             {tags.map((tag, index) => (
               <li key={tag} className="tag-item" role="option" aria-selected="true">
@@ -200,18 +237,22 @@ export const TagInput = forwardRef<HTMLDivElement, TagInputProps>(
             type="text"
             className="tag-input"
             placeholder={tags.length > 0 && !placeholder ? '' : placeholder}
+            value={inputValue}
             onKeyDown={handleKeyDown}
             onChange={handleChange}
+            onBlur={handleBlur}
             disabled={disabled}
             maxLength={maxTagLength}
             aria-activedescendant={tags.length > 0 ? `${listId}-option-0` : undefined}
             aria-autocomplete="list"
             aria-controls={listId}
+            aria-invalid={combinedError ? 'true' : 'false'}
+            aria-describedby={combinedError ? errorId : undefined}
           />
         </div>
-        {error && <p id={errorId} className="field-error" role="alert">{error}</p>}
-        {helperText && !error && <p id={helperId} className="field-helper">{helperText}</p>}
-        {(maxTags || maxTagLength) && (
+        {combinedError && <p id={errorId} className="field-error" role="alert">{combinedError}</p>}
+        {helperText && !combinedError && <p id={helperId} className="field-helper">{helperText}</p>}
+        {(maxTags || maxTagLength) && !combinedError && (
           <p className="field-helper" aria-live="polite">
             {maxTags && `Maximum ${maxTags} tags`}{maxTags && maxTagLength ? ' · ' : ''}{maxTagLength && `Each tag up to ${maxTagLength} characters`}
           </p>

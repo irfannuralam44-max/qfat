@@ -20,6 +20,7 @@ export function CreateContentPage() {
   const [activePlatform, setActivePlatform] = useState<Platform>('youtube');
   const [youtubeMetadata, setYoutubeMetadata] = useState<YouTubeMetadata>(initialYouTubeMetadata);
   const [facebookMetadata, setFacebookMetadata] = useState<FacebookMetadata>(initialFacebookMetadata);
+  const [resetKey, setResetKey] = useState(0);
 
   const handleYouTubeChange = useCallback((metadata: YouTubeMetadata) => {
     setYoutubeMetadata(metadata);
@@ -34,14 +35,12 @@ export function CreateContentPage() {
   };
 
   const hasAnyInput = () => {
-    if (activePlatform === 'youtube') {
-      return (
-        youtubeMetadata.title.trim() !== '' ||
-        youtubeMetadata.description.trim() !== '' ||
-        youtubeMetadata.tags.length > 0
-      );
-    }
-    return facebookMetadata.caption.trim() !== '';
+    const youtubeHasInput =
+      youtubeMetadata.title.trim() !== '' ||
+      youtubeMetadata.description.trim() !== '' ||
+      youtubeMetadata.tags.length > 0;
+    const facebookHasInput = facebookMetadata.caption.trim() !== '';
+    return youtubeHasInput || facebookHasInput;
   };
 
   const handleReset = () => {
@@ -49,6 +48,7 @@ export function CreateContentPage() {
     if (window.confirm('Discard all entered metadata? This cannot be undone.')) {
       setYoutubeMetadata(initialYouTubeMetadata);
       setFacebookMetadata(initialFacebookMetadata);
+      setResetKey((prev) => prev + 1);
     }
   };
 
@@ -184,11 +184,11 @@ export function CreateContentPage() {
           </div>
 
           <div role="tabpanel" id="panel-youtube" aria-labelledby="tab-youtube" hidden={activePlatform !== 'youtube'}>
-            <YouTubeEditor initialMetadata={youtubeMetadata} onChange={handleYouTubeChange} />
+            <YouTubeEditor initialMetadata={youtubeMetadata} onChange={handleYouTubeChange} resetKey={resetKey} />
           </div>
 
           <div role="tabpanel" id="panel-facebook" aria-labelledby="tab-facebook" hidden={activePlatform !== 'facebook'}>
-            <FacebookEditor initialMetadata={facebookMetadata} onChange={handleFacebookChange} />
+            <FacebookEditor initialMetadata={facebookMetadata} onChange={handleFacebookChange} resetKey={resetKey} />
           </div>
 
           <div className="editor-actions">
