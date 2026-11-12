@@ -295,9 +295,10 @@ describe('Security Validation', () => {
     });
 
     test('parseSessionCookie extracts session id', () => {
-      const cookie = 'qfat_session=abc123; other=value';
+      const validSessionId = generateSessionId();
+      const cookie = `qfat_session=${validSessionId}; other=value`;
       const sessionId = parseSessionCookie(cookie);
-      assert.equal(sessionId, 'abc123');
+      assert.equal(sessionId, validSessionId);
     });
 
     test('parseSessionCookie returns null for missing cookie', () => {
