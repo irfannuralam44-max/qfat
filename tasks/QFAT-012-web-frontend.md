@@ -18,7 +18,7 @@ Continue the QFAT MVP web frontend in accordance with the owner-approved PRD, wh
 
 The historical QFAT-002 architecture validation plan identifies QFAT-012 as “Web Frontend” (`apps/web/`, React/Vite/Tailwind, pages per PRD). That plan predates the later frontend tasks QFAT-008 through QFAT-010 and must not be treated as a complete current implementation brief.
 
-The exact remaining frontend deliverable must be confirmed against the current source and owner-approved designs before implementation scope can be finalized.
+The exact remaining frontend deliverable must be derived from the current source, owner-approved PRD, and recorded owner decisions. Figma is cancelled and is not a required design source or dependency.
 
 ## 2. Context and baseline
 
@@ -54,7 +54,7 @@ Evidence limitation: the exact device/browser observations and test outputs were
 - The PRD is the product requirements source of truth.
 - The current frontend already contains meaningful work from QFAT-008, QFAT-009, and QFAT-010.
 - The QFAT-002 architecture report's original QFAT-012 label is historical and predates those frontend tasks.
-- QFAT-011 automated verification is reported PASS, while physical network/browser validation remains unrecorded in its report.
+- QFAT-011 automated verification is reported PASS. The Owner separately confirmed the LAN and Tailscale physical checks and accepted QFAT-011; the historical report wording remains a snapshot of its authoring time.
 - Current backend capabilities must be established from current source and tests, not inferred from the PRD or architecture proposal.
 
 ### Owner decisions already recorded
@@ -63,6 +63,7 @@ Evidence limitation: the exact device/browser observations and test outputs were
 - YouTube and Facebook have separate metadata editors.
 - Facebook single-image posts are in MVP; albums are post-MVP.
 - Browser access uses the frontend LAN/Tailscale entrypoint; backend remains loopback-only.
+- Figma is cancelled for QFAT. Existing QFAT UI/source patterns, the owner-approved PRD, and recorded owner decisions are the design authority. GPT owns routine UI gap analysis and UX decisions within those boundaries.
 - QFAT-008, QFAT-009, and QFAT-010 have been implemented in their respective approved scopes.
 
 ### Assumptions — NOT APPROVED
@@ -75,7 +76,7 @@ Evidence limitation: the exact device/browser observations and test outputs were
 
 1. Should QFAT-012 retain the historical “Web Frontend” stage, with its exact remaining scope derived from the current PRD, designs, source, and API inventory?
 2. Or does the Owner intend to redefine QFAT-012 as a different next functional increment? Any such change must be explicitly approved and reflected in the task title, scope, and roadmap.
-3. Is QFAT-011 formally accepted based on the Owner's physical LAN/Tailscale checks? If yes, the check results and acceptance need to be recorded. If not, QFAT-012 remains blocked by its predecessor gate.
+3. CLOSED — QFAT-011 is Owner-accepted. The Owner explicitly confirmed completion of LAN and Tailscale physical checks and directed the project to proceed to QFAT-012. Do not reopen this question or ask for repeat tests.
 
 ## 4. Required sources before task finalization
 
@@ -103,7 +104,8 @@ GPT must retrieve the minimum relevant sources from the canonical repositories a
 - `tasks/QFAT-009-create-content-metadata-editors.md` and its report
 - `tasks/QFAT-010-media-selection-local-validation.md` and its report
 - `tasks/QFAT-011-browser-session-csrf-security.md` and its reports
-- Relevant approved design/Figma handoff, if it is intended to govern implementation.
+- Existing frontend source and UI patterns that establish the current visual/interaction baseline.
+- Owner-approved PRD and recorded product decisions. No Figma handoff is required; Figma is cancelled.
 
 ### Executor access requirement
 
@@ -130,12 +132,12 @@ Do not assume an API exists because a page appears in the PRD. Verify route regi
 
 ## 7. Readiness and approval gate
 
-This draft is **NOT READY** because the remaining frontend scope must still be derived from the current source and approved design handoff, then reviewed by the Owner. The QFAT-011 predecessor gate is considered owner-accepted as recorded in §2; do not block QFAT-012 on the stale historical report wording.
+This draft is **NOT READY** because the remaining frontend scope must still be derived from current source and approved product requirements, then reviewed by the Owner. No Figma handoff is required. The QFAT-011 predecessor gate is considered owner-accepted as recorded in §2; do not block QFAT-012 on the stale historical report wording.
 
 Before implementation can begin, GPT must:
 
 1. Inspect the current frontend source and current backend API inventory.
-2. Retrieve the approved design/Figma handoff and identify the exact remaining screens and flows.
+2. Use the existing QFAT UI/source patterns, approved PRD, and recorded owner decisions to identify the exact remaining screens and flows. GPT resolves routine UI details; escalate only material unresolved product decisions.
 3. Map each proposed feature to an approved PRD/design requirement and a real API contract where one is required.
 4. Define exact in-scope and out-of-scope behavior; distinguish UI-only flows from API-dependent features.
 5. Add measurable acceptance criteria, verification commands/environment, evidence requirements, report path, Git permissions, and stop conditions using GPS `GPT-TASK-TEMPLATE.md`.
