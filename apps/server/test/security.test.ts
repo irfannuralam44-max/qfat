@@ -58,7 +58,7 @@ describe('Security Validation', () => {
     test('rejects multiple origin values', () => {
       const result = validateOriginHeader('http://127.0.0.1:5173, http://10.0.0.1:5173');
       assert.equal(result.isValid, false);
-      assert.ok(result.error?.includes('Multiple Origin'));
+      assert.ok(result.error?.includes('multiple Origin'));
     });
 
     test('rejects non-http scheme', () => {
@@ -76,7 +76,7 @@ describe('Security Validation', () => {
     test('rejects public IPv4', () => {
       const result = validateOriginHeader('http://8.8.8.8:5173');
       assert.equal(result.isValid, false);
-      assert.ok(result.error?.includes('private IPv4'));
+      assert.ok(result.error?.includes('loopback, RFC1918, or Tailscale CGNAT'));
     });
 
     test('rejects DNS hostname', () => {
@@ -125,7 +125,7 @@ describe('Security Validation', () => {
       const originAuth: ParsedAuthority = { host: '127.0.0.1', port: 5173, isValid: true };
       const result = validateHostHeader('127.0.0.1:3000', originAuth);
       assert.equal(result.isValid, false);
-      assert.ok(result.error?.includes('port does not match'));
+      assert.ok(result.error?.includes('does not match Origin authority'));
     });
 
     test('rejects multiple host values', () => {
