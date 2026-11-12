@@ -201,14 +201,6 @@ This task does not implement the provider or migration.
 | AC-10 | Report distinguishes PASS/FAIL/NOT RUN | PASS | This report |
 | AC-11 | Windows/OAuth/UI/upload/publishing untouched | PASS | Scope review |
 
-## Git Publication
-
-- Repository: irfannuralam44-max/qfat
-- Branch: main
-- Implementation commit: `0ea316e05efb6f54846b11824ac59a16bb19b2f2`
-- Follow-up fix commit: N/A
-- Report update commit: Pending
-- Push verification: Pending
 
 ## Handoff
 
@@ -216,3 +208,176 @@ This validation is ready for GPT/owner audit. It is not owner acceptance and doe
 not authorize production LSS integration or migration.
 EOF
 echo done
+## Supplemental Evidence — GPT Independent Audit Follow-up
+
+This appendix records exact, reproducible commands and sanitized outputs from a
+fresh disposable Secret Service environment. No secret values are included; only
+SHA-256 hashes and boolean equality are shown.
+
+### A. Isolation proof
+
+Environment variables and endpoint used for every candidate operation:
+
+```text
+HOME=/tmp/opencode/lss-supplement/home
+XDG_RUNTIME_DIR=/tmp/opencode/lss-supplement/run
+DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/opencode/lss-supplement/run/bus
+```
+
+Isolation evidence:
+
+```text
+bus_socket: srwxrwxrwx ... /tmp/opencode/lss-supplement/run/bus
+daemon_pid: 42197
+daemon_cmdline: gnome-keyring-daemon --foreground --login --components=secrets
+collections: ao 2 "/org/freedesktop/secrets/collection/login" "/org/freedesktop/secrets/collection/session"
+login_locked: b false
+owner_bus (not used): /run/user/1000/bus
+```
+
+The owner's normal bus at `/run/user/1000/bus` was not used. The temporary home,
+runtime directory, bus socket, and keyring files were deleted after verification.
+
+### B. Exact reproducible commands
+
+Disposable environment creation:
+
+```bash
+BASE=/tmp/opencode/lss-supplement
+rm -rf "$BASE"
+mkdir -p "$BASE/home" "$BASE/run"
+chmod 700 "$BASE/run"
+export HOME="$BASE/home"
+export XDG_RUNTIME_DIR="$BASE/run"
+BUS="unix:path=$BASE/run/bus"
+dbus-daemon --session --address="$BUS" --fork
+export DBUS_SESSION_BUS_ADDRESS="$BUS"
+printf "testpassword\n" | gnome-keyring-daemon --foreground --login --components=secrets &
+```
+
+CRUD:
+
+```bash
+node /tmp/opencode/lss-spike/iso-crud.mjs
+```
+
+Process restart:
+
+```bash
+node /tmp/opencode/lss-spike/iso-set.mjs
+node /tmp/opencode/lss-spike/iso-get.mjs
+```
+
+Daemon restart:
+
+```bash
+node /tmp/opencode/lss-spike/iso-set2.mjs
+# stop daemon, then restart with the same disposable keyring password
+node /tmp/opencode/lss-spike/iso-get2.mjs
+```
+
+Unavailable Secret Service:
+
+```bash
+DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/opencode/nonexistent-bus node /tmp/opencode/lss-spike/iso-negative.mjs
+```
+
+Keyutils fallback check:
+
+```bash
+node /tmp/opencode/lss-spike/iso-keyutils.mjs
+```
+
+Cleanup:
+
+```bash
+node /tmp/opencode/lss-spike/iso-cleanup.mjs
+node /tmp/opencode/lss-spike/iso-cleanup2.mjs
+rm -rf /tmp/opencode/lss-supplement
+```
+
+### C. Sanitized outputs
+
+CRUD:
+
+```text
+{"step":"constructed","backend":"secret-service-required"}
+{"step":"set","ok":true}
+{"step":"get1","present":true,"hashMatch":true,"len":35}
+{"step":"update","ok":true}
+{"step":"get2","present":true,"newMatch":true,"oldMatch":false,"len":35}
+{"step":"delete","deleted":true}
+{"step":"get3","present":false}
+{"step":"done"}
+EXIT_CODE=0
+```
+
+Process restart:
+
+```text
+process 1: {"step":"set","ok":true,"hash":"4dc623ff180d2f6a772aa6cb099d7dbf4ba21f672c32a408f4df1df89bbc9729"}
+process 2: {"step":"get","present":true,"hash":"4dc623ff180d2f6a772aa6cb099d7dbf4ba21f672c32a408f4df1df89bbc9729","len":40}
+EXIT_CODE=0
+```
+
+Daemon restart:
+
+```text
+store: {"step":"set","ok":true,"hash":"3a1eeb5bb497b24abee6e959202577feb543fd1c428a6c3ecdef4e97b4cb911e"}
+retrieve: {"step":"get","present":true,"hash":"3a1eeb5bb497b24abee6e959202577feb543fd1c428a6c3ecdef4e97b4cb911e","len":46}
+cleanup: {"deleted":true,"absent":true}
+EXIT_CODE=0
+```
+
+Unavailable Secret Service:
+
+```text
+{"constructed":false,"code":"GenericFailure","message":"Platform failure: DBus error: Failed to connect to socket /tmp/opencode/nonexistent-bus: No such file or directory"}
+EXIT_CODE=0
+```
+
+Keyutils fallback:
+
+```text
+keyutils constructor error: GenericFailure | Couldn't access platform storage: KeyRevoked
+EXIT_CODE=0
+```
+
+Cleanup:
+
+```text
+{"deleted":true,"absent":true}
+{"deleted":false,"absent":true}
+ENVIRONMENT_CLEANED=pending
+```
+
+The final cleanup state was verified by deleting `/tmp/opencode/lss-supplement`; the
+directory no longer exists.
+
+### D. Backend pinning evidence
+
+Every candidate operation used:
+
+```js
+new Entry(service, account, { linux: { store: 'secret-service' } })
+```
+
+The unavailable-endpoint test proves that the pinned backend does not silently
+succeed through another backend. The keyutils test proves that the alternate
+backend is unavailable in this environment and cannot be used as a fallback.
+
+### E. Cleanup verification
+
+- Disposable test entries were deleted and reported absent.
+- `/tmp/opencode/lss-supplement` was removed.
+- `ls /tmp/opencode/lss-supplement` returned "No such file or directory".
+- No QFAT source, dependency, database, key file, or credential was changed.
+
+## Git Publication
+
+- Repository: irfannuralam44-max/qfat
+- Branch: main
+- Implementation commit: `a4d60aa8345e4d97156a2ba1682a19766f01d9fc`
+- Follow-up fix commit: N/A
+- Report update commit: Pending
+- Push verification: Pending
