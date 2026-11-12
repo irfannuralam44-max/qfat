@@ -9,6 +9,37 @@ declare -gA QFAT_DISPOSABLE_PIDS=()
 declare -ga QFAT_NOT_RUN_SUBTESTS=()
 QFAT_CLEANUP_FAILURES=0
 QFAT_BASE_DIR="${QFAT_BASE_DIR:-}"
+declare -ga QFAT_HARNESS_PIDS=()
+declare -ga QFAT_HARNESS_PIDFILES=()
+
+qfat_harness_track_pid() {
+  local pid="$1" start
+  start="$(qfat_get_proc_starttime "$pid")" || return 1
+  QFAT_HARNESS_PIDS+=("$pid:$start")
+}
+qfat_harness_forget_pid() {
+  local target="$1" entry
+  local -a kept=()
+  for entry in "${QFAT_HARNESS_PIDS[@]}"; do [[ "$entry" == "$target:"* ]] || kept+=("$entry"); done
+  QFAT_HARNESS_PIDS=("${kept[@]}")
+}
+qfat_harness_cleanup() {
+  local entry pid start pidfile
+  trap - EXIT
+  for pidfile in "${QFAT_HARNESS_PIDFILES[@]}"; do
+    if [[ -f "$pidfile" ]]; then
+      read -r pid start < "$pidfile" || true
+      if [[ "${pid:-}" =~ ^[0-9]+$ && "${start:-}" =~ ^[0-9]+$ ]] && qfat_verify_proc_identity "$pid" "$start"; then
+        command kill -KILL "$pid" 2>/dev/null || true
+      fi
+      rm -f "$pidfile"
+    fi
+  done
+  for entry in "${QFAT_HARNESS_PIDS[@]}"; do
+    pid="${entry%%:*}"; start="${entry#*:}"
+    if qfat_verify_proc_identity "$pid" "$start"; then command kill -KILL "$pid" 2>/dev/null || true; fi
+  done
+}
 
 qfat_parse_proc_starttime_line() {
   local stat_line="$1" rest
@@ -199,8 +230,8 @@ mkdir -p "$QFAT_BASE_DIR"
 qfat_install_traps
 case "$QFAT_SCENARIO" in
   kill-failure)
-    sleep 60 & child=$!
-    printf '%s\n' "$child" > "$QFAT_SCENARIO_PID_FILE"
+    nohup sleep 60 >/dev/null 2>&1 & child=$!
+    printf '%s %s\n' "$child" "$(qfat_get_proc_starttime "$child")" > "$QFAT_SCENARIO_PID_FILE"
     qfat_record_disposable_pid "$child" "kill-failure-child" || exit 1
     QFAT_TEST_KILL_FAIL_PID="$child"
     exit 0
@@ -208,8 +239,8 @@ case "$QFAT_SCENARIO" in
   provenance-failure)
     expected_bus="unix:path=$QFAT_SCENARIO_BASE/run/bus"
     expected_home="$QFAT_SCENARIO_BASE/home"
-    env HOME=/tmp/qfat-wrong-home DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/qfat-wrong-bus sleep 60 & child=$!
-    printf '%s\n' "$child" > "$QFAT_SCENARIO_PID_FILE"
+    nohup env HOME=/tmp/qfat-wrong-home DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/qfat-wrong-bus sleep 60 >/dev/null 2>&1 & child=$!
+    printf '%s %s\n' "$child" "$(qfat_get_proc_starttime "$child")" > "$QFAT_SCENARIO_PID_FILE"
     if qfat_verify_disposable_provenance "$child" "$expected_bus" "$expected_home"; then
       printf 'ERROR: wrong provenance unexpectedly accepted\n'
       exit 1
@@ -238,6 +269,7 @@ qfat_test_pid_and_parser() {
   expected="$(qfat_parse_proc_starttime_line "$line")" || qfat_fail 'parser rejected comm fixture'
   [[ "$expected" == '987654' ]] || qfat_fail "parser returned $expected instead of 987654"
   sleep 60 & pid=$!
+  qfat_harness_track_pid "$pid" || qfat_fail 'could not track test child'
   qfat_record_disposable_pid "$pid" 'pid-mismatch-test' >/dev/null || qfat_fail 'could not record child'
   start="${QFAT_DISPOSABLE_PIDS[$pid]}"
   QFAT_DISPOSABLE_PIDS["$pid"]='999999999999'
@@ -246,7 +278,9 @@ qfat_test_pid_and_parser() {
   QFAT_DISPOSABLE_PIDS["$pid"]="$start"
   qfat_terminate_pid "$pid" 'mismatch-test' >/dev/null || qfat_fail 'valid tracked process did not terminate'
   [[ -z "${QFAT_DISPOSABLE_PIDS[$pid]:-}" ]] || qfat_fail 'terminated PID remained tracked'
+  qfat_harness_forget_pid "$pid"
   sleep 60 & pid=$!
+  qfat_harness_track_pid "$pid" || qfat_fail 'could not track SIGKILL guard child'
   qfat_record_disposable_pid "$pid" 'sigkill-guard-test' >/dev/null || qfat_fail 'could not record SIGKILL guard child'
   QFAT_TEST_IGNORE_TERM_PID="$pid"
   if guard_output="$(qfat_terminate_pid "$pid" 'sigkill-guard-test' 2>&1)"; then guard_rc=0; else guard_rc=$?; fi
@@ -263,6 +297,7 @@ qfat_test_not_run() {
   local base out marker pidfile pid rc content
   base="$(mktemp -d /tmp/qfat-013l2-notrun.XXXXXX)"
   out="$(mktemp)"; marker="$(mktemp)"; pidfile="$(mktemp)"; : > "$marker"
+  QFAT_HARNESS_PIDFILES+=("$pidfile")
   if qfat_run_child_scenario provenance-failure "$base" "$out" "$pidfile" "$marker"; then rc=0; else rc=$?; fi
   [[ "$rc" -eq 2 ]] || qfat_fail "NOT RUN scenario exit=$rc, expected 2"
   content="$(cat "$out")"
@@ -279,15 +314,16 @@ qfat_test_not_run() {
 qfat_test_cleanup_failures() {
   local base out marker pid rc content
   base="$(mktemp -d /tmp/qfat-013l2-killfail.XXXXXX)"; out="$(mktemp)"; marker="$(mktemp)"; : > "$marker"
+  QFAT_HARNESS_PIDFILES+=("/tmp/qfat-013l2-childpid")
   if qfat_run_child_scenario kill-failure "$base" "$out" /tmp/qfat-013l2-childpid "$marker"; then rc=0; else rc=$?; fi
   [[ "$rc" -eq 1 ]] || qfat_fail "termination failure exit=$rc, expected 1"
   content="$(cat "$out")"
   qfat_assert_contains "$content" 'CLEANUP_STATUS: FAILURE'
   qfat_assert_contains "$content" 'cleanup_disposable_dir_removed=NOT_RUN'
   [[ -d "$base" ]] || qfat_fail 'directory removed while tracked process remained alive'
-  pid="$(cat /tmp/qfat-013l2-childpid)"
+  read -r pid start < /tmp/qfat-013l2-childpid
   command kill -0 "$pid" 2>/dev/null || qfat_fail 'injected termination failure did not leave child alive'
-  command kill -KILL "$pid" 2>/dev/null || true
+  if qfat_verify_proc_identity "$pid" "$start"; then command kill -KILL "$pid" 2>/dev/null || true; fi
   rm -f /tmp/qfat-013l2-childpid; rm -rf "$base"
   [[ "$(wc -l < "$marker")" -eq 1 ]] || qfat_fail 'termination-failure cleanup did not run exactly once'
   rm -f "$out" "$marker"
@@ -324,10 +360,10 @@ mkdir -p "$QFAT_BASE_DIR"
 qfat_install_traps
 : > "$4"
 while :; do sleep 0.05; done'''
-    proc = subprocess.Popen(['bash', '-c', child, '_', script, base, marker, ready], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    proc = subprocess.Popen(['bash', '-c', child, '_', script, base, marker, ready], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
     deadline = time.time() + 5
     while not os.path.exists(ready) and time.time() < deadline and proc.poll() is None: time.sleep(0.02)
-    if not os.path.exists(ready): proc.kill(); raise SystemExit('FAIL: signal test child did not become ready')
+    if not os.path.exists(ready): os.killpg(proc.pid, signal.SIGKILL); proc.wait(); raise SystemExit('FAIL: signal test child did not become ready')
     os.kill(proc.pid, sig)
     try: output, _ = proc.communicate(timeout=5)
     except subprocess.TimeoutExpired: proc.kill(); raise SystemExit('FAIL: signal test child did not exit')
@@ -341,6 +377,7 @@ PY
 }
 
 qfat_main() {
+  trap qfat_harness_cleanup EXIT
   [[ "${BASH_VERSINFO[0]}" -ge 4 ]] || qfat_fail 'Bash 4+ required'
   command -v python3 >/dev/null || qfat_fail 'python3 required for real signal delivery test'
   qfat_test_pid_and_parser
