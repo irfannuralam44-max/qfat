@@ -5,7 +5,7 @@
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
 - **Commit message:** `docs(QFAT-013L2): add isolated Secret Service CRUD and persistence validation report`
-- **Commit SHA:** Pending
+- **Commit SHA:** `0ea316e05efb6f54846b11824ac59a16bb19b2f2`
 
 ## Scope
 
@@ -205,7 +205,7 @@ This task does not implement the provider or migration.
 
 - Repository: irfannuralam44-max/qfat
 - Branch: main
-- Implementation commit: Pending
+- Implementation commit: `0ea316e05efb6f54846b11824ac59a16bb19b2f2`
 - Follow-up fix commit: N/A
 - Report update commit: Pending
 - Push verification: Pending
