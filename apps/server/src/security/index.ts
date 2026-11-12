@@ -24,7 +24,7 @@ function parseAuthority(authority: string): ParsedAuthority {
     return { host: '', port: 0, isValid: false, error: 'Missing authority' };
   }
 
-  const match = authority.match(/^\\[([^\\]]+)\\](?::(\\d+))?$|^([^:]+)(?::(\\d+))?$/);
+  const match = authority.match(/^\[([^\]]+)\](?::(\d+))?$|^([^:]+)(?::(\d+))?$/);
   if (!match) {
     return { host: '', port: 0, isValid: false, error: 'Malformed authority' };
   }
@@ -35,7 +35,7 @@ function parseAuthority(authority: string): ParsedAuthority {
     return { host: '', port: 0, isValid: false, error: 'Missing host' };
   }
 
-  if (portText !== undefined && (!/^[1-9]\\d*$/.test(portText) || String(Number(portText)) !== portText)) {
+  if (portText !== undefined && (!/^[1-9]\d*$/.test(portText) || String(Number(portText)) !== portText)) {
     return { host, port: 0, isValid: false, error: 'Malformed port' };
   }
 
@@ -52,7 +52,7 @@ function parseIPv4(ip: string): [number, number, number, number] | null {
   if (parts.length !== 4) return null;
 
   const octets = parts.map((part) => {
-    if (!/^(0|[1-9]\\d{0,2})$/.test(part)) return -1;
+    if (!/^(0|[1-9]\d{0,2})$/.test(part)) return -1;
     const value = Number(part);
     return value <= 255 ? value : -1;
   });
