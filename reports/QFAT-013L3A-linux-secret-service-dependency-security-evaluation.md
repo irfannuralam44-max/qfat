@@ -232,8 +232,34 @@ Environment: Linux, Node.js v24.22.2, npm 11.19.1. Retrieval date for all web so
 - Branch: main
 - Implementation commit: 0db74eaf567490220679ac994a1807e6d7833c5f
 - Follow-up fix commit: N/A
-- Report update commit: Pending (this audit metadata correction)
+- Report update commit: ebb7131ab6fbae7676e36dd89439235414bc87cb
 - Push verification: PASS (implementation commit verified on remote `main`)
+
+## GPT Independent Audit — 2026-11-13
+
+- Audit result: **PASS WITH FINDINGS**
+- Candidate commit reviewed: `0db74eaf567490220679ac994a1807e6d7833c5f`
+- Report correction commit: `ebb7131ab6fbae7676e36dd89439235414bc87cb`
+
+### Verified
+
+- Candidate commit adds only this report; no application source, dependency manifest, lockfile, test, schema, or migration file was changed.
+- Exact package release provenance identifies git commit `52184fbebffeef8a061234f60f313c479b954f9f`; the TypeScript declarations and relevant Rust builder sources were independently inspected at that immutable commit.
+- Linux explicit backend pinning returns the selected store directly and propagates construction errors; the unpinned Linux path sets up the auto-fallback builder that tries Secret Service and then keyutils.
+- The issue #156 report directly reproduces the indefinite constructor block for `new AsyncEntry(...)`. The corresponding `Entry` constructor impact is described by the issue author as source-based inference, not a separately reproduced case. The report was corrected to preserve that distinction.
+- The documented API supports secret retrieval, set, delete, and Linux store pinning, but does not expose a collection selector or an atomic create-if-absent primitive.
+- The package's published native platform packages and third-party libdbus licensing are material adoption considerations, correctly identified as requiring further review.
+- No binary-level Rust dependency scan or independent runtime reproduction was performed; these remain explicit limitations.
+
+### Findings / conditions before Phase B
+
+1. The candidate is not unconditionally approved. Its blocking D-Bus constructor issue requires a concrete, tested mitigation; moving the constructor to a worker thread is not sufficient according to the issue's reproduction.
+2. Collection selection/default collection behavior remains unverified and must be decided by the owner.
+3. The exact Secret Service collection behavior and locked/unavailable first-run UX remain owner decisions.
+4. The report's source links were changed from mutable `main` URLs to immutable release-commit URLs for the API and implementation evidence.
+5. The report publication metadata was corrected to record the actual implementation SHA and verified remote publication.
+
+No implementation, dependency adoption, keyring access, credential migration, or Phase B work is authorized by this audit. Owner review is still required for the five proposal decisions.
 
 ## Handoff
 
