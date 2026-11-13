@@ -30,7 +30,7 @@ Documentation-only remediation. Updated `docs/design/QFAT-017-linux-secret-servi
 | AC-08 | PASS | Candidate suitability and residual owner decisions are explicitly stated |
 | AC-09 | PASS | No production source, dependency, lockfile, schema, migration, key material, or user keyring state changed |
 | AC-10 | PASS | No hosted CI used; report records inspected sources and design-only verification |
-| AC-11 | PENDING PUBLICATION | Commit and push verification to be recorded after publication |
+| AC-11 | PASS | Commit and push verified on remote main |
 
 ## Findings
 
@@ -87,10 +87,10 @@ No code tests were run because this is a documentation-only task. No repository 
 
 - Repository: irfannuralam44-max/qfat
 - Branch: main
-- Implementation commit: Pending
+- Implementation commit: 133e8e055631a13aeb34185dc53c07568864ad42
 - Follow-up fix commit: N/A
 - Report update commit: Pending
-- Push verification: Pending
+- Push verification: PASS (remote main HEAD verified after push)
 
 ## Handoff
 
