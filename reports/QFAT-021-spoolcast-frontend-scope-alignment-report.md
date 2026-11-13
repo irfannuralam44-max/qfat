@@ -6,7 +6,8 @@
 - **Target branch:** `main`
 - **Base HEAD inspected:** `f8c5f9584e4e7baa70231446fe60a38e222c024c`
 - **Final documentation-change commit:** `e813ecac8a066b48985ebee04bfb38cf3747cdd4`
-- **Report commit:** Pending publication
+- **Report creation commit:** `578a19c74f2934ff3bf4deb415325a78ff01d8f6`
+- **Report publication-verification update:** `6710acbb0ca2cbb5615f95de6444a7e587e1f759`
 - **Commit message for final documentation change:** `docs(QFAT-021): mark historical task scope`
 
 ## 1. Scope and outcome
@@ -119,7 +120,7 @@ No new product/runtime decision was made to resolve these questions.
 - Branch: main
 - Implementation commit: e813ecac8a066b48985ebee04bfb38cf3747cdd4
 - Follow-up fix commit: N/A
-- Report update commit: N/A
+- Report update commit: 6710acbb0ca2cbb5615f95de6444a7e587e1f759
 - Push verification: PASS
 
 The documentation changes were published as a sequence of 14 fast-forward commits from the inspected HEAD. The commit recorded above is the final scope-note change before report publication; the full changed-path set is captured in the GitHub compare evidence described above.
@@ -134,3 +135,16 @@ The documentation changes were published as a sequence of 14 fast-forward commit
 ## 10. Handoff
 
 This work is ready for GPT/Owner audit. It is not owner-accepted. No subsequent task or implementation stage has been started.
+
+
+## 11. GPT independent audit — 2026-11-13
+
+- **Audit result:** PASS WITH FINDINGS — documentation scope alignment accepted; no implementation stage authorized by this audit.
+- **Reviewed remote candidate:** `main`, documentation change `e813ecac8a066b48985ebee04bfb38cf3747cdd4`, report publication update `6710acbb0ca2cbb5615f95de6444a7e587e1f759`.
+- **Independent compare:** base `f8c5f9584e4e7baa70231446fe60a38e222c024c` to documentation change `e813ecac8a066b48985ebee04bfb38cf3747cdd4` is 14 commits ahead, 0 behind. The 14 changed paths are Markdown documents/tasks only; no source/runtime/dependency/configuration path appears.
+- **Document audit:** PRD, architecture, ADR-006, AGENTS, CLAUDE overlay, workflow, scope-control document, and seven task scope notes were fetched from remote and reviewed. The responsibility boundary and stop/approval rules are consistent with the corrected product direction.
+- **Key scope checks:** Spoolcast remains publishing core; QFAT remains frontend; local bridge is conditional; no replacement backend, independent scheduler/job engine, token owner, or new persistence model is authorized; scheduling UI and Facebook single-image capability remain explicit open decisions.
+- **Report metadata correction:** the initial report-creation commit is `578a19c74f2934ff3bf4deb415325a78ff01d8f6`; commit `6710acbb0ca2cbb5615f95de6444a7e587e1f759` is the subsequent report-publication verification update. The Git Publication field now identifies the latter as the report update commit.
+- **Finding 1:** local `git diff --check`, local working-tree/staging inspection, and a local checkout-based full diff were not run. This limitation is disclosed; remote compare confirms the changed-path boundary. It is non-blocking for this documentation-only audit but remains an evidence limitation.
+- **Finding 2:** the report verifies remote Git publication only. It does not claim hosted CI, application tests, or live integration verification; those were correctly not run for this documentation-only task.
+- **Audit conclusion:** the documentation change satisfies the intent and scope of QFAT-021. PASS WITH FINDINGS is retained to preserve the disclosed local-verification limitation. Owner acceptance and authorization of any next implementation task remain separate.
