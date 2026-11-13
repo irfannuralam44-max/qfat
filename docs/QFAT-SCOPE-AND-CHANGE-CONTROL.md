@@ -24,8 +24,21 @@ A local browser-to-Node bridge/launcher/API is conditional and may be added only
 - Hosted SaaS, teams, Rust rewrite, Tauri/Electron, unrelated infrastructure, platform expansion.
 - Source/runtime changes under documentation-only tasks.
 
-## Conditional — requires evidence and owner approval
-Local bridge/launcher/process lifecycle; reuse/adaptation of QFAT server, SQLite, media, browser security, or credential code; QFAT UI exposure of scheduling/queue/accounts/progress/history; new Spoolcast capability; dependencies, runtime services, persistence/credential ownership, framework/package boundaries, or platforms. Conditional is not authorized merely because code/task/roadmap exists.
+## ## Approved MVP publishing UX boundary — 2026-11-14
+
+The Owner has approved QFAT frontend presentation of **Publish Now** and **Schedule**.
+
+- Publish Now uses the existing Spoolcast adapter's immediate mode when a separately approved integration invokes it.
+- Schedule submits a future publication request to each selected provider. After provider acceptance, the provider performs publication; QFAT/Spoolcast does not need a local timer or process running at publish time.
+- MVP Schedule uses one shared date/time and one explicit timezone for the entire selected platform/account target set. Normalize once to one instant and serialize that instant per provider.
+- Each target is attempted and reported independently. A failure for one target must not prevent remaining targets from being attempted. Existing Spoolcast CLI is sequential; no concurrency/simultaneity promise.
+- Future different times per platform/account are a later enhancement, not MVP scope.
+- Report provider acceptance separately from eventual public visibility. A successful scheduled request is **Scheduled**, not **Published/Live**.
+
+This is approval of product UX only. It does not authorize implementation, a local scheduler/daemon/cron integration, a new queue/job orchestrator, bridge/API/process topology, OAuth/account ownership or mapping, credential changes, persistence/status schema, retry/cancellation orchestration, or new provider capabilities. Existing source caveats (including required manifest publishAt and Facebook schedule-window validation for immediate flows) remain unresolved; see the focused design note.
+
+### Conditional — requires evidence and owner approval
+Local bridge/launcher/process lifecycle; reuse/adaptation of QFAT server, SQLite, media, browser security, or credential code; UI exposure of queue/accounts/progress/history beyond the approved publishing-mode/shared-time/per-target-result contract; new Spoolcast capability; dependencies, runtime services, persistence/credential ownership, framework/package boundaries, or platforms. Conditional is not authorized merely because code/task/roadmap exists.
 
 ## Document authority and conflict resolution
 1. Explicit current Owner decisions recorded in repository documentation.

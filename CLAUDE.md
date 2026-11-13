@@ -2,7 +2,7 @@
 >
 > QFAT is the frontend/UI for Spoolcast; Spoolcast remains the application and publishing authority. The CLI-specific material below describes the imported Spoolcast core only and is not authorization to build a parallel QFAT publishing backend or QFAT-owned OAuth/token/scheduler/queue/job system.
 >
-> Reuse existing Spoolcast provider integrations, upload protocols, CLI/domain behavior, queue/manifest/state semantics, and scheduling. A local browser-to-Node bridge is conditional and must be the smallest source-proven invocation mechanism. Do not assume immediate-only publishing; scheduling UI is an OPEN OWNER DECISION.
+> Reuse existing Spoolcast provider integrations, upload protocols, CLI/domain behavior, queue/manifest/state semantics, and scheduling. A local browser-to-Node bridge is conditional and must be the smallest source-proven invocation mechanism. Owner-approved QFAT MVP UX offers Publish Now and Schedule. MVP Schedule uses one shared date/time/timezone for all selected targets, with independent per-target outcomes; providers perform accepted future publication. This does not authorize a local scheduler or runtime integration. Per-target times are future direction only.
 >
 > If a QFAT task needs a capability missing from Spoolcast or implies a new backend subsystem, STOP and record OPEN OWNER DECISION. Existing QFAT server, SQLite, media, and credential code is not automatically mandatory. Follow AGENTS.md and docs/QFAT-SCOPE-AND-CHANGE-CONTROL.md.
 >

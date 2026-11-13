@@ -18,7 +18,7 @@ This document defines the QFAT execution workflow. Product identity and scope ar
 - Browser code must never receive provider secrets or implement provider protocols.
 - A local bridge/launcher/API is conditional: use only the smallest mechanism proven necessary to invoke existing Spoolcast operations.
 - Existing QFAT SQLite, media library, credential provider, and upload boundary are not automatically mandatory merely because they exist.
-- Do not assume immediate-only publishing. Spoolcast supports scheduling; whether QFAT exposes it is an **OPEN OWNER DECISION**.
+- Owner-approved QFAT MVP UX offers Publish Now and Schedule. MVP Schedule uses one shared date/time/timezone for all selected targets; outcomes are independent per target; provider-side scheduled publication is not a local scheduler. Per-target times are future direction only. This approval does not authorize runtime implementation, bridge, or backend.
 - Facebook single-image publishing is not verified in Spoolcast. Prior UI/media selection is not proof of publishing support.
 - If a task reveals a missing Spoolcast capability or requires a new backend subsystem, STOP, record **OPEN OWNER DECISION** with source evidence, and ask the Owner. Never implement an assumed workaround.
 - Historical tasks/reports are evidence, not ongoing authorization. A task authorizes only its exact scope and paths.

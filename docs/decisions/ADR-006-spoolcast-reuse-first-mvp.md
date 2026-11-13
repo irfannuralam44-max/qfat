@@ -19,7 +19,7 @@ The Owner clarified on 2026-11-13 that QFAT is to provide the frontend for Spool
 5. Prefer existing Spoolcast entry points/modules and the smallest safe adaptation. No replacement engine, parallel OAuth/token owner, scheduler, queue, publishing ledger, or generic adapter framework.
 6. Existing QFAT server, SQLite, media library, credential provider, and upload boundary are not automatically mandatory. Retain code; classify each as keep/adapt/defer/open decision based on evidence. This ADR does not authorize deletion/refactoring.
 7. If a required UI flow needs a capability Spoolcast lacks, stop and record OPEN OWNER DECISION. Do not implement a substitute backend.
-8. Spoolcast scheduling remains core behavior. QFAT scheduling UI exposure is OPEN OWNER DECISION; earlier immediate-only wording does not remove core capability.
+8. On 2026-11-14 the Owner approved QFAT MVP Publish Now and Schedule UX: one shared date/time/timezone for all selected targets, independent per-target outcomes, and provider-side scheduled publication. Future per-target times are later direction only. This UX approval does not authorize a local scheduler, bridge, runtime implementation, or new persistence/status schema.
 9. Preserve existing YouTube and Facebook video/Reels integrations. Facebook single-image publishing is not verified in Spoolcast and needs a separate owner decision/task.
 10. Preserve MIT attribution. Verification is local-only; no hosted CI. Linux credential work remains active; Windows held. Figma cancelled.
 
@@ -32,5 +32,5 @@ That was the direction in force when earlier tasks were authored. This corrected
 - PRD and architecture define QFAT as frontend and Spoolcast as core.
 - Agent instructions require stop-and-ask for missing core capabilities or new backend subsystems.
 - Existing QFAT code is audited for relevance before further use; it is not automatically expanded or deleted.
-- Scheduling UI, first-release journeys, local bridge, media handoff, account UI integration, status/history presentation, and image publishing remain owner decisions where not already established.
+- The Publish Now + shared-time Schedule UX is settled. Local bridge/process lifecycle, immediate manifest validation path, OAuth/account mapping, media handoff, progress/result transport, durable status/history semantics, cancellation/retry behavior, and image publishing remain unresolved where not separately established.
 - New implementation requires a bounded task with exact allowed paths, forbidden work, acceptance evidence, and stop rule, plus explicit owner authorization.
