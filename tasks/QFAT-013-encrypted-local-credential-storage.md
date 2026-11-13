@@ -1,3 +1,5 @@
+> **QFAT-021 scope note — 2026-11-13 (HISTORICAL / CREDENTIAL OWNERSHIP DECISION REQUIRED):** This task remains historical evidence of its original authorized scope. It is not current authorization to build or extend a standalone QFAT publishing backend. Current product identity is QFAT frontend for Spoolcast; see `docs/QFAT-SCOPE-AND-CHANGE-CONTROL.md`. The QFAT key-file credential foundation remains existing code but does not establish QFAT as permanent OAuth/token owner. No migration or new credential subsystem is authorized by this historical task. Future reuse requires a new bounded task and explicit owner authorization.
+
 # Task QFAT-013 — Encrypted Local Credential Storage Foundation
 
 - **Status:** OWNER-AUTHORIZED FOR EXECUTION
