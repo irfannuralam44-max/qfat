@@ -1,3 +1,5 @@
+> **QFAT-021 scope note — 2026-11-13 (HELD / UNAUTHORIZED):** This task remains historical evidence of its original authorized scope. It is not current authorization to build or extend a standalone QFAT publishing backend. Current product identity is QFAT frontend for Spoolcast; see `docs/QFAT-SCOPE-AND-CHANGE-CONTROL.md`. Windows credential work remains deferred under the Linux-first owner gate. Task-file presence is not authorization. Future reuse requires a new bounded task and explicit owner authorization.
+
 # Task QFAT-013W — Windows Credential Storage ACL and Durability
 
 > **OWNER HOLD — DO NOT EXECUTE.**
