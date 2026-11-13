@@ -304,7 +304,7 @@ The MVP is ready for owner review when all of the following are true:
 11. Facebook Reel transfer and browser-to-backend media intake use bounded memory.
 12. Platform credentials are not exposed to the frontend, logs, or plaintext database storage.
 13. Automated tests cover job state transitions, destination fan-out, upload adapter protocols via mocks, validation, and failure/retry paths.
-14. Typecheck and production build pass on Linux and Windows; relevant tests pass on both.
+14. Typecheck, production build, and relevant automated tests pass on the supported Linux MVP environment. Windows verification is deferred and must not be claimed.
 15. The upstream MIT license and attribution remain intact.
 16. No live production upload is required to pass automated CI.
 
