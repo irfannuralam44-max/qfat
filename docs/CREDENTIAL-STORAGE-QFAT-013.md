@@ -164,3 +164,18 @@ hygiene.
 Actual Windows ACL execution is **DEFERRED — NOT RUN** until all Linux work is
 complete. Linux POSIX behavior is tested on the repository's Linux environment;
 it is not evidence of Windows ACL support.
+
+
+## Owner direction — Linux MVP (2026-11-13)
+
+The owner selected the lightweight Linux-first direction for MVP:
+
+- Use the Secret Service implementation already available on the owner's Linux Mint machine (GNOME Keyring).
+- `@napi-rs/keyring` is the preferred **conditional candidate**, not an unconditional production dependency. Pin the explicit `secret-service` backend; do not allow keyutils fallback.
+- Use the Linux default collection after verifying actual storage and persistence behavior. Do not build custom collection management for MVP.
+- When the keyring is locked/unavailable, instruct the user to unlock it through Linux and retry; fail closed. Never fall back to plaintext, keyutils, or the old key file after cutover.
+- Test and mitigate the candidate's D-Bus blocking risk before production integration. If it cannot be made safe, stop and present the smallest alternative for an owner decision.
+- Keep the existing AES-256-GCM envelope and SQLite ciphertext format. Migration from the current key-file provider is explicit and separately verified; do not automatically move or delete real key material.
+- Windows credential storage remains deferred.
+
+This direction favors using the facilities of the owner's Linux environment rather than implementing a new keyring backend. It does not authorize dependency installation, production wiring, migration, or key-file retirement by itself; those require a narrowly scoped task and the normal owner acceptance gate.
