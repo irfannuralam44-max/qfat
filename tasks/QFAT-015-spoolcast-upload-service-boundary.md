@@ -1,3 +1,5 @@
+> **QFAT-021 scope note — 2026-11-13 (HISTORICAL / REUSABLE SPOOLCAST ADAPTATION):** This task remains historical evidence of its original authorized scope. It is not current authorization to build or extend a standalone QFAT publishing backend. Current product identity is QFAT frontend for Spoolcast; see `docs/QFAT-SCOPE-AND-CHANGE-CONTROL.md`. QFAT-015's existing upload-function adaptations are reusable Spoolcast core work. It does not authorize a QFAT publishing backend, HTTP routes, OAuth/account persistence, queue/job orchestration, or an independent publishing ledger. Future reuse requires a new bounded task and explicit owner authorization.
+
 # QFAT-015 — Make Existing Spoolcast Upload Functions Callable by QFAT
 
 - **Status:** READY FOR EXECUTION — bounded implementation task
