@@ -11,6 +11,10 @@ Scope: Linux credential storage only. Windows remains deferred.
 
 Use a **persistent, supervised child process** as the only process that imports and constructs `@napi-rs/keyring@2.1.2`. The parent QFAT server must never construct `Entry` or `AsyncEntry` directly. All Secret Service operations cross a versioned, size-limited JSON IPC boundary over stdin/stdout pipes.
 
+### No-overwrite status
+
+`@napi-rs/keyring@2.1.2` is **not suitable as currently specified** for QFAT's hard no-overwrite key-creation requirement. Its Secret Service API provides `setSecret`, which replaces an existing item, and provides no atomic create-if-absent or no-overwrite primitive. A read-back comparison can detect a conflict only after an overwrite has already occurred. A cooperative QFAT-only lock can reduce races among QFAT instances but cannot prevent a non-cooperating writer or an external Secret Service client from being overwritten. Therefore, either the owner must accept a documented cooperative-only guarantee with residual external-writer risk, or a different Secret Service client/API with suitable atomic semantics must be evaluated. This design does not claim that the candidate is race-safe.
+
 Recommended model for the MVP:
 
 - One dedicated child process per running QFAT server process.
@@ -29,6 +33,7 @@ Recommended model for the MVP:
 - `@napi-rs/keyring@2.1.2` is a conditional candidate, not approved for unconditional production adoption.
 - The candidate's Linux backend must be pinned to `secret-service`; auto-fallback to keyutils is prohibited.
 - The candidate exposes no collection selection. QFAT-016 observed successful CRUD in an unlocked default/login collection.
+- The candidate does not expose an atomic create-if-absent or no-overwrite operation. `setSecret` replaces an existing item.
 - The current provider contract is:
 
 ```ts
@@ -96,15 +101,22 @@ Rationale:
 
 ### 3.2 Process lifecycle sequence
 
+Selected lifecycle: **lazy spawn on first credential operation**. The parent server starts normally without importing or spawning the Secret Service child. The first `CredentialProvider` operation creates and READY-checks the child. This keeps `/api/v1/health` available when Secret Service is unavailable and surfaces Secret Service errors only when credential storage is actually needed.
+
 ```text
 Parent server startup
   -> validate platform = linux
-  -> create SecretServiceKeyStore
+  -> create an unstarted SecretServiceKeyStore
+  -> do not import or spawn the Secret Service child
+
+First credential operation
+  -> acquire serial operation lock
   -> spawn child with isolated/normal environment as applicable
   -> wait for READY handshake with startup timeout
   -> mark key store available or fail closed
+  -> perform operation with operation timeout
 
-Operation request
+Operation request after ready
   -> parent validates context and request shape
   -> enqueue operation
   -> serialize request to child over stdin
@@ -316,6 +328,33 @@ For retrieve, `secretBase64` is permitted only in the IPC response to the parent
 | Duplicate response | Ignore duplicate; record protocol anomaly |
 | Child stderr output | Capture bounded, secret-scanned diagnostic only; never fail solely because stderr is non-empty unless policy requires it |
 
+### 4.8 READY handshake and supervisor queue
+
+READY handshake:
+- The child's first stdout line after spawn must be a valid `READY` response with `protocolVersion: 1`.
+- The parent waits for `READY` until the startup timeout.
+- If `READY` is missing, malformed, late, or has an incompatible protocol version, startup fails closed and the child is terminated.
+- The parent does not send operations before `READY`.
+
+Queue and backpressure:
+- FIFO queue with a maximum of 8 pending operations.
+- If the queue is full, new operations fail immediately with `SECRET_SERVICE_CHILD_UNAVAILABLE` rather than buffering indefinitely.
+- One operation is in flight at a time.
+- After timeout, malformed IPC, child exit, or forced termination, the active operation fails and the queue is drained with `SECRET_SERVICE_CHILD_UNAVAILABLE` or the original mapped error.
+- A timed-out operation is never replayed automatically. A write whose completion is ambiguous remains failed; the caller must not retry it as if it were known to be absent.
+- After a child crash, at most one supervised restart is attempted for a later operation. After a timeout, no automatic restart is attempted during the same process lifetime; Secret Service is marked unavailable until server restart or an explicit future recovery policy.
+
+Stderr policy:
+- stderr is captured in a bounded buffer (maximum 4 KiB).
+- stderr is treated as untrusted diagnostic text.
+- Secret-like patterns and URL query strings must be redacted before logging.
+- Non-empty stderr does not by itself fail an operation unless it indicates a protocol or child failure.
+
+Secret buffer lifetime:
+- The parent allocates the 32-byte key buffer for one operation, passes it through IPC, and clears the request object reference after validation.
+- The child decodes the base64 secret, constructs the native buffer, performs the operation, and clears local references.
+- Node.js and native runtimes may retain copies; the design must not claim guaranteed erasure.
+
 ## 5. Backend selection and fail-closed behavior
 
 ### 5.1 Explicit pinning
@@ -335,7 +374,7 @@ Proposed parent-facing error codes:
 | Code | Meaning |
 |---|---|
 | `SECRET_SERVICE_UNAVAILABLE` | D-Bus or Secret Service is unavailable |
-| `SECRET_SERVICE_LOCKED` | Default/login collection is unavailable or locked |
+| `SECRET_SERVICE_UNAVAILABLE_OR_LOCKED` | Default/login collection is inaccessible or its state cannot be distinguished; do not claim a confirmed locked state |
 | `SECRET_SERVICE_OPERATION_FAILED` | Provider returned an unexpected failure |
 | `SECRET_SERVICE_OPERATION_TIMEOUT` | Operation exceeded its timeout |
 | `SECRET_SERVICE_CHILD_CRASH` | Child exited before responding |
@@ -358,8 +397,8 @@ Existing `CredentialStorageError` codes remain valid for the encrypted envelope 
 - No environment-variable key.
 - No regenerated key when encrypted records exist.
 - No continued account-management startup if the active key source is unavailable.
-- If the default collection is unavailable, return an actionable error instructing the user to unlock Secret Service through Linux and retry.
-- Do not claim a specific lock state unless the provider exposes reliable evidence. An unavailable default collection is reported as unavailable/locked, not as a definitively diagnosed lock.
+- If the default collection is inaccessible, return an actionable error instructing the user to unlock Secret Service through Linux and retry.
+- Do not emit a definitive locked-state category based solely on a generic failure or unavailable collection. Use `SECRET_SERVICE_UNAVAILABLE_OR_LOCKED` unless reliable provider evidence supports `SECRET_SERVICE_PERMISSION_DENIED`.
 
 ## 6. CredentialProvider integration
 
@@ -389,15 +428,66 @@ interface CredentialKeyStore {
 }
 ```
 
-`create()` must be create-if-absent. Because `@napi-rs/keyring` does not expose an atomic create-if-absent primitive, the adapter must:
+### 6.2A No-overwrite analysis (mandatory)
 
-1. Call `get()`.
-2. If absent, call the native `setSecret`.
-3. Call `get()` again.
-4. Compare the retrieved bytes to the generated key.
-5. If they differ, return `SECRET_KEY_CONFLICT` and never overwrite either side.
+`@napi-rs/keyring@2.1.2` does **not** provide an atomic create-if-absent or no-overwrite operation. `setSecret` replaces an existing item. Therefore, the earlier read-check-write sequence is **not** a safe no-overwrite mechanism. It can detect a conflict only after an overwrite has already occurred.
 
-This is not an atomic primitive. Concurrent QFAT processes or external Secret Service writers can create a race. The risk must be documented and tested.
+Race interleaving:
+
+1. Process A calls `get()` and receives `null`.
+2. Process B calls `get()` and receives `null`.
+3. Process A calls `setSecret(keyA)`.
+4. Process B calls `setSecret(keyB)` and overwrites keyA.
+5. Both processes may read back and observe keyB; keyA is lost without detection, or detection occurs only after overwrite.
+
+External-writer interleaving:
+
+1. QFAT calls `get()` and receives `null`.
+2. An external Secret Service writer creates an item with keyX.
+3. QFAT calls `setSecret(keyQ)` and overwrites keyX.
+4. QFAT may detect a conflict only after the overwrite.
+
+Because the Secret Service API lacks a no-overwrite primitive, a read-back comparison cannot restore or protect the overwritten value.
+
+#### Strategy comparison
+
+| Strategy | Protected actors | Limitation |
+|---|---|---|
+| Candidate native API only | None for create-if-absent | `setSecret` always replaces; no atomic guarantee |
+| QFAT cross-process file lock on a coordination file in the data directory | Cooperating QFAT processes sharing the same data directory | Does not protect against non-cooperating or external Secret Service writers |
+| OS advisory lock (`flock`/equivalent) via a helper | Participating processes only | Node has no built-in flock; still does not protect external writers |
+| Alternative Secret Service client/API with atomic create-if-absent or no-overwrite | All writers using that API, depending on implementation | Requires evaluation and possible dependency approval |
+| Reject candidate for production key storage | N/A | Retains key-file provider; no Secret Service benefit |
+
+#### Selected design
+
+The candidate is **NOT SUITABLE** for QFAT's hard no-overwrite requirement under the current approved constraints. The design must not describe read-then-setSecret-then-read as race-safe.
+
+If the owner wishes to continue with `@napi-rs/keyring@2.1.2`, the only defensible mitigation is a QFAT-owned cross-process single-writer lock plus read-back conflict detection. That mitigation protects cooperating QFAT instances sharing the same data directory only. It does **not** protect against external Secret Service writers and therefore does not satisfy a hard no-overwrite guarantee. The owner must explicitly accept that residual risk or select a different client/API.
+
+A QFAT-owned lock, if approved as a mitigation only, must specify:
+- lock file path under the QFAT data directory;
+- atomic lock acquisition using `O_CREAT | O_EXCL` or an equivalent filesystem primitive;
+- lock owner identity using PID and process start time;
+- stale-lock detection and recovery;
+- crash cleanup semantics;
+- permissions and symlink/path safety;
+- timeout and retry policy;
+- behavior when lock ownership cannot be proven;
+- fail-closed behavior if the lock cannot be acquired.
+
+#### Required deterministic race tests
+
+These tests are design requirements for any future implementation:
+- two simultaneous first-start QFAT processes;
+- pre-existing item with a different key;
+- external writer creates an item between QFAT read and write;
+- process crash while holding the lock;
+- stale lock from a dead process;
+- uncertain lock ownership;
+- verification that QFAT does not overwrite and returns a conflict error.
+
+No such tests were executed in this documentation task.
 
 ### 6.3 Provider mapping
 
@@ -439,6 +529,8 @@ No such files are created by this task.
 - Never generate a replacement key when encrypted credential records exist.
 - If Secret Service is unavailable or locked, fail closed and do not create a key-file fallback.
 
+With `@napi-rs/keyring@2.1.2`, `create()` cannot be implemented as a true atomic create-if-absent operation. The adapter must not present read-check-write as a guarantee. If the candidate is selected despite the residual race, the QFAT-owned lock and conflict checks are mitigations only.
+
 ### 6.5 Existing encrypted records
 
 - If encrypted rows exist and the Secret Service item is missing, malformed, inaccessible, or has the wrong length, fail closed.
@@ -462,8 +554,8 @@ Trade-off:
 ### 6.7 Server startup and request handling
 
 - Server startup must not import `@napi-rs/keyring`.
-- The Secret Service child is spawned lazily on first credential operation or during a future explicit startup check.
-- If Secret Service is unavailable, credential operations fail closed.
+- The Secret Service child is spawned lazily on the first credential operation, not during server startup.
+- If Secret Service is unavailable, the first credential operation fails closed; server startup and unrelated routes remain available.
 - The server should not expose whether a specific account secret exists beyond the minimum required by the authorized local UI.
 
 ## 7. Migration and cutover boundary
@@ -521,7 +613,7 @@ Migration is a separate, explicitly invoked future task. This design does not au
 
 ## 9. Residual risks
 
-1. `@napi-rs/keyring` does not expose atomic create-if-absent or collection selection.
+1. `@napi-rs/keyring` does not expose atomic create-if-absent or collection selection. Under the current constraints, it does not satisfy QFAT's hard no-overwrite requirement.
 2. The default `login` collection must be unlocked and available. QFAT-016 observed failure when it was unavailable.
 3. Child-process termination after a native hang depends on OS signal delivery; a permanently stuck native thread may leave an orphan until process exit.
 4. Secret bytes cross IPC and exist in multiple process memories; Node.js cannot guarantee erasure.
@@ -530,7 +622,7 @@ Migration is a separate, explicitly invoked future task. This design does not au
 
 ## 10. Open decisions requiring owner approval
 
-1. Approve or reject `@napi-rs/keyring@2.1.2` for production implementation after reviewing this design.
+1. Decide whether `@napi-rs/keyring@2.1.2` is rejected for production key storage because it cannot provide a hard no-overwrite guarantee, or whether a cooperative-only lock and residual external-writer risk are acceptable.
 2. Approve the default/login collection limitation or require another Secret Service client.
 3. Approve the first-run behavior: fail closed with unlock instructions versus an explicit user-driven unlock/setup flow.
 4. Approve the migration invocation model and key-file retention policy.
