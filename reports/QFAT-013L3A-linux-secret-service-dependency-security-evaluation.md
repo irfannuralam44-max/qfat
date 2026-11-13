@@ -5,7 +5,7 @@
 - Repository: irfannuralam44-max/qfat
 - Target branch: main
 - Commit message: docs(QFAT-013L3A): add Linux Secret Service dependency security evaluation
-- Commit SHA: Pending
+- Commit SHA: 0db74eaf567490220679ac994a1807e6d7833c5f
 
 ## Scope
 
@@ -114,11 +114,11 @@ Error surfaces:
 
 - The native errors are surfaced as JavaScript errors/exceptions. The declarations describe high-level cases such as locked/inaccessible stores, ambiguous entries, and missing entries.
 - No stable QFAT-facing error code or enum is exposed by the package. A QFAT adapter would need to map native errors, likely by type/name/message.
-- Issue #156 shows that constructor-time D-Bus work can block indefinitely, which weakens timeout and fail-closed guarantees unless construction is isolated or avoided.
+- Issue #156 directly reproduces the indefinite main-thread block for `new AsyncEntry(...)`. Its author also reports that source inspection suggests `new Entry(...)` follows the same synchronous D-Bus setup path, but explicitly labels that part as inferred rather than separately reproduced. Treat the `Entry` impact as a source-based inference, not a reproduced result.
 
 ### Compatibility risks for QFAT
 
-1. Blocking constructor: `new Entry()`/`new AsyncEntry()` may perform D-Bus connection work synchronously. A wedged session bus can block the whole Node process, including worker threads' ability to exit.
+1. Blocking constructor: `new AsyncEntry()` is directly reproduced as performing D-Bus connection work synchronously. The same path appears to affect `new Entry()` by source inspection, but that specific case was not separately reproduced in issue #156. A wedged session bus can block the whole Node process; the issue also reports that moving the call to a worker does not make the process reliably terminable.
 2. Default fallback: without explicit `{ linux: { store: 'secret-service' } }`, the library may silently fall back to the kernel keyring, which is in-memory and does not persist across reboot. QFAT must always pin `secret-service`.
 3. No collection selection: QFAT cannot choose a dedicated QFAT collection or explicitly handle a locked login collection through this API.
 4. Error classification: QFAT would need a mapping layer from native error text/type to stable QFAT error codes.
@@ -176,11 +176,11 @@ Recommended mitigations if the owner approves further work:
 | `https://registry.npmjs.org/@napi-rs/keyring` | npm registry | 2026-11-13 | Package metadata, version list, license, maintainers, repository, engine, optional dependencies, publish metadata, attestations |
 | `https://github.com/Brooooooklyn/keyring-node` | Brooooooklyn | 2026-11-13 | Repository ownership, README, license, issue count, public project status |
 | `https://github.com/Brooooooklyn/keyring-node/blob/main/README.md` | Brooooooklyn | 2026-11-13 | Linux backend selection, explicit pinning, keyutils persistence warning, bundled Rust dependencies, libdbus licensing, cargo-auditable |
-| `https://raw.githubusercontent.com/Brooooooklyn/keyring-node/main/index.d.ts` | Brooooooklyn | 2026-11-13 | Exact TypeScript API: constructors, `withTarget`, `getSecret`, `setSecret`, `deleteCredential`, `EntryOptions`, `LinuxStore` |
-| `https://raw.githubusercontent.com/Brooooooklyn/keyring-node/main/src/entry_builder.rs` | Brooooooklyn | 2026-11-13 | Explicit Secret Service construction with empty configuration; auto-fallback behavior; target modifier handling |
-| `https://raw.githubusercontent.com/Brooooooklyn/keyring-node/main/src/linux_credential_builder.rs` | Brooooooklyn | 2026-11-13 | Secret Service is tried first, then keyutils fallback on construction error |
-| `https://raw.githubusercontent.com/Brooooooklyn/keyring-node/main/src/result.rs` | Brooooooklyn | 2026-11-13 | `NoEntry` becomes absent; other errors propagate; deletion failure is not reported as false |
-| `https://raw.githubusercontent.com/Brooooooklyn/keyring-node/main/src/options.rs` | Brooooooklyn | 2026-11-13 | Linux store enum values `secret-service` and `keyutils` |
+| `https://raw.githubusercontent.com/Brooooooklyn/keyring-node/52184fbebffeef8a061234f60f313c479b954f9f/index.d.ts` | Brooooooklyn | 2026-11-13 | Exact TypeScript API: constructors, `withTarget`, `getSecret`, `setSecret`, `deleteCredential`, `EntryOptions`, `LinuxStore` |
+| `https://raw.githubusercontent.com/Brooooooklyn/keyring-node/52184fbebffeef8a061234f60f313c479b954f9f/src/entry_builder.rs` | Brooooooklyn | 2026-11-13 | Explicit Secret Service construction with empty configuration; auto-fallback behavior; target modifier handling |
+| `https://raw.githubusercontent.com/Brooooooklyn/keyring-node/52184fbebffeef8a061234f60f313c479b954f9f/src/linux_credential_builder.rs` | Brooooooklyn | 2026-11-13 | Secret Service is tried first, then keyutils fallback on construction error |
+| `https://raw.githubusercontent.com/Brooooooklyn/keyring-node/52184fbebffeef8a061234f60f313c479b954f9f/src/result.rs` | Brooooooklyn | 2026-11-13 | `NoEntry` becomes absent; other errors propagate; deletion failure is not reported as false |
+| `https://raw.githubusercontent.com/Brooooooklyn/keyring-node/52184fbebffeef8a061234f60f313c479b954f9f/src/options.rs` | Brooooooklyn | 2026-11-13 | Linux store enum values `secret-service` and `keyutils` |
 | `https://github.com/Brooooooklyn/keyring-node/issues/156` | Brooooooklyn | 2026-11-13 | Open blocking D-Bus constructor issue and suggested fixes |
 | `https://github.com/Brooooooklyn/keyring-node/issues/99` | Brooooooklyn | 2026-11-13 | Open password-length limitation |
 | `https://github.com/Brooooooklyn/keyring-node/releases` | Brooooooklyn | 2026-11-13 | Release history including `v2.1.2` on 2026-10-19 |
@@ -193,7 +193,7 @@ Recommended mitigations if the owner approves further work:
 1. The exact Secret Service collection used by the underlying crate is not documented in the README or TypeScript declarations. It is likely the default/login collection, but QFAT must verify this.
 2. Whether `setSecret` is atomic create-if-absent is not documented. QFAT would need an adapter-level pattern and concurrency tests.
 3. Native error taxonomy is not stable/exposed as codes; QFAT would need mapping and tests.
-4. Issue #156 affects timeout and fail-closed behavior. This evaluation did not execute the candidate or reproduce the issue.
+4. Issue #156 reports a reproducible `AsyncEntry` constructor hang on Linux; the `Entry` constructor impact is inferred from source, not separately reproduced. This evaluation did not independently execute the candidate or reproduce the issue.
 5. No binary-level Rust dependency audit (`cargo audit bin`) was performed because the package was not installed.
 6. OSV/GitHub advisory searches are point-in-time and may not cover all transitive Rust crates.
 7. No Windows work was evaluated; Windows remains deferred.
@@ -230,10 +230,10 @@ Environment: Linux, Node.js v24.22.2, npm 11.19.1. Retrieval date for all web so
 
 - Repository: irfannuralam44-max/qfat
 - Branch: main
-- Implementation commit: Pending
+- Implementation commit: 0db74eaf567490220679ac994a1807e6d7833c5f
 - Follow-up fix commit: N/A
-- Report update commit: Pending
-- Push verification: Pending
+- Report update commit: Pending (this audit metadata correction)
+- Push verification: PASS (implementation commit verified on remote `main`)
 
 ## Handoff
 
