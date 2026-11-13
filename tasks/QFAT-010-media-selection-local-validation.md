@@ -1,3 +1,5 @@
+> **QFAT-021 scope note — 2026-11-13 (HISTORICAL / REUSABLE UI WORK):** This task remains historical evidence of its original authorized scope. It is not current authorization to build or extend a standalone QFAT publishing backend. Current product identity is QFAT frontend for Spoolcast; see `docs/QFAT-SCOPE-AND-CHANGE-CONTROL.md`. Browser media-selection behavior may be reused as UI; it does not authorize a separate media backend or publishing capability. Future reuse requires a new bounded task and explicit owner authorization.
+
 # Task QFAT-010 — Media Selection and Local Validation
 
 - **Status:** OWNER-AUTHORIZED FOR IMPLEMENTATION — 2026-11-12
