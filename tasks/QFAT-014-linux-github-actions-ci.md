@@ -1,3 +1,5 @@
+> **QFAT-021 scope note — 2026-11-13 (HELD / SUPERSEDED BY NO-HOSTED-CI DECISION):** This task remains historical evidence of its original authorized scope. It is not current authorization to build or extend a standalone QFAT publishing backend. Current product identity is QFAT frontend for Spoolcast; see `docs/QFAT-SCOPE-AND-CHANGE-CONTROL.md`. The earlier hosted CI task is not executable. Current owner decision prohibits creating, enabling, triggering, or relying on hosted CI. Its report remains historical evidence. Future reuse requires a new bounded task and explicit owner authorization.
+
 # Task — QFAT-014 Linux GitHub Actions CI
 
 - Status: CANCELLED BY OWNER
