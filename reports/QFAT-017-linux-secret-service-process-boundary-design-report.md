@@ -5,7 +5,7 @@
 - Repository: irfannuralam44-max/qfat
 - Target branch: main
 - Commit message: docs(QFAT-017): add Linux Secret Service process boundary design
-- Commit SHA: Pending
+- Commit SHA: 910efc5fbdb7ad5e39b26c18f638750d82003ef9
 
 ## Scope
 
@@ -66,3 +66,16 @@ Exact local verification:
 ## Handoff
 
 This design is ready for GPT/owner audit. It is not owner acceptance and does not authorize implementation, dependency installation, migration, OAuth/account work, uploads, or Windows work.
+
+## GPT Audit — 2026-11-13
+
+- **Audit result: ACCEPTED WITH FINDINGS for the QFAT-017 design scope only.**
+- Reviewed the QFAT-017 task, the implementation commit and its complete design artifact, the publication-metadata commit, the current credential provider/error/config source, and the accepted-with-findings QFAT-016 validation report.
+- The design covers the requested process boundary, supervised child lifecycle, bounded timeouts and termination escalation, versioned IPC, message limits, secret hygiene, explicit Secret Service backend pinning, fail-closed behavior, current provider integration, migration boundary, threat analysis, and owner decisions. The implementation commit changes documentation only; no production source or dependency changes were present in its diff.
+- Findings retained before any implementation:
+  1. **Non-atomic key creation:** the proposed read-then-setSecret-then-read sequence is not an atomic create-if-absent operation. A concurrent QFAT process or external writer can race between the read and write, and the design does not yet establish a mechanism that guarantees the other key is never overwritten. The design acknowledges this residual risk; implementation must not proceed on an assumption of race safety. Resolve with an enforceable single-writer/instance-lock strategy or a keyring API with suitable atomic semantics, and test the selected guarantee.
+  2. **Child lifecycle inconsistency:** the process-startup sequence says to spawn the child during parent server startup, while the provider integration section says the child is spawned lazily on the first credential operation (or via a future startup check). Choose one lifecycle and specify readiness/failure semantics consistently.
+  3. **Error classification:** SECRET_SERVICE_LOCKED must not be emitted merely because the default collection is inaccessible. Preserve an UNAVAILABLE_OR_LOCKED/unknown category unless the provider exposes reliable evidence of the actual locked state. User guidance may still instruct unlocking the Linux keyring and retrying.
+  4. **Protocol and operational details remain design-level:** the NDJSON contract and timeout recommendations are suitable starting points, but implementation must explicitly define the child READY handshake, exact per-operation request/response validation, queue bound/backpressure, and what happens to queued requests after a child failure. These must be testable and must not permit a timed-out request to be replayed ambiguously.
+- The report's top-level implementation SHA was corrected from Pending to the published implementation SHA in this audit update.
+- **Boundary:** this acceptance is for the design deliverables only. It does not approve production dependency adoption, child/provider implementation, key-file migration/cutover, startup wiring, key-file retirement, OAuth/account work, publishing, or Windows work. The race-safety issue is a mandatory design resolution before any implementation task is authorized. Windows remains deferred and unauthorized.
