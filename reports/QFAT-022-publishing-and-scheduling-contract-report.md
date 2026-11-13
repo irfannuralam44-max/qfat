@@ -67,7 +67,7 @@ No task file, ADR, README, Spoolcast documentation, source, tests, package/depen
 | AC-07 Focused design note contains journeys, evidence, status semantics, gaps, decisions | PASS | `docs/design/QFAT-PUBLISHING-AND-SCHEDULING-FLOW.md` §§2–9 |
 | AC-08 No runtime/source/test/dependency/configuration/schema changes | PASS | Final remote compare lists only seven authorized Markdown documentation paths before report addition |
 | AC-09 Markdown links/references checked where practical | PASS WITH FINDINGS | Static relative-link check against the remote repository tree found zero broken links in the seven changed docs; stale scheduling-open wording scan found zero matches. Local `git diff --check` was NOT RUN because no local checkout/shell is available through the repository connector. |
-| AC-10 Report committed/pushed to main and remote verified | Pending report publication | Complete after report commit and remote re-fetch |
+| AC-10 Report committed/pushed to main and remote verified | PASS | Report commit `fa2ee369dfe6a71d3342444f89031a3db783bb51` was re-fetched from main; final remote verification recorded below |
 
 ## Verification
 
@@ -102,10 +102,17 @@ No runtime changes, workaround, new scheduler/daemon/queue/job engine, bridge/AP
 - Branch: main
 - Implementation commit: 26be2fb895219f1da756052d1bd629eedadb9d2e
 - Follow-up fix commit: 59e6cd64025a08609329fe724531f39fccfcbfa6
-- Report update commit: Pending
-- Push verification: Pending
+- Report update commit: fa2ee369dfe6a71d3342444f89031a3db783bb51
+- Push verification: PASS
 
 The follow-up commit restores the out-of-scope ADR-006 to its exact pre-task contents; it is not a runtime fix. The final net diff is limited to the seven authorized documentation paths plus this report.
+
+## Post-publication verification
+
+- Re-fetched `main` after report publication and confirmed it pointed to `fa2ee369dfe6a71d3342444f89031a3db783bb51`.
+- Re-fetched `reports/QFAT-022-publishing-and-scheduling-contract-report.md` from `main`; the report is present and readable.
+- Compared synchronized base `157ed53729568ae69541482b8a708c3320e78d0b` to report commit `fa2ee369dfe6a71d3342444f89031a3db783bb51`: 3 commits ahead, 0 behind. Final net diff contains only the seven authorized documentation paths and the requested report.
+- Remote publication verification: PASS. This is source publication verification only, not CI.
 
 ## Handoff
 
