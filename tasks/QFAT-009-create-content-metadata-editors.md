@@ -1,3 +1,5 @@
+> **QFAT-021 scope note — 2026-11-13 (HISTORICAL / REUSABLE UI WORK):** This task remains historical evidence of its original authorized scope. It is not current authorization to build or extend a standalone QFAT publishing backend. Current product identity is QFAT frontend for Spoolcast; see `docs/QFAT-SCOPE-AND-CHANGE-CONTROL.md`. Editor components may be reused as frontend UI. The former immediate-only assumption is superseded; this task did not authorize publishing integration. Future reuse requires a new bounded task and explicit owner authorization.
+
 # Task QFAT-009 — Create Content and Metadata Editors
 
 - **Status:** OWNER-AUTHORIZED FOR IMPLEMENTATION — 2026-11-12
