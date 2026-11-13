@@ -61,6 +61,8 @@ Do not implement from a stale checkout, a chat paraphrase, or a task file that w
 
 ## 6. Git and publication
 
+- **Verification policy:** QFAT checks and tests run locally only. Do not create, enable, trigger, or rely on GitHub Actions or other hosted CI workflows. GitHub remains the repository, task, report, and source-control platform; this decision disables hosted CI, not GitHub usage itself. Record exact local commands and outcomes in each task report.
+
 - Use only the target branch explicitly named by the task.
 - Do not create, rename, switch, merge, or delete branches unless the task explicitly authorizes it.
 - Do not force-push, rewrite history, amend published commits, or merge into `main` unless authorized.
