@@ -2708,3 +2708,23 @@ execution gate for the tracked runner-safety regression cases only.
 **GPT audit disposition: PASS WITH FINDINGS.** Owner local runner-safety
 verification is PASS. QFAT-013L2 remains subject to the owner's explicit
 acceptance decision; production implementation is a separate authorization.
+
+
+## Owner Acceptance Decision — 2026-11-13
+
+The owner explicitly accepted QFAT-013L2 in the project conversation after
+reviewing the GPT audit disposition.
+
+- **Owner decision:** ACCEPTED — PASS WITH FINDINGS.
+- **Accepted scope:** QFAT-013L2 isolated Linux Secret Service CRUD/persistence
+  feasibility evidence and the tracked runner-safety verification only.
+- **Known residual findings:** AC-08 remains PARTIAL; the harness-only
+  emergency cleanup helper lacks post-SIGKILL wait/disappearance verification.
+  Historical CRUD, process-restart, daemon-restart, fail-closed, and isolated
+  environment cleanup evidence was not repeated by the owner harness run.
+- **Task outcome:** QFAT-013L2 is closed as accepted with findings.
+- **Authorization boundary:** This acceptance does not authorize production
+  Secret Service integration, dependency adoption, provider/factory wiring,
+  credential migration, OAuth/account UI/API, upload/publishing, or Windows
+  work. Any production implementation requires a separate scoped proposal and
+  explicit owner authorization.
