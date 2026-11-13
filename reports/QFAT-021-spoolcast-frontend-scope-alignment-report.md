@@ -100,7 +100,7 @@ No new product/runtime decision was made to resolve these questions.
 | AC-08 Relevant old tasks classified without deleting/re-writing historical reports or creating implementation authorization | PASS | Backlog table; minimal notes in seven directly relevant task documents |
 | AC-09 No source/runtime/dependency/configuration changes | PASS | Remote compare lists only Markdown documentation/task paths |
 | AC-10 Markdown links/referenced paths checked where practical | PASS WITH FINDINGS | Relative-link scan run on seven revised core docs against current repository tree. Three architecture links initially appeared unresolved because the simple checker did not normalize `.`/`..`; their normalized target paths exist. Local `git diff --check` and local working-tree status were not executable through the available GitHub-only repository interface; remote commit diff/path list was inspected instead. |
-| AC-11 Report committed/pushed and remote verified | Pending report publication | To be completed by report commit verification |
+| AC-11 Report committed/pushed and remote verified | PASS | Report commit `578a19c74f2934ff3bf4deb415325a78ff01d8f6` is visible on `main`; report path fetched successfully from remote |
 
 ## 7. Verification evidence and limitations
 
@@ -120,10 +120,17 @@ No new product/runtime decision was made to resolve these questions.
 - Implementation commit: e813ecac8a066b48985ebee04bfb38cf3747cdd4
 - Follow-up fix commit: N/A
 - Report update commit: N/A
-- Push verification: Pending report publication
+- Push verification: PASS
 
 The documentation changes were published as a sequence of 14 fast-forward commits from the inspected HEAD. The commit recorded above is the final scope-note change before report publication; the full changed-path set is captured in the GitHub compare evidence described above.
 
-## 9. Handoff
+## 9. Post-publication verification
+
+- On 2026-11-13, re-fetched `main` and confirmed its HEAD was `578a19c74f2934ff3bf4deb415325a78ff01d8f6`.
+- Re-fetched `reports/QFAT-021-spoolcast-frontend-scope-alignment-report.md` from `main`; the report is present and readable.
+- Compared `e813ecac8a066b48985ebee04bfb38cf3747cdd4` to `578a19c74f2934ff3bf4deb415325a78ff01d8f6`: one report-only commit ahead, zero behind.
+- Remote publication verification: PASS. This verifies GitHub source publication only, not hosted CI.
+
+## 10. Handoff
 
 This work is ready for GPT/Owner audit. It is not owner-accepted. No subsequent task or implementation stage has been started.
