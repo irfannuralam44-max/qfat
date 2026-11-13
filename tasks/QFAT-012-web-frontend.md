@@ -1,3 +1,5 @@
+> **QFAT-021 scope note — 2026-11-13 (HISTORICAL / SCOPE SUPERSEDED):** This task remains historical evidence of its original authorized scope. It is not current authorization to build or extend a standalone QFAT publishing backend. Current product identity is QFAT frontend for Spoolcast; see `docs/QFAT-SCOPE-AND-CHANGE-CONTROL.md`. Its vertical QFAT media-intake/library backend scope is not a standing product mandate. Retain the implementation as existing work; reassess only against a separately approved Spoolcast frontend flow. Future reuse requires a new bounded task and explicit owner authorization.
+
 # QFAT-012 — Media Intake & Local Library
 
 - **Status:** READY — OWNER-AUTHORIZED FOR IMPLEMENTATION
