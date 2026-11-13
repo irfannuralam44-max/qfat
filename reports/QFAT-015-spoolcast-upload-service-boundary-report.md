@@ -5,7 +5,7 @@
 - Repository: irfannuralam44-max/qfat
 - Target branch: main
 - Commit message: feat(QFAT-015): make Spoolcast upload functions callable with immediate publishing
-- Commit SHA: Pending
+- Commit SHA: fb3d9fb8322464cff2e2de2ebf38208d8e50f0f2
 
 ## Scope
 
@@ -60,7 +60,7 @@ The GPT audit identified two implementation/test gaps. They were corrected in th
 | AC-04 | PASS | Progress callbacks tested with measured bytes; quiet mode test confirms no CLI output |
 | AC-05 | PASS | YouTube test makes thumbnail throw and still returns `videoId`/`url` with `thumbnailError` |
 | AC-06 | PASS | Reels test asserts stream body, not Buffer; no `readFileSync` in module |
-| AC-07 | PASS | 6 offline tests pass |
+| AC-07 | PASS | 12 offline tests pass |
 | AC-08 | PASS | Legacy callers use defaults; scheduled semantics preserved |
 | AC-09 | PASS | No routes, OAuth, DB, credential provider, UI, dependency, Windows, or CI changes |
 | AC-10 | PASS | `npm run typecheck`, `npm run build`, and tests pass |
@@ -115,7 +115,7 @@ Sources: existing Spoolcast implementation in `src/upload-*.ts`; Facebook Graph 
 - Implementation commit: fb3d9fb8322464cff2e2de2ebf38208d8e50f0f2
 - Follow-up fix commit: N/A
 - Report update commit: Pending
-- Push verification: PASS (origin/main confirmed at fb3d9fb8322464cff2e2de2ebf38208d8e50f0f2)
+- Push verification: PASS (remote main HEAD verified after push)
 
 ## Handoff
 
