@@ -16,10 +16,49 @@ import { videoMimeType } from './video.js';
 import { loadGoogleClient, type YouTubeAccount } from './tokens.js';
 import type { ResolvedMeta } from './manifest.js';
 
+export interface YouTubeUploadCredentials {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+}
+
+export interface YouTubeUploadProgress {
+  bytesSent: number;
+  totalBytes: number;
+}
+
+export interface YouTubeUploadOptions {
+  /** Explicit Google OAuth client credentials. When omitted, Spoolcast's google-client.json is used for CLI compatibility. */
+  googleClient?: {
+    client_id: string;
+    client_secret: string;
+    redirect_uris?: string[];
+  };
+  /** Explicit refresh token. Overrides account.refresh_token when provided. */
+  refreshToken?: string;
+  /** Publish immediately instead of using meta.publishAtUTC. */
+  immediate?: boolean;
+  /** Optional progress callback receiving measured upload bytes. */
+  progress?: (progress: YouTubeUploadProgress) => void;
+  /** Suppress CLI progress/console output for service callers. */
+  quiet?: boolean;
+}
+
 export interface YouTubeUploadResult {
   videoId: string;
-  url:     string;
+  url: string;
+  thumbnailSet?: boolean;
+  thumbnailError?: string;
+  playlistAdded?: boolean;
+  playlistError?: string;
 }
+
+/**
+ * Upload a video to YouTube.
+ *
+ * Legacy CLI callers use the default scheduled mode and Spoolcast's client file.
+ * QFAT service callers pass explicit credentials/options and immediate=true.
+ */
 
 /**
  * Upload a video to YouTube as a private scheduled post.
@@ -33,31 +72,29 @@ export async function uploadToYouTube(
   videoPath: string,
   meta: ResolvedMeta,
   account: YouTubeAccount,
+  options: YouTubeUploadOptions = {},
 ): Promise<YouTubeUploadResult> {
   const thumbnailPath = resolveThumbnail(videoPath);
 
-  // --------------------------------------------------------------------------
-  // Build an authenticated OAuth2 client (same client, per-channel refresh token).
-  // --------------------------------------------------------------------------
-  const creds = await loadGoogleClient();
+  const creds = options.googleClient ?? await loadGoogleClient();
+  const refreshToken = options.refreshToken ?? account.refresh_token;
 
   const oauth2Client = new google.auth.OAuth2(creds.client_id, creds.client_secret);
-  oauth2Client.setCredentials({ refresh_token: account.refresh_token });
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
 
   const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
 
-  // --------------------------------------------------------------------------
-  // Upload the video.
-  // --------------------------------------------------------------------------
   const isShort = meta.format === 'short';
-  console.log(`  [youtube] Uploading "${meta.title}"${isShort ? ' (Short)' : ''}…`);
+  if (!options.quiet) {
+    console.log(`  [youtube] Uploading "${meta.title}"${isShort ? ' (Short)' : ''}…`);
+  }
 
-  // YouTube has no Shorts API — a vertical (≤1:1) video ≤3 min is auto-classified
-  // as a Short. Appending #Shorts is a long-standing hint and is harmless otherwise.
   const description = isShort ? appendShortsTag(meta.description) : meta.description;
 
   const videoStat = fs.statSync(videoPath);
-  const response  = await youtube.videos.insert({
+  const immediate = options.immediate === true;
+
+  const response = await youtube.videos.insert({
     part:          ['snippet', 'status'],
     notifySubscribers: false,
     requestBody: {
@@ -68,8 +105,8 @@ export async function uploadToYouTube(
         categoryId:  meta.categoryId,
       },
       status: {
-        privacyStatus:             'private',
-        publishAt:                 meta.publishAtUTC,
+        privacyStatus:             immediate ? 'public' : 'private',
+        ...(immediate ? {} : { publishAt: meta.publishAtUTC }),
         selfDeclaredMadeForKids:   meta.madeForKids,
       },
     },
@@ -78,57 +115,78 @@ export async function uploadToYouTube(
       body:     fs.createReadStream(videoPath),
     },
   }, {
-    // Pass content-length so the API can show upload progress.
     onUploadProgress: (evt: { bytesRead: number }) => {
-      const pct = Math.round((evt.bytesRead / videoStat.size) * 100);
-      process.stdout.write(`\r  [youtube] Upload progress: ${pct}%  `);
+      options.progress?.({ bytesSent: evt.bytesRead, totalBytes: videoStat.size });
+      if (!options.quiet) {
+        const pct = Math.round((evt.bytesRead / videoStat.size) * 100);
+        process.stdout.write(`\r  [youtube] Upload progress: ${pct}%  `);
+      }
     },
   });
 
-  process.stdout.write('\n');
+  if (!options.quiet) {
+    process.stdout.write('\n');
+  }
 
   const videoId = response.data.id;
   if (!videoId) throw new Error('YouTube API did not return a video ID.');
 
   const url = `https://www.youtube.com/watch?v=${videoId}`;
-  console.log(`  [youtube] Uploaded: ${url} (scheduled ${meta.publishAtUTC})`);
-
-  // --------------------------------------------------------------------------
-  // Optionally set thumbnail.
-  // --------------------------------------------------------------------------
-  if (thumbnailPath) {
-    console.log('  [youtube] Setting thumbnail…');
-    await youtube.thumbnails.set({
-      videoId,
-      media: {
-        mimeType: 'image/jpeg',
-        body:     fs.createReadStream(thumbnailPath),
-      },
-    });
-    console.log('  [youtube] Thumbnail set ✓');
+  if (!options.quiet) {
+    console.log(`  [youtube] Uploaded: ${url}${immediate ? '' : ` (scheduled ${meta.publishAtUTC})`}`);
   }
 
-  // --------------------------------------------------------------------------
-  // Optionally add to playlist.
-  // --------------------------------------------------------------------------
+  const result: YouTubeUploadResult = { videoId, url };
+
+  if (thumbnailPath) {
+    if (!options.quiet) console.log('  [youtube] Setting thumbnail…');
+    try {
+      await youtube.thumbnails.set({
+        videoId,
+        media: {
+          mimeType: 'image/jpeg',
+          body:     fs.createReadStream(thumbnailPath),
+        },
+      });
+      result.thumbnailSet = true;
+      if (!options.quiet) console.log('  [youtube] Thumbnail set ✓');
+    } catch (err) {
+      result.thumbnailSet = false;
+      result.thumbnailError = sanitizeProviderError(err);
+      if (!options.quiet) console.warn(`  [youtube] Thumbnail failed: ${result.thumbnailError}`);
+    }
+  }
+
   if (meta.playlistId) {
-    console.log(`  [youtube] Adding to playlist ${meta.playlistId}…`);
-    await youtube.playlistItems.insert({
-      part: ['snippet'],
-      requestBody: {
-        snippet: {
-          playlistId: meta.playlistId,
-          resourceId: {
-            kind:    'youtube#video',
-            videoId,
+    if (!options.quiet) console.log(`  [youtube] Adding to playlist ${meta.playlistId}…`);
+    try {
+      await youtube.playlistItems.insert({
+        part: ['snippet'],
+        requestBody: {
+          snippet: {
+            playlistId: meta.playlistId,
+            resourceId: {
+              kind:    'youtube#video',
+              videoId,
+            },
           },
         },
-      },
-    });
-    console.log('  [youtube] Added to playlist ✓');
+      });
+      result.playlistAdded = true;
+      if (!options.quiet) console.log('  [youtube] Added to playlist ✓');
+    } catch (err) {
+      result.playlistAdded = false;
+      result.playlistError = sanitizeProviderError(err);
+      if (!options.quiet) console.warn(`  [youtube] Playlist failed: ${result.playlistError}`);
+    }
   }
 
-  return { videoId, url };
+  return result;
+}
+
+function sanitizeProviderError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.replace(/(access_token|refresh_token|client_secret)=[^&\s]+/gi, '$1=<redacted>');
 }
 
 /**

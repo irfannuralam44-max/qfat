@@ -17,12 +17,24 @@
  */
 
 import fs from 'node:fs';
+import { Transform } from 'node:stream';
 import { FB_GRAPH_BASE, FB_REELS_RUPLOAD_BASE } from './config.js';
 import type { FacebookAccount } from './tokens.js';
 import type { ResolvedMeta } from './manifest.js';
 
 export interface FacebookReelUploadResult {
   videoId: string;
+}
+
+export interface FacebookReelUploadProgress {
+  bytesSent: number;
+  totalBytes: number;
+}
+
+export interface FacebookReelUploadOptions {
+  progress?: (progress: FacebookReelUploadProgress) => void;
+  immediate?: boolean;
+  quiet?: boolean;
 }
 
 /**
@@ -37,14 +49,16 @@ export async function uploadReelToFacebook(
   videoPath: string,
   meta: ResolvedMeta,
   account: FacebookAccount,
+  options: FacebookReelUploadOptions = {},
 ): Promise<FacebookReelUploadResult> {
   const { page_id, page_token } = account;
   const fileSize = fs.statSync(videoPath).size;
+  const immediate = options.immediate === true;
 
   // --------------------------------------------------------------------------
   // Phase 1: Start — initialize the Reel upload session.
   // --------------------------------------------------------------------------
-  console.log(`  [facebook/reel] Starting upload session (${fileSize} bytes)…`);
+  if (!options.quiet) console.log(`  [facebook/reel] Starting upload session (${fileSize} bytes)…`);
 
   const startBody = new URLSearchParams({
     upload_phase: 'start',
@@ -72,9 +86,19 @@ export async function uploadReelToFacebook(
   // --------------------------------------------------------------------------
   // Phase 2: Upload — single-shot binary POST to the rupload host.
   // --------------------------------------------------------------------------
-  console.log('  [facebook/reel] Uploading video…');
+  if (!options.quiet) console.log('  [facebook/reel] Uploading video…');
 
-  const fileBuffer = fs.readFileSync(videoPath);
+  // Stream the file in bounded memory instead of reading it entirely into one Buffer.
+  let bytesSent = 0;
+  const uploadBody = fs.createReadStream(videoPath).pipe(new Transform({
+    transform(chunk, _encoding, callback) {
+      const size = Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(chunk);
+      bytesSent += size;
+      options.progress?.({ bytesSent, totalBytes: fileSize });
+      callback(null, chunk);
+    },
+  }));
+
   const uploadResp = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
@@ -83,23 +107,29 @@ export async function uploadReelToFacebook(
       'file_size':     String(fileSize),
       'Content-Type':  'application/octet-stream',
     },
-    body: fileBuffer,
+    body: uploadBody as any,
   });
   await assertOk(uploadResp, 'reel upload phase');
+  options.progress?.({ bytesSent: fileSize, totalBytes: fileSize });
 
   // --------------------------------------------------------------------------
   // Phase 3: Finish — publish as SCHEDULED with the caption.
   // --------------------------------------------------------------------------
-  console.log('  [facebook/reel] Finalising and scheduling…');
+  if (!options.quiet) {
+    console.log(immediate ? '  [facebook/reel] Finalising and publishing…' : '  [facebook/reel] Finalising and scheduling…');
+  }
 
-  const finishBody = new URLSearchParams({
-    upload_phase:           'finish',
-    video_id:               videoId,
-    video_state:            'SCHEDULED',
-    description:            meta.description,
-    scheduled_publish_time: String(meta.publishAtUnix),
-    access_token:           page_token,
-  });
+  const finishParams: Record<string, string> = {
+    upload_phase: 'finish',
+    video_id: videoId,
+    video_state: immediate ? 'PUBLISHED' : 'SCHEDULED',
+    description: meta.description,
+    access_token: page_token,
+  };
+  if (!immediate) {
+    finishParams.scheduled_publish_time = String(meta.publishAtUnix);
+  }
+  const finishBody = new URLSearchParams(finishParams);
 
   const finishResp = await fetch(`${FB_GRAPH_BASE}/${page_id}/video_reels`, {
     method: 'POST',
@@ -107,10 +137,13 @@ export async function uploadReelToFacebook(
   });
   await assertOk(finishResp, 'reel finish phase');
 
-  console.log(
-    `  [facebook/reel] Scheduled video_id=${videoId} ` +
-    `for Unix=${meta.publishAtUnix} (${meta.publishAtUTC})`
-  );
+  if (!options.quiet) {
+    console.log(
+      immediate
+        ? `  [facebook/reel] Published video_id=${videoId}`
+        : `  [facebook/reel] Scheduled video_id=${videoId} for Unix=${meta.publishAtUnix} (${meta.publishAtUTC})`
+    );
+  }
 
   return { videoId };
 }
@@ -122,6 +155,7 @@ export async function uploadReelToFacebook(
 async function assertOk(resp: Response, phase: string): Promise<void> {
   if (!resp.ok) {
     const body = await resp.text();
-    throw new Error(`Facebook API error during ${phase} (HTTP ${resp.status}): ${body}`);
+    const safeBody = body.replace(/(access_token|page_token)=[^&\s]+/gi, '$1=<redacted>');
+    throw new Error(`Facebook API error during ${phase} (HTTP ${resp.status}): ${safeBody}`);
   }
 }

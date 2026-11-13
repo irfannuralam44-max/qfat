@@ -1,0 +1,95 @@
+# Implementation Report — QFAT-015
+
+- Status: PASS
+- Task specification: tasks/QFAT-015-spoolcast-upload-service-boundary.md
+- Repository: irfannuralam44-max/qfat
+- Target branch: main
+- Commit message: feat(QFAT-015): make Spoolcast upload functions callable with immediate publishing
+- Commit SHA: Pending
+
+## Scope
+
+Made the existing Spoolcast YouTube, Facebook Page video, and Facebook Reels upload functions callable by a future QFAT server path without changing their protocols. Added explicit credentials/options, immediate publishing, optional progress callbacks, quiet mode, preserved primary YouTube results on optional follow-up failure, bounded-memory Reels streaming, and sanitized provider errors. Added offline tests. No HTTP routes, OAuth, database, credential provider, UI, dependency, Windows, or hosted CI changes.
+
+## Implementation
+
+### YouTube
+- `uploadToYouTube(videoPath, meta, account, options?)`
+- Explicit `googleClient` and `refreshToken` override; `loadGoogleClient()` is only used for legacy CLI compatibility when no client is passed.
+- `immediate: true` sets `status.privacyStatus = 'public'` and omits `publishAt`.
+- Legacy scheduled mode remains `privacyStatus = 'private'` with `publishAt`.
+- Optional progress callback receives measured `bytesSent`/`totalBytes`.
+- Thumbnail and playlist failures are caught and reported in `thumbnailError`/`playlistError`; the primary `videoId` and `url` are still returned.
+
+### Facebook Page video
+- `uploadToFacebook(videoPath, meta, account, options?)`
+- Immediate mode sends `published=true` and omits `scheduled_publish_time`.
+- Scheduled mode remains `published=false` plus `scheduled_publish_time`.
+- Progress callback receives measured transfer offsets.
+- `quiet` suppresses CLI stdout/stderr progress.
+
+### Facebook Reels
+- `uploadReelToFacebook(videoPath, meta, account, options?)`
+- Immediate mode sends `video_state=PUBLISHED` and omits `scheduled_publish_time`.
+- Scheduled mode remains `video_state=SCHEDULED` plus `scheduled_publish_time`.
+- Replaces `readFileSync` with `fs.createReadStream(...).pipe(new Transform(...))`, so the whole file is not read into one Buffer.
+- Progress callback receives measured streamed bytes.
+
+## Files changed
+
+- `src/upload-youtube.ts` — callable options, explicit credentials, immediate publish, progress, quiet mode, optional follow-up error isolation.
+- `src/upload-facebook.ts` — callable options, immediate publish, progress, quiet mode, sanitized errors.
+- `src/upload-facebook-reel.ts` — callable options, immediate publish, bounded-memory streaming, progress, quiet mode, sanitized errors.
+- `test/upload-service.test.ts` — offline tests for all three paths.
+
+## Acceptance criteria
+
+| ID | Result | Evidence |
+|---|---|---|
+| AC-01 | PASS | Options accept explicit credentials; no `loadTokens`/`saveTokens` in QFAT path; Facebook uses explicit account |
+| AC-02 | PASS | Tests pass typed `ResolvedMeta`; no CLI args, manifests, aliases, or `meta.json` dependency in upload functions |
+| AC-03 | PASS | Tests assert YouTube public/no publishAt, Facebook published=true/no schedule, Reels PUBLISHED/no schedule |
+| AC-04 | PASS | Progress callbacks tested with measured bytes; quiet mode test confirms no CLI output |
+| AC-05 | PASS | YouTube test makes thumbnail throw and still returns `videoId`/`url` with `thumbnailError` |
+| AC-06 | PASS | Reels test asserts stream body, not Buffer; no `readFileSync` in module |
+| AC-07 | PASS | 6 offline tests pass |
+| AC-08 | PASS | Legacy callers use defaults; scheduled semantics preserved |
+| AC-09 | PASS | No routes, OAuth, DB, credential provider, UI, dependency, Windows, or CI changes |
+| AC-10 | PASS | `npm run typecheck`, `npm run build`, and tests pass |
+
+## Verification
+
+Environment: Linux, Node.js v24.22.2, npm 11.19.1.
+
+| Command | Result | Notes |
+|---|---|---|
+| `npm run typecheck` | PASS | `tsc --noEmit` |
+| `npm run build` | PASS | `tsc` |
+| `npx tsx --test test/upload-service.test.ts` | PASS | 6 tests, 0 failures |
+| `npx tsc --noEmit --strict --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck --allowImportingTsExtensions test/upload-service.test.ts` | PASS | Test typecheck |
+
+No live Google/Meta APIs, credentials, OAuth, uploads, database, or hosted CI were used.
+
+## Provider request semantics
+
+- YouTube immediate: `videos.insert` with `status.privacyStatus = 'public'` and no `publishAt`.
+- YouTube scheduled: `status.privacyStatus = 'private'` with `publishAt`.
+- Facebook video immediate: finish phase `published=true`, no `scheduled_publish_time`.
+- Facebook video scheduled: finish phase `published=false` plus `scheduled_publish_time`.
+- Facebook Reels immediate: finish phase `video_state=PUBLISHED`, no `scheduled_publish_time`.
+- Facebook Reels scheduled: finish phase `video_state=SCHEDULED` plus `scheduled_publish_time`.
+
+Sources: existing Spoolcast implementation in `src/upload-*.ts`; Facebook Graph API behavior as implemented by the existing three-phase protocol; YouTube Data API `videos.insert` status fields.
+
+## Git Publication
+
+- Repository: irfannuralam44-max/qfat
+- Branch: main
+- Implementation commit: Pending
+- Follow-up fix commit: N/A
+- Report update commit: Pending
+- Push verification: Pending
+
+## Handoff
+
+This work is ready for GPT/owner audit. It is not owner acceptance.

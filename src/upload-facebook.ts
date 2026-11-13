@@ -21,6 +21,17 @@ export interface FacebookUploadResult {
   videoId: string;
 }
 
+export interface FacebookUploadProgress {
+  bytesSent: number;
+  totalBytes: number;
+}
+
+export interface FacebookUploadOptions {
+  progress?: (progress: FacebookUploadProgress) => void;
+  immediate?: boolean;
+  quiet?: boolean;
+}
+
 /** Chunk size for the transfer phase (10 MB). */
 const CHUNK_SIZE = 10 * 1024 * 1024;
 
@@ -36,16 +47,18 @@ export async function uploadToFacebook(
   videoPath: string,
   meta: ResolvedMeta,
   account: FacebookAccount,
+  options: FacebookUploadOptions = {},
 ): Promise<FacebookUploadResult> {
   const { page_id, page_token } = account;
   const fileSize = fs.statSync(videoPath).size;
   const mimeType = videoMimeType(videoPath);
   const chunkExt = path.extname(videoPath).toLowerCase();
+  const immediate = options.immediate === true;
 
   // --------------------------------------------------------------------------
   // Phase 1: Start — register the upload session.
   // --------------------------------------------------------------------------
-  console.log(`  [facebook] Starting upload session (${fileSize} bytes)…`);
+  if (!options.quiet) console.log(`  [facebook] Starting upload session (${fileSize} bytes)…`);
 
   const startForm = new FormData();
   startForm.append('upload_phase',  'start');
@@ -84,7 +97,12 @@ export async function uploadToFacebook(
       fs.readSync(fileHandle, buf, 0, chunkLen, startOffset);
 
       const pct = Math.round((startOffset / fileSize) * 100);
-      process.stdout.write(`\r  [facebook] Transfer chunk ${++chunkIndex} (${pct}%)  `);
+      options.progress?.({ bytesSent: startOffset, totalBytes: fileSize });
+      if (!options.quiet) {
+        process.stdout.write(`\r  [facebook] Transfer chunk ${++chunkIndex} (${pct}%)  `);
+      } else {
+        chunkIndex++;
+      }
 
       const transferForm = new FormData();
       transferForm.append('upload_phase',        'transfer');
@@ -110,20 +128,23 @@ export async function uploadToFacebook(
     fs.closeSync(fileHandle);
   }
 
-  process.stdout.write('\n');
+  if (!options.quiet) process.stdout.write('\n');
 
-  // --------------------------------------------------------------------------
-  // Phase 3: Finish — commit with schedule metadata.
-  // --------------------------------------------------------------------------
-  console.log('  [facebook] Finalising and scheduling…');
+  if (!options.quiet) {
+    console.log(immediate ? '  [facebook] Finalising and publishing…' : '  [facebook] Finalising and scheduling…');
+  }
 
   const finishForm = new FormData();
   finishForm.append('upload_phase',            'finish');
   finishForm.append('upload_session_id',       upload_session_id);
   finishForm.append('title',                   meta.title);
   finishForm.append('description',             meta.description);
-  finishForm.append('published',               'false');
-  finishForm.append('scheduled_publish_time',  String(meta.publishAtUnix));
+  if (immediate) {
+    finishForm.append('published', 'true');
+  } else {
+    finishForm.append('published',               'false');
+    finishForm.append('scheduled_publish_time',  String(meta.publishAtUnix));
+  }
   finishForm.append('access_token',            page_token);
 
   const finishResp = await fetch(
@@ -132,11 +153,15 @@ export async function uploadToFacebook(
   );
   await assertOk(finishResp, 'finish phase');
 
-  console.log(
-    `  [facebook] Scheduled video_id=${video_id} ` +
-    `for Unix=${meta.publishAtUnix} (${meta.publishAtUTC})`
-  );
+  if (!options.quiet) {
+    console.log(
+      immediate
+        ? `  [facebook] Published video_id=${video_id}`
+        : `  [facebook] Scheduled video_id=${video_id} for Unix=${meta.publishAtUnix} (${meta.publishAtUTC})`
+    );
+  }
 
+  options.progress?.({ bytesSent: fileSize, totalBytes: fileSize });
   return { videoId: video_id };
 }
 
@@ -147,6 +172,7 @@ export async function uploadToFacebook(
 async function assertOk(resp: Response, phase: string): Promise<void> {
   if (!resp.ok) {
     const body = await resp.text();
-    throw new Error(`Facebook API error during ${phase} (HTTP ${resp.status}): ${body}`);
+    const safeBody = body.replace(/(access_token|page_token)=[^&\s]+/gi, '$1=<redacted>');
+    throw new Error(`Facebook API error during ${phase} (HTTP ${resp.status}): ${safeBody}`);
   }
 }
