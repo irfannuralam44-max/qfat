@@ -104,8 +104,9 @@ Results:
 
 - Task creation commit: `15caa84065b9513316a0530342967930a5acb3f7`
 - Design update commit: `f572416b38adabe4f82a97685bf6900438cb231e`
-- Report commit: 24bed744f81affaee2ce62d5a1e9a59696c5befc
-- Final remote `main` head: verified after metadata publication (see final handoff SHA below)
+- Report creation commit: 24bed744f81affaee2ce62d5a1e9a59696c5befc
+- Report publication-metadata commit: e62e6bb57c2e7046b0c2900135bcbf912bc1651e
+- Final remote `main` head: verified after report metadata publication; final handoff SHA is provided in the project chat.
 
 ## 9. GPT independent documentation audit
 
