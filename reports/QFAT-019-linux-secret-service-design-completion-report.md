@@ -30,7 +30,7 @@ Documentation-only task. Updated `docs/design/QFAT-017-linux-secret-service-proc
 | AC-08 | PASS | Whole-document consistency review performed; unresolved owner decisions are explicit |
 | AC-09 | PASS | No production source, tests, dependency, lockfile, schema, migration, key material, or user keyring state changed |
 | AC-10 | PASS | No hosted CI used; exact inspected sources and design-only verification are recorded |
-| AC-11 | PENDING PUBLICATION | Commit and push verification to be recorded after publication |
+| AC-11 | PASS | Commit and push verified on remote main |
 
 ## Findings
 
@@ -78,10 +78,10 @@ Exact local verification:
 
 - Repository: irfannuralam44-max/qfat
 - Branch: main
-- Implementation commit: Pending
+- Implementation commit: 68978734a802eb84bbecef08aed2f097a1db02aa
 - Follow-up fix commit: N/A
 - Report update commit: Pending
-- Push verification: Pending
+- Push verification: PASS (remote main HEAD verified after push)
 
 ## Handoff
 
