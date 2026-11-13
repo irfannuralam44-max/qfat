@@ -112,3 +112,19 @@ This work is ready for GPT/owner audit; it is not owner-accepted. GitHub executi
 - Finding: the GitHub account-level billing lock remains unresolved outside the repository. Do not change billing, add payment details, or bypass the restriction as part of this task.
 
 **GPT audit result: PASS WITH FINDINGS for the repository implementation; GitHub-hosted execution remains BLOCKED.** This is not owner acceptance. The owner may accept the workflow implementation with this limitation recorded, or keep QFAT-014 open until GitHub runner access is restored.
+
+
+## Owner Decision Addendum — 2026-11-13
+
+**Final owner decision: QFAT-014 is CANCELLED. GitHub Actions/hosted CI will not be used for QFAT. All future tests and verification are local-only.**
+
+This decision supersedes the earlier handoff question in this report asking whether the owner wished to accept the workflow. The owner has chosen not to use GitHub Actions because of the GitHub account/billing friction.
+
+- The historical workflow implementation and run evidence above are retained for audit history.
+- The GitHub Actions workflow file `.github/workflows/qfat-linux-ci.yml` has been removed.
+- The blocked run `43351816748` remains a historical fact; it did not start a runner and did not execute any workflow steps.
+- The local checks recorded above remain agent-reported historical evidence; this addendum does not claim GPT independently reran them.
+- Future tasks must specify and execute local Linux checks only, recording exact commands, environment, exit codes, and test counts.
+- GitHub continues to be used for repository hosting, task specifications, source commits, reports, and review. This decision only discontinues GitHub Actions/hosted CI.
+
+**Disposition: CANCELLED BY OWNER — no further CI setup or billing changes are authorized.**
