@@ -15,6 +15,8 @@ Use a **persistent, supervised child process** as the only process that imports 
 
 `@napi-rs/keyring@2.1.2` is **not suitable as currently specified** for QFAT's hard no-overwrite key-creation requirement. Its Secret Service API provides `setSecret`, which replaces an existing item, and provides no atomic create-if-absent or no-overwrite primitive. A read-back comparison can detect a conflict only after an overwrite has already occurred. A cooperative QFAT-only lock can reduce races among QFAT instances but cannot prevent a non-cooperating writer or an external Secret Service client from being overwritten. Therefore, either the owner must accept a documented cooperative-only guarantee with residual external-writer risk, or a different Secret Service client/API with suitable atomic semantics must be evaluated. This design does not claim that the candidate is race-safe.
 
+**Current approved backend status: NO APPROVED SECRET SERVICE BACKEND.** No alternative with proven no-overwrite semantics has been established by this design.
+
 Recommended model for the MVP:
 
 - One dedicated child process per running QFAT server process.
@@ -355,6 +357,23 @@ Secret buffer lifetime:
 - The child decodes the base64 secret, constructs the native buffer, performs the operation, and clears local references.
 - Node.js and native runtimes may retain copies; the design must not claim guaranteed erasure.
 
+### 4.9 State transition model
+
+| State | Allowed transitions | Meaning |
+|---|---|---|
+| `STARTING` | `READY`, `FAILED` | Child spawned; waiting for READY handshake |
+| `READY` | `BUSY`, `FAILED`, `STOPPING` | Child is available for operations |
+| `BUSY` | `READY`, `FAILED`, `STOPPING` | One operation is in flight |
+| `FAILED` | `STOPPING` | Child is unusable; no operation may start |
+| `STOPPING` | terminal | Shutdown in progress |
+
+Rules:
+- Only one `BUSY` operation exists at a time.
+- A timeout moves the state to `FAILED`, not back to `READY`.
+- Queued requests are rejected when entering `FAILED` or `STOPPING`.
+- No timed-out write is replayed.
+- `READY` requires a valid protocol-version handshake.
+
 ## 5. Backend selection and fail-closed behavior
 
 ### 5.1 Explicit pinning
@@ -399,6 +418,27 @@ Existing `CredentialStorageError` codes remain valid for the encrypted envelope 
 - No continued account-management startup if the active key source is unavailable.
 - If the default collection is inaccessible, return an actionable error instructing the user to unlock Secret Service through Linux and retry.
 - Do not emit a definitive locked-state category based solely on a generic failure or unavailable collection. Use `SECRET_SERVICE_UNAVAILABLE_OR_LOCKED` unless reliable provider evidence supports `SECRET_SERVICE_PERMISSION_DENIED`.
+
+## 5.4 Native error mapping evidence
+
+Candidate: `@napi-rs/keyring@2.1.2`  
+Inspected sources: npm metadata, README, `index.d.ts`, `src/entry_builder.rs`, `src/linux_credential_builder.rs`, `src/result.rs`, `src/options.rs`, and QFAT-016 runtime observations.
+
+| Candidate condition or API behavior | Parent category | Evidence strength | Notes |
+|---|---|---|---|
+| Secret Service construction succeeds but no default/login collection is accessible | `SECRET_SERVICE_UNAVAILABLE_OR_LOCKED` | Direct observation from QFAT-016 | Do not report a definitive locked state |
+| D-Bus connection fails, e.g. `Failed to connect to socket ... No such file or directory` | `SECRET_SERVICE_UNAVAILABLE` | Direct observation from QFAT-016 | Service/transport unavailable |
+| `getSecret()` returns `null` | Not an error; absent item | API declaration | `null` means absent, not failure |
+| `deleteCredential()` returns `false` | Not an error; absent item | API declaration | `false` means absent |
+| `Ambiguous` error | `SECRET_SERVICE_OPERATION_FAILED` or a dedicated `SECRET_SERVICE_AMBIGUOUS` category | API declaration | Candidate documents this case |
+| Native platform access failure without permission-specific evidence | `SECRET_SERVICE_UNAVAILABLE_OR_LOCKED` or `SECRET_SERVICE_OPERATION_FAILED` | Partial implementation evidence | No stable native code is exposed; classify conservatively |
+| Candidate native error text indicating permission denial | `SECRET_SERVICE_PERMISSION_DENIED` only if the source/API explicitly supports that interpretation | Not established for this candidate | Do not infer from generic failures |
+| Operation exceeds timeout | `SECRET_SERVICE_OPERATION_TIMEOUT` | Parent-side observation | JS timeout cannot interrupt native blocking |
+| Child exits before response | `SECRET_SERVICE_CHILD_CRASH` | Parent-side observation | |
+| Malformed/truncated/oversized/late/duplicate IPC | `SECRET_SERVICE_PROTOCOL_ERROR` | Parent-side protocol rule | |
+| Any unmapped native failure | `SECRET_SERVICE_OPERATION_FAILED` | Safe fallback | Fail closed |
+
+The candidate exposes no stable numeric error codes. Native errors are JavaScript `Error` objects, often with messages. Mapping by message text is brittle and must be isolated and tested. Unknown errors fail closed and must not leak raw native details.
 
 ## 6. CredentialProvider integration
 
@@ -558,6 +598,24 @@ Trade-off:
 - If Secret Service is unavailable, the first credential operation fails closed; server startup and unrelated routes remain available.
 - The server should not expose whether a specific account secret exists beyond the minimum required by the authorized local UI.
 
+## 6.8 Responsibility and ownership matrix
+
+| Responsibility | Owner | Proposed future module | Status |
+|---|---|---|---|
+| Single-writer/no-overwrite guarantee | Owner decision + design review | None approved | Candidate cannot provide it; current key-file provider retains this responsibility |
+| Secret Service native import and construction | Child process only | `apps/server/src/credentials/secret-service-child.ts` | Proposed, not implemented, not authorized |
+| Parent supervision, timeout, termination | Parent key-store adapter | `apps/server/src/credentials/secret-service-key-store.ts` | Proposed, not implemented, not authorized |
+| IPC framing, validation, queue, backpressure | Parent key-store adapter | `apps/server/src/credentials/secret-service-key-store.ts` | Proposed, not implemented, not authorized |
+| Secret Service create/read/delete operations | Child process through narrow IPC | `apps/server/src/credentials/secret-service-child.ts` | Proposed, not implemented, not authorized |
+| Secret bytes crossing IPC | Parent adapter and child only | Both modules above | Proposed, not implemented, not authorized |
+| Key caching | None by default; child only if separately approved | Child process | Not approved |
+| Detection of encrypted records and fail-closed behavior | Existing credential provider | `apps/server/src/credentials/provider.ts` | Existing, unchanged |
+| AES-256-GCM envelope encryption/decryption | Existing envelope module | `apps/server/src/credentials/envelope.ts` | Existing, unchanged |
+| SQLite ciphertext persistence | Existing repository/envelope layer | Existing DB/schema code | Existing, unchanged |
+| Migration and key-file retention | Separate explicitly authorized operation | Future migration task only | Not authorized |
+
+The parent server owns orchestration and fail-closed behavior. The child owns native Secret Service access. The existing provider and envelope own credential storage semantics. SQLite owns ciphertext persistence. No future module is implemented or authorized by this document.
+
 ## 7. Migration and cutover boundary
 
 Migration is a separate, explicitly invoked future task. This design does not authorize it.
@@ -567,7 +625,7 @@ Migration is a separate, explicitly invoked future task. This design does not au
 1. Detect the existing key-file state and count encrypted credential rows without exposing values.
 2. Require the current key file to pass all existing ownership, permission, symlink, length, and durability checks.
 3. Read the existing 32-byte key into memory; never print or serialize it.
-4. Create the Secret Service item using create-if-absent semantics.
+4. Do not call an unavailable atomic create-if-absent API. With `@napi-rs/keyring@2.1.2`, `setSecret` replaces an existing item; a future implementation must first establish a proven no-overwrite mechanism or be blocked.
 5. If an item already exists with different key material, stop and do not overwrite either side.
 6. Retrieve the Secret Service item in a separate process and compare equality in memory.
 7. With the Secret Service key selected, decrypt every existing credential envelope using its original context. This is a verification pass only; do not modify ciphertext.
@@ -606,14 +664,14 @@ Migration is a separate, explicitly invoked future task. This design does not au
 | Parent shutdown | Orphan child may remain | SHUTDOWN request, bounded wait, SIGTERM/SIGKILL, pipe closure |
 | Secret Service unavailable | Credential operations cannot proceed | Fail closed with actionable guidance |
 | Default collection locked/unavailable | Candidate cannot access the expected `login` collection | Fail closed; do not claim a specific lock state without reliable evidence |
-| Concurrent first-run initialization | Race in create-if-absent | Adapter-level read-check-write plus conflict detection; document non-atomic limitation |
+| Concurrent first-run initialization | Candidate lacks atomic create-if-absent | No adapter-level read-check-write is authorized. A cooperative lock and conflict detection are mitigations only; candidate remains unsuitable for the hard requirement |
 | Migration interruption | Partial migration state | Verification pass before cutover; preserve key file; fail closed |
 | Key loss | Existing encrypted records become unrecoverable | Preserve key file until approved retirement; document recovery limits |
 | Node/native memory copies | Secret bytes may remain in memory | Best-effort clearing only; no guaranteed erasure claim |
 
 ## 9. Residual risks
 
-1. `@napi-rs/keyring` does not expose atomic create-if-absent or collection selection. Under the current constraints, it does not satisfy QFAT's hard no-overwrite requirement.
+1. `@napi-rs/keyring` does not expose atomic create-if-absent or collection selection. Under the current constraints, it does not satisfy QFAT's hard no-overwrite requirement. **NO APPROVED SECRET SERVICE BACKEND** is currently established.
 2. The default `login` collection must be unlocked and available. QFAT-016 observed failure when it was unavailable.
 3. Child-process termination after a native hang depends on OS signal delivery; a permanently stuck native thread may leave an orphan until process exit.
 4. Secret bytes cross IPC and exist in multiple process memories; Node.js cannot guarantee erasure.
@@ -623,6 +681,7 @@ Migration is a separate, explicitly invoked future task. This design does not au
 ## 10. Open decisions requiring owner approval
 
 1. Decide whether `@napi-rs/keyring@2.1.2` is rejected for production key storage because it cannot provide a hard no-overwrite guarantee, or whether a cooperative-only lock and residual external-writer risk are acceptable.
+2. If rejected, select or evaluate a Secret Service client/API with proven no-overwrite semantics before any implementation. Until then, **NO APPROVED SECRET SERVICE BACKEND**.
 2. Approve the default/login collection limitation or require another Secret Service client.
 3. Approve the first-run behavior: fail closed with unlock instructions versus an explicit user-driven unlock/setup flow.
 4. Approve the migration invocation model and key-file retention policy.
