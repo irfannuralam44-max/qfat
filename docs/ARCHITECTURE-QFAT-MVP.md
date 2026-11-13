@@ -1,156 +1,80 @@
-# QFAT MVP — Practical Integration Architecture
+# QFAT MVP — Spoolcast Frontend Architecture
 
-- **Document ID:** QFAT-ARCH-001
-- **Status:** OWNER-DIRECTED BASELINE
-- **Last updated:** 2026-11-13
-- **Product requirements:** [PRD-QFAT-MVP](./PRD-QFAT-MVP.md)
-- **Upstream baseline:** [Spoolcast](../UPSTREAM.md)
+- Document ID: QFAT-ARCH-001
+- Status: OWNER-DIRECTED RESPONSIBILITY MODEL — IMPLEMENTATION SHAPE NOT PRESELECTED
+- Last updated: 2026-11-13
+- Product requirements: [PRD-QFAT-MVP](./PRD-QFAT-MVP.md)
+- Scope control: [QFAT Scope and Change Control](./QFAT-SCOPE-AND-CHANGE-CONTROL.md)
+- Upstream baseline: [Spoolcast](../UPSTREAM.md)
 
-## 1. Architecture decision
+## 1. Settled direction
+**Spoolcast is the core application and publishing authority. QFAT is the browser frontend.** Reuse existing Spoolcast OAuth/provider integrations, upload protocols, CLI/domain behavior, queue/manifest/state semantics, and scheduling behavior. Do not create a parallel QFAT publishing backend.
 
-QFAT is a local-first web application. For the MVP, QFAT will **reuse the imported Spoolcast Node.js/TypeScript code as its platform integration engine** and add only the application-facing pieces needed to operate it from the QFAT UI.
+A browser cannot execute Node.js Spoolcast or safely access local provider credentials. A local bridge/launcher/API may be necessary, but only the minimum boundary demonstrated by source inspection is permitted. This document does not select an unverified process model, framework, endpoint design, persistence model, or launcher.
 
-Do not rebuild Spoolcast's OAuth or YouTube/Facebook upload protocols merely to create cleaner package boundaries. Do not introduce a new upload engine, adapter framework, plugin system, daemon, scheduler, or broad domain abstraction unless a concrete MVP requirement cannot be met by adapting the existing code.
+## 2. Responsibility matrix
 
-The implementation should prefer the smallest safe change to the existing source.
+| Component | Responsibility | Must not own |
+|---|---|---|
+| Spoolcast core (src/) | OAuth/provider integrations, publishing protocols, CLI/domain behavior, queue/manifest/schedule/state semantics | QFAT UI |
+| QFAT frontend (apps/web/) | Screens, interaction, input/presentation validation, user intent, truthful result display | Provider protocols, secrets, publishing rules, independent job engine |
+| Local bridge (conditional) | Safely invoke existing Spoolcast entry point; validate boundary input; relay actual progress/results/errors | OAuth/token ownership, scheduler, queue, publishing ledger, replacement engine |
+| Existing QFAT server (apps/server/) | Current health/security/media bridge; possible host for minimal invocation boundary if justified | Assumed full product backend |
+| Existing QFAT persistence | Existing records retained as implementation history; new use only for proven need and owner approval | Parallel publishing source of truth |
 
-## 2. Runtime shape
+## 3. Verified repository topology
+- src/ contains Spoolcast CLI, OAuth, token-store, manifest, queue orchestration/state, YouTube upload, Facebook video, and Facebook Reels modules.
+- QFAT-015 adapted existing YouTube, Facebook video and Reels upload functions for explicit caller inputs, immediate-publish invocation, progress callbacks, structured results, and bounded-memory Reels streaming.
+- apps/web/ contains React/Vite frontend, Overview, Create Content, platform editors, media selector, and Media Library.
+- apps/server/ initializes SQLite/migrations and registers health, browser-security, and media routes. Its inspected entry point does not register Spoolcast OAuth/upload operations or publishing-job orchestration.
+- QFAT SQLite, media library, key-file credential provider, and browser-security code exist. Their presence does not prove every subsystem belongs in the target product.
 
-```text
-QFAT Web UI (React)
-       |
-       | same-origin local HTTP API + progress updates
-       v
-QFAT Server (Node.js / TypeScript)
-       |
-       | thin application integration
-       v
-Existing Spoolcast modules
-  - YouTube OAuth and upload
-  - Facebook authorization concepts and upload
-  - Facebook Reels upload
-       |
-       +---- Google / YouTube APIs
-       +---- Meta / Facebook APIs
+These are observations, not authorization to expand or delete code.
 
-QFAT local data:
-  - SQLite: accounts metadata, media metadata, jobs/history
-  - encrypted credential records
-  - local media library
-  - Linux Secret Service protects the AES key (Linux MVP)
-```
+## 4. Minimal logical interaction flow
+1. User interacts with QFAT browser UI.
+2. UI collects intent/input; it never reads credentials or calls provider APIs.
+3. If browser-to-Node invocation is needed, UI sends a bounded request to an approved local bridge.
+4. Bridge validates request and invokes an existing Spoolcast entry point/module.
+5. Spoolcast performs its existing provider/domain operation and remains authoritative.
+6. Bridge relays measured progress, structured outcomes, and sanitized errors.
+7. UI renders those facts; it does not invent job state, progress, or outcomes.
 
-The browser never accesses platform credentials or calls platform APIs directly. The server owns credentials, local persistence, media handling, and publishing.
+This is a logical flow, not a committed transport/process design. Future work must prove each bridge responsibility and specify exact paths/tests.
 
-## 3. Reuse-first rules
+## 5. Runtime/process relationship
+A local mechanism is required if browser UI is to invoke Node.js Spoolcast. Whether it is an existing server extension, launcher/IPC process, or another minimal local boundary is OPEN OWNER DECISION until a source-grounded design compares viable options.
 
-| Existing Spoolcast area | MVP treatment |
-|---|---|
-| YouTube OAuth flow | Reuse its working OAuth/API logic; adapt callback and UI interaction only where required |
-| Facebook authorization | Reuse API/token-exchange logic; replace terminal prompts with the minimum browser-facing flow needed |
-| YouTube upload | Keep the existing Google API upload path; add structured progress and safe result handling |
-| Facebook long-form video | Keep the existing three-phase upload protocol and bounded chunk transfer |
-| Facebook Reels | Keep the Reels protocol; fix whole-file memory loading and expose progress/checkpoints as needed |
-| Multi-account token model | Preserve multiple YouTube channels and Facebook Pages; connect it to QFAT account records |
-| CLI queue/manifest | Keep for upstream/CLI compatibility where practical; do not make it the QFAT UI's required workflow |
-| CLI console output | Replace or wrap only the output boundary needed by the server; do not spread UI concerns into protocol code |
+Do not assume a permanent second backend, full publishing server, child process, daemon, scheduler, worker pool, replacement queue, or SQLite publishing source of truth is required.
 
-Preserve Spoolcast's MIT license and copyright notices in adapted code. Keep the upstream source traceable.
+## 6. Existing QFAT subsystem disposition
 
-## 4. Minimal QFAT server responsibilities
+| Subsystem | Classification | Evidence/constraint |
+|---|---|---|
+| Fastify server | Adapt conditionally | Currently health/security/media routes; extend only if smallest bridge is proven and authorized |
+| SQLite/migrations | Keep existing records; new use undecided | Server initializes DB; Spoolcast owns queue/state semantics; no parallel publishing ledger |
+| Media intake/library | Keep/adapt conditionally | Existing QFAT slice; reuse only if required for frontend-to-Spoolcast handoff |
+| Key-file credential provider | Existing implementation; ownership decision needed | Spoolcast owns OAuth/token conventions; avoid competing credential authority |
+| Linux Secret Service | Defer/blocked | No approved backend meets hard no-overwrite requirement; QFAT-020 retains key-file provider |
+| Windows credential storage | Held/unauthorized | Platform sequencing gate |
+| QFAT-015 upload boundary | Reuse existing callable adaptations | Existing Spoolcast upload functions adapted; no replacement engine |
+| QFAT job/SSE orchestration | Defer / OPEN OWNER DECISION | Not found in current Spoolcast core/server registration |
+| Facebook single-image publishing | Capability gap / OPEN OWNER DECISION | Not found in inspected Spoolcast upload modules |
 
-The server is an application wrapper around the existing platform modules. Its MVP responsibilities are:
+## 7. Settled facts and OPEN OWNER DECISIONS
+Settled: Spoolcast is core/publishing authority; QFAT is frontend; reuse provider protocols; browser never receives secrets or calls provider APIs; bridge must be minimal; preserve MIT attribution; local-only verification/no hosted CI; Linux-only active credential work; Windows held; Figma cancelled.
 
-1. Expose local HTTP endpoints for account status, media intake/library, publishing commands, job status, and history.
-2. Invoke the existing OAuth and upload functions through narrow wrappers.
-3. Provide credentials to those functions without returning secrets to the browser.
-4. Accept media from the browser using streaming/bounded-memory file handling.
-5. Record each selected destination independently in the existing QFAT SQLite persistence.
-6. Translate upload callbacks/progress into a simple event stream for the UI.
-7. Sanitize errors and prevent unsafe blind retries when the remote outcome is uncertain.
+OPEN OWNER DECISIONS:
+1. Which Spoolcast operations/user journeys should first QFAT release expose?
+2. Should QFAT expose scheduling, and what controls/constraints?
+3. What is the smallest acceptable local invocation boundary and process lifecycle?
+4. Must QFAT retain its media library, or should selected files hand off to Spoolcast's existing input/queue model?
+5. Which QFAT SQLite/media/credential records remain necessary?
+6. How should account UI invoke existing Spoolcast OAuth flows without duplicating token ownership?
+7. Is Facebook single-image publishing required despite the current Spoolcast capability gap?
+8. Which progress/status/history views can be presented without a parallel job engine?
 
-Use the existing server framework and folder structure already present in the repository. Do not replace it based on architectural preference. Add a dependency only when the current implementation demonstrably cannot meet an MVP requirement.
+This document does not resolve these decisions.
 
-## 5. Upload behavior and essential fixes
-
-Only make changes needed for the approved MVP behavior:
-
-- **Immediate publishing:** QFAT MVP publishes after explicit user confirmation. Do not expose scheduling or carry over Spoolcast's scheduled-publishing behavior into the QFAT job path.
-- **YouTube primary result:** capture and persist the primary video ID as soon as the upload succeeds. Optional thumbnail/playlist failures must not cause the primary video to be uploaded again.
-- **Facebook long-form video:** retain the existing bounded chunk transfer. Add only the checkpoint/result handling required for truthful job status and safe recovery.
-- **Facebook Reels:** replace whole-file `readFileSync` transfer with bounded-memory transfer. Preserve the platform-specific Reels protocol.
-- **Facebook single image:** implement the single-photo Page publishing path for MVP. Albums/multiple images remain post-MVP.
-- **Progress:** surface measured progress where available. If the provider does not expose a reliable percentage, show an indeterminate state rather than inventing one.
-- **Multiple destinations:** preserve independent per-destination outcomes. A success at one destination must not be repeated because another destination failed.
-
-Do not add optional post-publish features (such as thumbnail or playlist management) to the critical publishing path unless they are already needed and explicitly included in the MVP.
-
-## 6. Persistence and credentials
-
-Keep SQLite for QFAT application records: account metadata, media metadata, jobs, destination outcomes, and history. Do not store platform tokens as plaintext SQLite fields or ordinary JSON files.
-
-The existing QFAT encrypted credential provider and AES-256-GCM envelope remain the credential foundation. The agreed Linux direction is:
-- Secret Service is the key-storage interface.
-- Use the Linux Secret Service implementation available on the owner's Linux Mint environment (GNOME Keyring).
-- `@napi-rs/keyring` remains a conditional dependency candidate, with explicit Secret Service backend selection and no keyutils fallback.
-- Use the Linux default collection, after verifying actual behavior.
-- If the keyring is locked/unavailable, instruct the user to unlock it through Linux and retry; fail closed.
-- Do not start a custom D-Bus/keyring implementation for MVP unless the selected library fails a required safety test.
-
-The dependency's D-Bus blocking risk must be tested and mitigated before production integration. No automatic fallback to key files, keyutils, or plaintext is permitted. Keep the already-built key-file provider available only as the documented current/intermediate state until an explicit, tested migration and cutover task is approved. Never delete or migrate real key material implicitly.
-
-Windows credential storage remains deferred. Linux is the active MVP implementation/verification target; do not expand platform work without owner approval.
-
-## 7. UI/API boundary
-
-The QFAT UI should use the existing server API patterns and components. Keep the browser-facing contract small and task-driven:
-
-- Account list/connect/disconnect.
-- Media intake and media library.
-- Create/publish request with selected destinations.
-- Job list/detail and per-destination status.
-- Progress events and history.
-
-Do not create a large generic API schema system before the actual endpoints require it. Validate all untrusted input at the server boundary. Bind the server to loopback for the local MVP and retain the existing local-origin/session protections.
-
-## 8. MVP scope
-
-- Multiple YouTube channels.
-- Multiple Facebook Pages.
-- YouTube standard video and Shorts via the standard video upload path.
-- Facebook long-form video and Reels.
-- Facebook single-image posts.
-- Separate YouTube and Facebook metadata editors.
-- Immediate publishing only.
-- Per-destination progress, status, errors, and history.
-- Local media library and encrypted credential storage.
-
-Out of scope: Facebook albums, scheduling, hosted SaaS, team collaboration, Electron/Tauri packaging, Rust rewrite, analytics, transcoding, AI metadata, and unnecessary framework/package restructuring.
-
-## 9. Implementation order
-
-Work in small, independently verifiable tasks. Prefer the shortest dependency path:
-
-1. Inspect the current `apps/server` and existing Spoolcast modules together; define the smallest invocation/wrapper changes required.
-2. Connect account/OAuth operations to the QFAT Accounts UI while preserving Spoolcast provider logic.
-3. Connect existing upload paths to QFAT's media and publishing flow; fix only the required immediate-publish, progress, memory, and duplicate-upload issues.
-4. Complete Facebook single-image publishing.
-5. Complete job status/history and safe retry/reconciliation behavior.
-6. Integrate the agreed Linux credential key store when required by the account connection/publishing flow, including explicit migration from the existing key-file state.
-7. Run local Linux verification and owner-approved sandbox smoke tests.
-
-Do not start multiple dependent tasks in parallel. Each task must identify exact files, acceptance criteria, local checks, and explicit exclusions.
-
-## 10. Verification and platform policy
-
-- Run all checks locally on Linux; no GitHub Actions or hosted CI.
-- Do not use real credentials or perform live authorization/uploads unless a task and the owner explicitly authorize them.
-- Use mocked HTTP/provider responses for automated tests.
-- Record exact commands and outcomes; distinguish source inspection from executed tests.
-- Windows remains deferred. A successful Linux test does not imply Windows compatibility.
-
-## 11. Architecture change control
-
-This document intentionally favors pragmatic reuse over theoretical modularity. Refactoring is allowed only when it directly reduces an identified MVP risk or enables a required user flow. Any proposed rewrite, new framework, major dependency, new package boundary, or platform expansion requires a concrete justification and owner approval before implementation.
-
-Historical task and report documents remain evidence of work performed under earlier plans. They are not current architecture instructions where they conflict with this owner-directed baseline.
+## 8. Change control
+New backend services, persistence/credential owners, schedulers, queues, job orchestrators, dependencies, frameworks, package boundaries, provider integrations, or runtime topology require explicit owner approval. If a required Spoolcast capability is missing, stop and document the gap; do not build a workaround backend. Historical tasks/reports are evidence, not current authorization.
