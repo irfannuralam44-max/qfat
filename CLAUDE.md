@@ -1,14 +1,12 @@
-> **QFAT PROJECT OVERLAY — READ THIS FIRST (owner direction 2026-11-13)**
+> **QFAT PRODUCT OVERLAY — OWNER DIRECTION 2026-11-13**
 >
-> This repository contains the imported Spoolcast upstream CLI plus QFAT application code. The instructions below describe the original Spoolcast CLI and remain useful when maintaining the upstream `src/` behavior, but they do not define the complete QFAT product workflow.
+> QFAT is the frontend/UI for Spoolcast; Spoolcast remains the application and publishing authority. The CLI-specific material below describes the imported Spoolcast core only and is not authorization to build a parallel QFAT publishing backend or QFAT-owned OAuth/token/scheduler/queue/job system.
 >
-> For QFAT MVP work, the authoritative product and architecture documents are `docs/PRD-QFAT-MVP.md`, `docs/ARCHITECTURE-QFAT-MVP.md`, `AGENTS.md`, and `docs/AI-DEVELOPMENT-WORKFLOW.md`.
+> Reuse existing Spoolcast provider integrations, upload protocols, CLI/domain behavior, queue/manifest/state semantics, and scheduling. A local browser-to-Node bridge is conditional and must be the smallest source-proven invocation mechanism. Do not assume immediate-only publishing; scheduling UI is an OPEN OWNER DECISION.
 >
-> **Reuse-first:** Spoolcast remains the platform integration engine. Reuse its OAuth and YouTube/Facebook upload logic with the smallest safe adaptations. QFAT's existing `apps/server` is the thin application bridge and `apps/web` is the UI. Do not rebuild upload protocols, introduce a replacement engine, or split modules into extra packages without a concrete MVP need and owner approval.
+> If a QFAT task needs a capability missing from Spoolcast or implies a new backend subsystem, STOP and record OPEN OWNER DECISION. Existing QFAT server, SQLite, media, and credential code is not automatically mandatory. Follow AGENTS.md and docs/QFAT-SCOPE-AND-CHANGE-CONTROL.md.
 >
-> QFAT MVP publishes immediately (no scheduling), supports multiple YouTube channels and Facebook Pages, and includes Facebook single-image posts. Facebook albums are post-MVP. Linux is the active implementation/verification target; Windows is deferred. Verification is local-only; do not use GitHub Actions/hosted CI. Figma is cancelled.
->
-> Preserve Spoolcast's MIT license and attribution. Do not interpret legacy CLI scheduling, terminal prompts, or queue-manifest workflows as required QFAT UI behavior.
+> Local-only verification; no hosted CI. Linux-only active credential work; Windows deferred. No live OAuth/account authorization/provider calls/uploads without explicit approval. Figma cancelled. Preserve MIT attribution.
 
 ---
 
