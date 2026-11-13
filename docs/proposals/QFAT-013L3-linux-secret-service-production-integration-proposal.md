@@ -1,7 +1,7 @@
 # QFAT-013L3 — Linux Secret Service Production Integration Proposal
 
-- **Document status:** DRAFT — OWNER REVIEW REQUIRED
-- **Execution status:** NOT AUTHORIZED — proposal/design only
+- **Document status:** SUPERSEDED AS ACTIVE PLAN — retained for historical technical reference
+- **Execution status:** NOT AUTHORIZED
 - **Date:** 2026-11-13
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
@@ -9,7 +9,7 @@
 - **Prerequisite:** QFAT-013L2 accepted by owner as PASS WITH FINDINGS on 2026-11-13
 - **Related:** ADR-004, `docs/CREDENTIAL-STORAGE-QFAT-013.md`, QFAT-013L, QFAT-013L2
 
-> This document is a technical proposal for owner review. Its creation does not authorize implementation, dependency installation, migration, or changes to application source. A separate implementation task and explicit owner approval are required.
+> **Superseded notice (2026-11-13):** The owner chose a simpler Linux MVP direction: reuse the machine's existing GNOME Keyring/Secret Service, prefer `@napi-rs/keyring` conditionally with explicit Secret Service selection, use the default collection after verification, and fail closed with user-directed unlock. This detailed proposal remains as historical technical research, not the active implementation plan. Do not follow its multi-phase expansion or introduce custom D-Bus/collection machinery unless a concrete safety blocker requires a new owner decision. No dependency installation, production wiring, or migration is authorized by this notice.
 
 ## 1. Objective
 
