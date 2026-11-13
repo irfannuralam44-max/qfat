@@ -1,3 +1,7 @@
+> **Repository note:** This README is the imported upstream Spoolcast CLI documentation and is retained to preserve upstream usage/reference. It is not the user guide for the QFAT web application. QFAT product scope and current implementation direction are documented in [the QFAT MVP PRD](docs/PRD-QFAT-MVP.md) and [the QFAT MVP architecture](docs/ARCHITECTURE-QFAT-MVP.md). For QFAT development instructions, read [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md). QFAT adapts Spoolcast's platform integrations; it does not require users to operate the CLI queue workflow.
+
+---
+
 # spoolcast
 
 [![npm](https://img.shields.io/npm/v/spoolcast.svg)](https://www.npmjs.com/package/spoolcast)
