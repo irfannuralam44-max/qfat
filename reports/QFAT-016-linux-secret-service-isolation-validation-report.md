@@ -151,3 +151,12 @@ Process-isolated Linux Secret Service access using `@napi-rs/keyring@2.1.2` is *
 ## Handoff
 
 This validation is ready for GPT/owner audit. It is not owner acceptance and does not authorize production provider implementation, migration, OAuth/account work, uploads, or Windows work.
+
+
+## GPT Audit — 2026-11-13
+
+- **Audit result: ACCEPTED WITH FINDINGS for the QFAT-016 validation scope only.**
+- The published report documents the required disposable Linux Secret Service setup, exact candidate package version/backend pin, synthetic-secret CRUD and child-restart persistence, bounded child termination, malformed IPC handling, unavailable-backend behavior, and the stated no-production-change boundary.
+- The default `login` collection limitation is consistent with the owner's existing Linux MVP direction in `docs/CREDENTIAL-STORAGE-QFAT-013.md` and `docs/ARCHITECTURE-QFAT-MVP.md`; custom collection management is not required for MVP.
+- Findings retained: a successful locked-collection unlock flow and post-host-reboot persistence were not tested; the harness was temporary and is not committed, so this audit relies on the detailed execution evidence in the report rather than independently rerunning it. The report's claims about process containment and secret hygiene are therefore accepted as reported, not independently reproduced here.
+- **Boundary:** this acceptance does not approve production dependency adoption, provider implementation, startup wiring, key-file migration/cutover, or deletion of existing key material. A separate design task must define the child-process protocol, timeout/termination behavior, error mapping, and lifecycle before implementation is authorized.
