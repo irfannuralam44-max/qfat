@@ -4,7 +4,7 @@ Status: Active repository workflow
 Workflow model: GitHub-hosted source of truth, local-only verification, Markdown-driven, GPT-planned and GPT-audited
 Applies to: implementation, maintenance, adaptation, and QA tasks in this repository
 
-This document defines the reusable operating contract for work in Qfat. Project-specific architecture, product behavior, security constraints, and verification commands are defined by `AGENTS.md`, `README.md`, `CLAUDE.md`, and task-specific documentation. The repository currently contains the Spoolcast upstream baseline; do not treat planned Qfat adaptations as completed features. **Owner decision (2026-11-13): all verification is local-only. GitHub Actions/hosted CI must not be created, enabled, triggered, or used. GitHub remains the source-control and documentation platform.**
+This document defines the reusable operating contract for work in Qfat. **Owner direction (2026-11-13): keep MVP implementation pragmatic and reuse-first. The imported Spoolcast modules remain the platform engine; agents should adapt them through the existing QFAT server with the smallest safe changes, not rebuild or over-abstract them.** Project-specific architecture, product behavior, security constraints, and verification commands are defined by `AGENTS.md`, `README.md`, `CLAUDE.md`, and task-specific documentation. The repository currently contains the Spoolcast upstream baseline; do not treat planned Qfat adaptations as completed features. **Owner decision (2026-11-13): all verification is local-only. GitHub Actions/hosted CI must not be created, enabled, triggered, or used. GitHub remains the source-control and documentation platform.**
 
 ## 1. Roles and authority
 
