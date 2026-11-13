@@ -4,7 +4,28 @@ Status: Active repository workflow
 Workflow model: GitHub-hosted source of truth, local-only verification, Markdown-driven, GPT-planned and GPT-audited
 Applies to: implementation, maintenance, adaptation, and QA tasks in this repository
 
-This document defines the reusable operating contract for work in Qfat. **Owner direction (2026-11-13): keep MVP implementation pragmatic and reuse-first. The imported Spoolcast modules remain the platform engine; agents should adapt them through the existing QFAT server with the smallest safe changes, not rebuild or over-abstract them.** Project-specific architecture, product behavior, security constraints, and verification commands are defined by `AGENTS.md`, `README.md`, `CLAUDE.md`, and task-specific documentation. The repository currently contains the Spoolcast upstream baseline; do not treat planned Qfat adaptations as completed features. **Owner decision (2026-11-13): all verification is local-only. GitHub Actions/hosted CI must not be created, enabled, triggered, or used. GitHub remains the source-control and documentation platform.**
+This document defines the QFAT execution workflow. Product identity and scope are governed by `docs/QFAT-SCOPE-AND-CHANGE-CONTROL.md`: **QFAT is the frontend for Spoolcast; Spoolcast remains the application and publishing core.** Reuse existing Spoolcast capabilities and authorize only the smallest source-proven local invocation boundary. This workflow does not authorize a parallel QFAT publishing backend. Project facts are in `AGENTS.md`, `CLAUDE.md`, current PRD/architecture, and owner-approved decisions. **All verification is local-only; GitHub Actions/hosted CI must not be created, enabled, triggered, or used.**
+
+## QFAT product-scope gate — mandatory
+
+# QFAT PRODUCT BOUNDARY — OWNER DIRECTION 2026-11-13
+
+**QFAT is the frontend/UI for the existing Spoolcast application. Spoolcast remains the application and publishing core.** QFAT is not a parallel publishing product, publishing engine, or replacement backend.
+
+- `src/` contains Spoolcast CLI/core, OAuth/provider integrations, upload protocols, queue/manifest/state behavior, and scheduling.
+- `apps/web/` is the QFAT browser frontend.
+- `apps/server/` currently provides QFAT health, browser-security, and media-intake routes; its existence does not authorize a full publishing backend.
+- Browser code must never receive provider secrets or implement provider protocols.
+- A local bridge/launcher/API is conditional: use only the smallest mechanism proven necessary to invoke existing Spoolcast operations.
+- Existing QFAT SQLite, media library, credential provider, and upload boundary are not automatically mandatory merely because they exist.
+- Do not assume immediate-only publishing. Spoolcast supports scheduling; whether QFAT exposes it is an **OPEN OWNER DECISION**.
+- Facebook single-image publishing is not verified in Spoolcast. Prior UI/media selection is not proof of publishing support.
+- If a task reveals a missing Spoolcast capability or requires a new backend subsystem, STOP, record **OPEN OWNER DECISION** with source evidence, and ask the Owner. Never implement an assumed workaround.
+- Historical tasks/reports are evidence, not ongoing authorization. A task authorizes only its exact scope and paths.
+- Linux is the only active credential-storage workstream; Windows is deferred. Verification is local-only; no hosted CI. No live OAuth/account authorization/uploads without explicit approval. Figma is cancelled. Preserve upstream MIT attribution.
+
+Read `docs/QFAT-SCOPE-AND-CHANGE-CONTROL.md` for authority order, in/out/conditional scope, approval gates, and required task fields.
+
 
 ## 1. Roles and authority
 
