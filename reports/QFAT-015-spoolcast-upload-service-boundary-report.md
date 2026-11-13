@@ -103,10 +103,10 @@ Sources: existing Spoolcast implementation in `src/upload-*.ts`; Facebook Graph 
 
 - Repository: irfannuralam44-max/qfat
 - Branch: main
-- Implementation commit: Pending
+- Implementation commit: 29f58c1c0c2aef48fc73db9d09763f425d4b11fd
 - Follow-up fix commit: N/A
 - Report update commit: Pending
-- Push verification: Pending
+- Push verification: PASS (origin/main confirmed at 29f58c1c0c2aef48fc73db9d09763f425d4b11fd)
 
 ## Handoff
 
