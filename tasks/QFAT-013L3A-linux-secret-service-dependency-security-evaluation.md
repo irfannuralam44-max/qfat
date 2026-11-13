@@ -1,7 +1,7 @@
 # QFAT-013L3A — Linux Secret Service Dependency and Security Evaluation
 
-- **Status:** READY FOR EXECUTION — Phase A only
-- **Authorization:** Owner said “lanjut” on 2026-11-13, authorizing this bounded evaluation only
+- **Status:** COMPLETED — EVALUATED AND OWNER REVIEWED
+- **Authorization:** Historical authorization covered Phase A evaluation only. Owner reviewed the findings on 2026-11-13 and selected the lightweight Linux MVP direction recorded below; no implementation is authorized by this task.
 - **Repository:** `irfannuralam44-max/qfat`
 - **Target branch:** `main`
 - **Parent proposal:** `docs/proposals/QFAT-013L3-linux-secret-service-production-integration-proposal.md`
@@ -135,3 +135,18 @@ Stop and report BLOCKED if:
 - Repository state or task scope conflicts with this specification.
 
 Do not proceed to Phase B. After the report is pushed, stop for GPT audit and owner review.
+
+
+## 9. Owner review outcome — 2026-11-13
+
+The owner selected the following MVP direction after reviewing the evaluation:
+
+1. Prefer `@napi-rs/keyring` conditionally, with explicit Secret Service backend selection. It must pass a focused safety test for the reported D-Bus blocking risk before production use. If it cannot be made safe, stop and return with the smallest alternative for an owner decision.
+2. Use the Linux default collection provided by the existing machine environment (GNOME Keyring/Secret Service), after verifying actual storage and persistence behavior.
+3. When the keyring is locked, instruct the user to unlock it through Linux and retry. Fail closed; no keyutils, key-file, or plaintext fallback after cutover.
+4. Keep the current AES-256-GCM envelope and SQLite ciphertext. Migration from the existing key-file provider is explicit and separately verified; do not automatically move or delete real key material.
+5. Keep this workstream Linux-only. Windows remains deferred.
+
+This owner direction supersedes the unresolved decision list in the original Phase A evaluation. The detailed production-integration proposal is retained as historical research but is no longer the active MVP plan.
+
+**Important:** This task records a dependency/security evaluation and owner design decisions only. It does not authorize installing/adopting the dependency, wiring production code, migrating credentials, retiring the key file, or starting a broad Secret Service implementation phase. Any required integration must be a narrowly scoped task tied to the account/publishing MVP flow and must include the D-Bus safety gate.
