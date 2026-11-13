@@ -97,7 +97,6 @@ export async function uploadToFacebook(
       fs.readSync(fileHandle, buf, 0, chunkLen, startOffset);
 
       const pct = Math.round((startOffset / fileSize) * 100);
-      options.progress?.({ bytesSent: startOffset, totalBytes: fileSize });
       if (!options.quiet) {
         process.stdout.write(`\r  [facebook] Transfer chunk ${++chunkIndex} (${pct}%)  `);
       } else {
@@ -123,6 +122,7 @@ export async function uploadToFacebook(
       };
       startOffset = parseInt(transferData.start_offset, 10);
       endOffset   = parseInt(transferData.end_offset,   10);
+      options.progress?.({ bytesSent: startOffset, totalBytes: fileSize });
     }
   } finally {
     fs.closeSync(fileHandle);

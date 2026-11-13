@@ -108,6 +108,7 @@ export async function uploadReelToFacebook(
       'Content-Type':  'application/octet-stream',
     },
     body: uploadBody as any,
+    duplex: 'half',
   });
   await assertOk(uploadResp, 'reel upload phase');
   options.progress?.({ bytesSent: fileSize, totalBytes: fileSize });

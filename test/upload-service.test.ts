@@ -30,6 +30,8 @@ function tempVideo(size = 128): string {
   return file;
 }
 
+import http from 'node:http';
+
 describe('QFAT-015 upload service boundary', () => {
   it('YouTube immediate publish uses public status, omits publishAt, and reports progress', async () => {
     const originalYoutube = google.youtube;
@@ -195,6 +197,79 @@ describe('QFAT-015 upload service boundary', () => {
       global.fetch = originalFetch;
       console.log = originalLog;
       process.stdout.write = originalWrite as any;
+    }
+  });
+
+
+  it('Reels uses Node fetch streaming against a real local HTTP server', async () => {
+    const video = tempVideo(100000);
+    const received: Buffer[] = [];
+    let finishBody = '';
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+      if (url.pathname.endsWith('/video_reels')) {
+        const phase = url.searchParams.get('upload_phase');
+        if (phase === 'start') {
+          const uploadUrl = `http://127.0.0.1:${(server.address() as any).port}/upload`;
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify({ video_id: 'reel-real', upload_url: uploadUrl }));
+          return;
+        }
+        if (phase === 'finish') {
+          let body = '';
+          req.setEncoding('utf8');
+          req.on('data', (chunk) => { body += chunk; });
+          req.on('end', () => {
+            finishBody = body;
+            res.setHeader('content-type', 'application/json');
+            res.end(JSON.stringify({ success: true }));
+          });
+          return;
+        }
+      }
+      req.on('data', (chunk) => { received.push(Buffer.from(chunk)); });
+      req.on('end', () => {
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ success: true }));
+      });
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as any).port;
+    const originalFetch = global.fetch;
+    global.fetch = (async (url: any, init: any) => {
+      if (String(url).includes('video_reels')) {
+        const bodyPhase = init?.body instanceof URLSearchParams ? init.body.get('upload_phase') : null;
+        const urlPhase = new URL(String(url)).searchParams.get('upload_phase');
+        const phase = bodyPhase ?? urlPhase;
+        if (phase === 'start') {
+          const uploadUrl = `http://127.0.0.1:${port}/upload`;
+          return new Response(JSON.stringify({ video_id: 'reel-real', upload_url: uploadUrl }), { status: 200 });
+        }
+        if (phase === 'finish') {
+          finishBody = String(init?.body ?? '');
+          return new Response(JSON.stringify({ success: true }), { status: 200 });
+        }
+      }
+      return originalFetch(url, init);
+    }) as any;
+
+    const progress: { bytesSent: number; totalBytes: number }[] = [];
+    try {
+      const result = await uploadReelToFacebook(video, shortMeta, { page_id: 'page-1', page_token: 'page-token' }, {
+        immediate: true,
+        quiet: true,
+        progress: (p) => progress.push(p),
+      });
+      assert.equal(result.videoId, 'reel-real');
+      const totalReceived = received.reduce((n, b) => n + b.length, 0);
+      assert.equal(totalReceived, 100000);
+      assert.ok(progress.length > 0);
+      assert.equal(progress.at(-1)?.bytesSent, 100000);
+      assert.match(finishBody, /video_state=PUBLISHED/);
+      assert.doesNotMatch(finishBody, /scheduled_publish_time/);
+    } finally {
+      server.close();
     }
   });
 

@@ -11,6 +11,14 @@
 
 Made the existing Spoolcast YouTube, Facebook Page video, and Facebook Reels upload functions callable by a future QFAT server path without changing their protocols. Added explicit credentials/options, immediate publishing, optional progress callbacks, quiet mode, preserved primary YouTube results on optional follow-up failure, bounded-memory Reels streaming, and sanitized provider errors. Added offline tests. No HTTP routes, OAuth, database, credential provider, UI, dependency, Windows, or hosted CI changes.
 
+## Post-audit corrections
+
+The GPT audit identified two implementation/test gaps. They were corrected in this follow-up:
+
+1. Facebook Reels now sends the streamed request body with `duplex: 'half'`, which is required by Node.js Fetch for a `Readable` request body. The upload remains a single-shot stream; no `readFileSync` or whole-file Buffer is used.
+2. Facebook Page video progress is now emitted only after the transfer response provides the confirmed new offset. The old pre-transfer offset is no longer reported as completed bytes.
+3. A real local HTTP server test now sends the Reels body through Node Fetch and verifies that all 100000 bytes are received. Mocked `global.fetch` alone is retained only for simpler request-shape tests.
+
 ## Implementation
 
 ### YouTube
@@ -65,7 +73,8 @@ Environment: Linux, Node.js v24.22.2, npm 11.19.1.
 |---|---|---|
 | `npm run typecheck` | PASS | `tsc --noEmit` |
 | `npm run build` | PASS | `tsc` |
-| `npx tsx --test test/upload-service.test.ts` | PASS | 6 tests, 0 failures |
+| `npx tsx --test test/upload-service.test.ts` | PASS | 7 tests, 0 failures |
+| Real local HTTP server Reels streaming test | PASS | 100000 bytes received; progress final 100000/100000 |
 | `npx tsc --noEmit --strict --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck --allowImportingTsExtensions test/upload-service.test.ts` | PASS | Test typecheck |
 
 No live Google/Meta APIs, credentials, OAuth, uploads, database, or hosted CI were used.
