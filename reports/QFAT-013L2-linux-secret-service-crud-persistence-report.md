@@ -2611,3 +2611,100 @@ Actual harness execution record:
    ```
 
 The harness is an agent-side disposable regression execution; it is not owner-side evidence. The owner local test remains **NOT RUN — menunggu pengujian owner**.
+
+
+## Owner Local Verification and GPT Final Harness Audit — 2026-11-13
+
+### Owner execution evidence
+
+The owner ran the tracked harness from the QFAT working tree at
+`/mnt/data-ext/project/qfat` and supplied the following commands, complete
+output, and exit codes in the project conversation:
+
+```bash
+bash -n scripts/validation/qfat-013l2-runner-safety-tests.sh
+printf 'bash_n_exit=%s\\n' "$?"
+
+bash scripts/validation/qfat-013l2-runner-safety-tests.sh
+printf 'harness_exit=%s\\n' "$?"
+```
+
+Observed owner output:
+
+```text
+bash_n_exit=0
+IDENTITY MISMATCH: mismatch-test PID 8431 expected=999999999999 actual=2158693; refusing to signal
+PASS F-09: parser fixture, TERM mismatch refusal, pre-KILL mismatch refusal, PID cleanup
+PASS F-10: real provenance mismatch path, exit 2, no false success, cleanup once
+PASS F-11/F-12/F-13/F-15: cleanup failures preserve PID evidence, refuse unverified signals, retain live-process directories, and use unique mktemp PID files
+PASS SIGNAL: actual SIGINT=130 and SIGTERM=143 delivered to live runner; EXIT cleanup exactly once
+
+ALL RUNNER SAFETY TESTS PASSED
+harness_exit=0
+```
+
+Environment details beyond the working-tree path and shell prompt were not
+provided with this execution; no distribution, kernel, Bash, or Python version
+is inferred here. The owner output is consistent with the tracked harness
+revision currently published on `main` (blob
+`57067e52ff0407edd601a6ba34702e40516be437`).
+
+### GPT independent source audit
+
+GPT re-read the exact tracked harness and the current task/report on `main`.
+The owner output matches the harness's asserted scenarios and expected success
+markers. The mismatch diagnostic is an expected negative-test result, not a
+failure: the harness deliberately supplies a false start-time identity and
+asserts that the process is not signalled.
+
+Source-level review confirms that the harness:
+- exercises PID start-time parsing and identity mismatch refusal, including a
+  second guard before SIGKILL escalation;
+- drives a real disposable child through provenance rejection and NOT RUN
+  finalization, checking exit 2, absence of a false success marker, one EXIT
+  cleanup, and disposable-directory removal;
+- injects termination and directory-removal failures and checks non-zero
+  failure status and preservation of evidence/directories;
+- exercises malformed/unreadable/mismatched PID-file handling and distinct
+  temporary PID-file allocation; and
+- sends actual SIGINT and SIGTERM to disposable runner subprocesses and checks
+  exit codes 130/143 and exactly one EXIT cleanup marker.
+
+The harness itself does not connect to D-Bus or Secret Service and does not
+repeat CRUD or persistence tests. This owner run therefore closes the owner
+execution gate for the tracked runner-safety regression cases only.
+
+### Acceptance status update
+
+| Criterion | Updated result | Boundary |
+|---|---|---|
+| AC-01 through AC-07 | Historical isolated-run evidence retained | Not repeated by this runner-only harness run. |
+| AC-08 | PARTIAL | The harness verifies its own disposable process/directory cleanup; it does not repeat Secret Service entry deletion or the original isolated keyring destruction evidence. |
+| AC-09 through AC-11 | Existing scope-review evidence retained | This harness run does not independently re-run the original Git diff/scope checks. |
+| AC-12 | PASS | Owner ran the tracked PID lifecycle regression cases; exit 0. |
+| AC-13 | PASS | Owner ran the NOT RUN/no-false-success regression case; child scenario expects exit 2 and outer harness passes; exit 0. |
+| AC-14 | PASS | Owner ran cleanup-failure and single-EXIT-trap regression cases; exit 0. |
+
+### Remaining findings and disposition
+
+- The original CRUD, separate-process persistence, daemon-restart persistence,
+  fail-closed, and isolated cleanup results remain historical isolated-run
+  evidence as documented in Sections 1–7; this owner run did not reproduce
+  those tests.
+- AC-08 remains PARTIAL because runner cleanup coverage is not a substitute for
+  the original Secret Service entry/environment cleanup evidence.
+- In the harness-only emergency teardown helper
+  `qfat_harness_cleanup`, tracked child PIDs are identity-checked before
+  SIGKILL, but that helper does not perform the same post-signal wait and
+  disappearance verification that `qfat_terminate_pid` performs. This is a
+  limited harness-failure-cleanup hardening finding; it does not contradict the
+  passing assertions in the owner's run, but should be considered before
+  reusing that helper as a production lifecycle implementation. The harness
+  is not production code and must not be copied as a production provider.
+- No evidence from this run authorizes production Secret Service integration,
+  dependency adoption, migration, OAuth/account work, upload/publishing, or
+  Windows work.
+
+**GPT audit disposition: PASS WITH FINDINGS.** Owner local runner-safety
+verification is PASS. QFAT-013L2 remains subject to the owner's explicit
+acceptance decision; production implementation is a separate authorization.
