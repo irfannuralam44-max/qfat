@@ -127,5 +127,5 @@ This remediation is ready for GPT/owner audit. It is not owner acceptance and do
 
 QFAT-019 is useful progress and correctly preserves the critical decision that there is **NO APPROVED SECRET SERVICE BACKEND**. However, the design is not yet deterministic enough to implement safely and still contains contradictions that undermine the selection gate. Keep the existing Linux key-file provider unchanged. Do not install `@napi-rs/keyring`, implement a Secret Service provider/child/adapter, start migration, or begin Windows work. A narrowly scoped documentation-only remediation is required; no implementation task is authorized.
 
-- GPT audit commit: Pending
+- GPT audit commit: 4f31a8bf3e214f616033aac219a00ef3b999ecf7
 - Report update commit: Pending
