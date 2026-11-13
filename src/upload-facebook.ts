@@ -161,7 +161,6 @@ export async function uploadToFacebook(
     );
   }
 
-  options.progress?.({ bytesSent: fileSize, totalBytes: fileSize });
   return { videoId: video_id };
 }
 
