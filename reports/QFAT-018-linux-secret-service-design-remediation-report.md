@@ -1,11 +1,12 @@
 # Implementation Report — QFAT-018
 
-- Status: PASS WITH FINDINGS
+- Agent status: PASS WITH FINDINGS
+- GPT audit: ACCEPTED WITH FINDINGS — documentation remediation only; design is NOT implementation-ready
 - Task specification: tasks/QFAT-018-linux-secret-service-design-remediation.md
 - Repository: irfannuralam44-max/qfat
 - Target branch: main
 - Commit message: docs(QFAT-018): remediate Linux Secret Service design no-overwrite analysis
-- Commit SHA: Pending
+- Commit SHA: 133e8e055631a13aeb34185dc53c07568864ad42
 
 ## Scope
 
@@ -24,9 +25,9 @@ Documentation-only remediation. Updated `docs/design/QFAT-017-linux-secret-servi
 | AC-02 | PASS | Candidate is explicitly marked not suitable for the hard no-overwrite requirement unless owner accepts residual external-writer risk; read-back comparison is not claimed as a guarantee |
 | AC-03 | PASS | Race interleavings, protected-actor table, deterministic test requirements, and crash/stale-lock/uncertain-ownership scenarios are documented |
 | AC-04 | PASS | Exactly one lifecycle is selected: lazy spawn on first credential operation; startup, readiness, failure, restart, and shutdown are aligned |
-| AC-05 | PASS | `SECRET_SERVICE_LOCKED` was removed; `SECRET_SERVICE_UNAVAILABLE_OR_LOCKED` is used when the provider cannot distinguish states |
-| AC-06 | PASS | READY handshake, exact schemas, bounded framing, queue/backpressure, late/duplicate handling, no ambiguous write replay, and shutdown behavior are specified |
-| AC-07 | PASS | Design preserves AES-GCM envelope, SQLite format, current contract, and explicit migration boundary |
+| AC-05 | PARTIAL | Generic locked-state misclassification was corrected, but exact native-error-to-parent-category mappings and evidence for permission-denied classification are not specified |
+| AC-06 | PARTIAL | READY/version, limits, queue, and several failure cases are described, but exact per-message schemas and required/forbidden fields, invalid UTF-8/truncated-line/unsolicited-response handling, and shutdown admission semantics remain underspecified |
+| AC-07 | PARTIAL | Envelope, SQLite format, and migration boundary are preserved, but the ownership map for key creation/single-writer enforcement/IPC/fail-closed behavior is incomplete and the migration sequence still assumes unavailable create-if-absent semantics |
 | AC-08 | PASS | Candidate suitability and residual owner decisions are explicitly stated |
 | AC-09 | PASS | No production source, dependency, lockfile, schema, migration, key material, or user keyring state changed |
 | AC-10 | PASS | No hosted CI used; report records inspected sources and design-only verification |
@@ -89,9 +90,53 @@ No code tests were run because this is a documentation-only task. No repository 
 - Branch: main
 - Implementation commit: 133e8e055631a13aeb34185dc53c07568864ad42
 - Follow-up fix commit: N/A
-- Report update commit: Pending
+- Report update commit: 9d2febf35ba2e6aca2a95ad49abd71a5f9b11007 (agent publication-metadata update)
 - Push verification: PASS (remote main HEAD verified after push)
 
 ## Handoff
 
 This remediation is ready for GPT/owner audit. It is not owner acceptance and does not authorize implementation, dependency installation, migration, OAuth/account work, uploads, or Windows work.
+
+
+## GPT Independent Audit
+
+- Audit result: **ACCEPTED WITH FINDINGS — QFAT-018 documentation remediation only**.
+- Audit branch head verified: `main` at `9d2febf35ba2e6aca2a95ad49abd71a5f9b11007`.
+- Implementation commit verified: `133e8e055631a13aeb34185dc53c07568864ad42`.
+- Agent report-publication metadata commit: `9d2febf35ba2e6aca2a95ad49abd71a5f9b11007`.
+- This audit does **not** authorize production implementation, dependency adoption, migration, or keyring cutover.
+
+### Confirmed strengths
+
+1. The design correctly rejects `@napi-rs/keyring@2.1.2` as currently specified for the hard no-overwrite requirement. It explicitly explains that `setSecret()` replaces an existing item and that read-back cannot undo an overwrite.
+2. The race interleavings and actor boundary for a cooperative QFAT lock are accurately described. The document does not claim that such a lock protects external Secret Service writers.
+3. The child lifecycle is consistently selected as lazy first-use spawn in the main lifecycle description and server-startup section.
+4. The design removes a definitive generic `SECRET_SERVICE_LOCKED` classification and introduces an inaccessible-or-locked/unknown category.
+5. The implementation and report changes are documentation-only; the reported scope contains no source, dependency, key material, schema, or user keyring changes.
+
+### Findings that remain before any implementation task
+
+**F-01 — IPC contract is not yet implementation-ready (AC-06 partial).**
+
+The design describes a READY line and broad request/response shapes, but it does not define exact READY fields or complete per-operation schemas with required and forbidden fields. It also omits deterministic behavior for invalid UTF-8, a truncated final NDJSON line, unsolicited responses, and admission of new work while shutdown is in progress. These cases were explicitly required by QFAT-018. Do not implement the supervisor from this contract yet.
+
+**F-02 — Native error mapping is not evidence-complete (AC-05 partial).**
+
+The parent-facing categories are listed, but the design does not map specific candidate native error values to those categories with source-backed evidence, nor define a sufficiently explicit unknown/unmapped fallback. In particular, permission-denied must only be emitted when a specific native condition proves it; otherwise use the unknown/inaccessible category.
+
+**F-03 — Candidate rejection is not propagated through every future-flow section (AC-07 partial).**
+
+The executive recommendation correctly says the package is NOT SUITABLE for the hard no-overwrite requirement. However:
+- Section 8 still lists “adapter-level read-check-write plus conflict detection” as the mitigation for concurrent first-run initialization.
+- Section 7.1 still describes migration using create-if-absent semantics without clearly stating that this candidate cannot perform that step.
+- Section 11 proposes a future Secret Service adapter/child implementation without a mandatory prior gate to select a different API with proven no-overwrite semantics (or to obtain an explicit owner decision that does not weaken the security requirement).
+
+These statements must be reconciled. Until then, keep the existing key-file provider active and do not install or implement this candidate for production key storage.
+
+**F-04 — Provider ownership map is incomplete (AC-07 partial).**
+
+The design proposes a `CredentialKeyStore` interface and parent/child modules, but it does not explicitly assign ownership for the no-overwrite/single-writer guarantee, create/read/delete semantics, key bytes crossing IPC, and fail-closed handling when encrypted rows exist but the key is missing or inaccessible. Because the current candidate is rejected, a future design must first identify a viable backend and then assign these responsibilities without changing the existing envelope or SQLite format.
+
+### Acceptance boundary and next gate
+
+QFAT-018 successfully corrected the central unsafe race claim and resolved the lifecycle inconsistency. It is accepted with findings as a **design-remediation deliverable**, not as a complete implementation specification. The remaining findings must be resolved in a separately scoped documentation task before any Secret Service implementation task is authored. The safe current state remains the existing Linux key-file provider; Windows remains deferred and unauthorized.
