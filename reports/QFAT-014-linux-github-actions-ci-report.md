@@ -93,9 +93,22 @@ No secrets, OAuth credentials, platform tokens, live YouTube/Meta API calls, upl
 - Branch: main
 - Implementation commit: 9ab2c9eeb9f6a19960c228038b1f1b0ce8bbd086
 - Follow-up fix commit: N/A
-- Report update commit: Pending
+- Report update commit: 4396996ba26ce4c6cc1a0f8ebf6a980536f7f98e (this report's publication commit; GPT post-publication audit addendum follows separately)
 - Push verification: PASS
 
 ## Handoff
 
 This work is ready for GPT/owner audit; it is not owner-accepted. GitHub execution remains blocked by the recorded billing issue.
+
+## GPT Post-publication Audit Addendum — 2026-11-13
+
+- Audited implementation commit: `9ab2c9eeb9f6a19960c228038b1f1b0ce8bbd086`.
+- Audited report publication commit: `4396996ba26ce4c6cc1a0f8ebf6a980536f7f98e`.
+- Remote comparison confirms the report commit is one commit ahead of the implementation commit and changes only this report.
+- Independently inspected `.github/workflows/qfat-linux-ci.yml`: both jobs use `ubuntu-latest`; Node is `24.x`; permissions are `contents: read`; requested triggers and commands are present; no secrets or live platform calls are configured.
+- GitHub run `43351816748` has two jobs, both completed with conclusion `failure`. The run's recorded failure is pre-runner account billing lock; no runner execution or step-level result is available. GitHub-side test execution therefore remains `NOT RUN`.
+- The implementation report accurately separates local agent-reported checks from GitHub execution. GPT did not independently reproduce the local commands in this audit.
+- Workflow source and report scope match QFAT-014. No Windows/macOS runner or application/dependency change was introduced.
+- Finding: the GitHub account-level billing lock remains unresolved outside the repository. Do not change billing, add payment details, or bypass the restriction as part of this task.
+
+**GPT audit result: PASS WITH FINDINGS for the repository implementation; GitHub-hosted execution remains BLOCKED.** This is not owner acceptance. The owner may accept the workflow implementation with this limitation recorded, or keep QFAT-014 open until GitHub runner access is restored.
