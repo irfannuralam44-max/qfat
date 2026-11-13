@@ -1,10 +1,10 @@
 # AI Development Workflow — Qfat
 
 Status: Active repository workflow
-Workflow model: GitHub-first, Markdown-driven, GPT-planned and GPT-audited
+Workflow model: GitHub-hosted source of truth, local-only verification, Markdown-driven, GPT-planned and GPT-audited
 Applies to: implementation, maintenance, adaptation, and QA tasks in this repository
 
-This document defines the reusable operating contract for work in Qfat. Project-specific architecture, product behavior, security constraints, and verification commands are defined by `AGENTS.md`, `README.md`, `CLAUDE.md`, and task-specific documentation. The repository currently contains the Spoolcast upstream baseline; do not treat planned Qfat adaptations as completed features.
+This document defines the reusable operating contract for work in Qfat. Project-specific architecture, product behavior, security constraints, and verification commands are defined by `AGENTS.md`, `README.md`, `CLAUDE.md`, and task-specific documentation. The repository currently contains the Spoolcast upstream baseline; do not treat planned Qfat adaptations as completed features. **Owner decision (2026-11-13): all verification is local-only. GitHub Actions/hosted CI must not be created, enabled, triggered, or used. GitHub remains the source-control and documentation platform.**
 
 ## 1. Roles and authority
 
@@ -64,7 +64,7 @@ Do not implement from a stale checkout, a chat paraphrase, or a task file that w
 
 ### Phase C — Verify
 
-Run the checks required by the task and applicable project QA guidance.
+Run the checks required by the task and applicable project QA guidance on the local Linux environment. GitHub-hosted CI is not part of QFAT verification.
 
 Rules:
 
@@ -83,14 +83,15 @@ Create a Markdown report under `reports/`, unless the task specifies another pat
 
 The report must be committed with the implementation (or in a clearly linked follow-up commit on the same agreed branch). It must identify the exact candidate commit SHA and branch. Do not paste the detailed report into chat.
 
-### Phase E — Commit, push, and verify
+### Phase E — Commit, push, and verify (source publication only; no hosted CI)
 
 1. Review `git diff`, `git status`, and the staged file list.
 2. Ensure only task-related changes are included.
 3. Commit using the message specified by GPT; if none is specified, use a concise conventional commit message describing the actual change.
 4. Push to the exact target branch.
-5. Verify the remote branch points to the expected commit and the report is present on GitHub.
-6. If push fails or the remote differs, stop and report BLOCKED. Do not claim the task is complete.
+5. Verify the remote branch points to the expected commit and the report is present on GitHub. This verifies source publication only; it is not a CI run.
+6. Do not expect, trigger, or wait for GitHub Actions after a push. If any hosted workflow exists from historical work, it must remain inactive/removed unless the owner explicitly reverses this decision.
+7. If push fails or the remote differs, stop and report BLOCKED. Do not claim the task is complete.
 
 ### Phase F — Minimal chat handoff
 
