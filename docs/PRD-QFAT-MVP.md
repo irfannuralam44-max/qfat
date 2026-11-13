@@ -220,94 +220,54 @@ Use the FATTECH 2.0 frontend stack as a technical/design foundation, while creat
 ## 6. Technical product constraints
 
 ### 6.1 Runtime architecture
-The MVP consists of two separately runnable local processes:
-- **Frontend:** React + Vite static/client application served to the browser.
-- **Backend:** Node.js >= 22 + TypeScript HTTP API and upload worker.
 
-The backend must be independently startable and must own:
-- OAuth flows and credential access.
-- Platform API clients and upload adapters.
-- Media staging and file streaming.
-- Job orchestration, cancellation, retry, and reconciliation.
-- SQLite persistence.
-- Progress event publication.
+The MVP uses the existing QFAT local web application structure: React frontend and a local Node.js/TypeScript server. The server is the only component permitted to access credentials or call Google/Meta APIs.
 
-The frontend must not import platform adapter modules, access token files, or execute arbitrary shell commands.
+**Reuse-first implementation rule:** the imported Spoolcast source in `src/` is the existing platform integration engine. Adapt its OAuth and upload code in place or through thin wrappers. Do not rebuild the platform protocols, introduce a replacement upload engine, or reorganize the source into many packages unless a concrete MVP requirement cannot be met safely by the existing code.
+
+The server owns the minimum application responsibilities required by the UI: account operations, media intake, invoking Spoolcast functions, per-destination job state, progress events, and history. Preserve the existing `apps/server` and `apps/web` structure unless implementation evidence requires a narrowly scoped change.
 
 ### 6.2 API and event boundaries
-- Use versioned, documented JSON HTTP endpoints for commands and queries.
-- Use SSE for job/destination progress events.
-- Define shared request/response/event schemas in a contracts module/package.
-- Validate all external input at the backend boundary.
-- Treat browser-supplied paths, account IDs, file names, and metadata as untrusted input.
-- Do not make the frontend's in-memory state the source of truth for job state.
 
-Illustrative event shape (not a final API contract):
+Use the existing server framework and API conventions in the repository. Add only the endpoints and event handling required for account management, media, publishing, job status, and history. Do not build a generic contract framework before it is needed.
 
-```ts
-type DestinationStatus =
-  | "queued"
-  | "preparing"
-  | "uploading"
-  | "finalizing"
-  | "published"
-  | "failed"
-  | "cancelled"
-  | "needs_reconciliation";
+Validate all browser input at the server boundary. The frontend must not import Spoolcast platform modules, access credential files, or call platform APIs directly. Progress should be passed from existing upload callbacks through a thin server event bridge; report indeterminate progress when exact measurements are unavailable.
 
-interface DestinationProgressEvent {
-  jobId: string;
-  destinationId: string;
-  platform: "youtube" | "facebook";
-  status: DestinationStatus;
-  bytesSent?: number;
-  totalBytes?: number;
-  percent?: number;
-  message?: string;
-  occurredAt: string;
-}
-```
+### 6.3 Repository organization
 
-### 6.3 Suggested repository organization
-The exact folder layout may be adjusted by the architecture task, but preserve clear process and domain boundaries:
+Keep the current repository layout:
+- `src/`: imported Spoolcast platform and CLI baseline.
+- `apps/server/`: QFAT local API and application integration.
+- `apps/web/`: QFAT React UI.
+- Existing `packages/` may be used where already present and justified, but do not split or move Spoolcast modules solely for architectural neatness.
 
-```text
-apps/
-  web/                 # React + Vite frontend
-  api/                 # Node.js HTTP API and worker
-packages/
-  contracts/           # Shared API and event schemas
-  core/                # Platform-independent domain/use cases
-  upload-engine/       # Job orchestration and upload lifecycle
-  youtube/              # YouTube adapter
-  facebook/             # Facebook video, Reel, and image adapters
-  auth/                 # OAuth and credential-provider interfaces
-  persistence/          # SQLite repositories and migrations
-```
-
-Do not reorganize the imported upstream source tree in the PRD implementation itself. A dedicated implementation task must decide how to migrate existing `src/` modules into the target structure while preserving attribution and behavior.
+Preserve the upstream MIT license and attribution. The CLI/queue behavior should remain compatible where practical, but QFAT's browser workflow must not require users to manually edit queue folders or JSON manifests.
 
 ### 6.4 Persistence
-- SQLite is the proposed local database for accounts metadata, media metadata, jobs, destination jobs, and upload checkpoints.
-- Platform secrets must not be stored as plaintext in SQLite or ordinary JSON files.
-- Define a credential-provider abstraction and select an appropriate secure storage implementation for Linux and Windows before implementing OAuth persistence.
-- On systems without a usable secure credential store, fail closed or require an explicit owner-approved alternative; do not silently fall back to plaintext.
-- Use transactions for state transitions and checkpoint updates.
-- Preserve job history and destination-level idempotency across backend restarts.
 
-### 6.5 Upload adapter requirements
-Adapt the imported Spoolcast modules; do not embed CLI behavior in the web application.
-- YouTube: stream the media file; report structured progress; persist the primary video ID immediately after successful creation; keep optional follow-up operations separate so their failure cannot trigger a duplicate primary upload.
-- Facebook Page video: preserve the three-phase resumable upload protocol; use bounded chunks; persist session identifiers and acknowledged offsets; validate finish responses.
-- Facebook Reels: keep the Reels protocol separate from long-form video; replace whole-file `readFileSync` behavior with bounded-memory transfer; honor server acknowledgements and persist checkpoints.
-- Facebook single image: implement the Page photo publishing flow for one image; confirm current endpoint, permission, and publishing semantics against official Meta documentation before implementation.
-- All adapters: accept injected credentials, cancellation, progress reporting, and typed errors; never write directly to the job database/ledger. The orchestration layer owns state transitions.
+SQLite stores QFAT account metadata, media metadata, publishing jobs, destination outcomes, checkpoints, and history. Media files remain in application-managed local storage, not in SQLite blobs.
 
-### 6.6 Publishing semantics
-- Publish immediately by default after explicit user confirmation.
-- Do not carry over the upstream scheduled-publishing requirements into the MVP.
-- Respect platform privacy/default publishing settings and account permissions; if the platform requires a choice or does not allow the requested state, present the constraint before dispatch.
-- Centralize and verify the supported Meta Graph API version at implementation time. Do not rely solely on the upstream hardcoded version.
+Use the existing QFAT persistence implementation and migrations. Do not introduce another database library or persistence abstraction unless the current implementation demonstrably cannot meet an MVP requirement.
+
+### 6.5 Credential storage
+
+Platform tokens must not be exposed to the frontend or stored as plaintext SQLite fields or ordinary JSON files. Continue using the existing encrypted credential provider and AES-256-GCM envelope.
+
+The agreed Linux MVP direction is to store the AES key in Linux Secret Service (provided by the owner's GNOME Keyring environment), using the default collection after verification. `@napi-rs/keyring` is a conditional candidate with explicit Secret Service backend selection; no keyutils or plaintext fallback is permitted. If the keyring is locked/unavailable, QFAT instructs the user to unlock it through Linux and retry, then fails closed.
+
+The candidate's D-Bus blocking risk must be tested and mitigated before production use. Migration from the existing key-file provider must be an explicit, separately tested operation; never migrate or delete real key material implicitly. Windows credential storage remains deferred and is not part of the active Linux MVP workstream.
+
+### 6.6 Upload adapter requirements
+
+Adapt the existing Spoolcast modules; do not replace them with a new adapter framework.
+
+- YouTube: retain the existing Google API upload path and file streaming. Capture the primary video ID immediately after success; optional post-publish failures must not cause a duplicate primary upload.
+- Facebook Page video: retain the existing three-phase resumable protocol and bounded chunk transfer.
+- Facebook Reels: retain the Reels-specific protocol, but replace whole-file memory loading with bounded-memory transfer.
+- Facebook single image: add the single-photo Page publishing path for MVP; album/multiple-image publishing is post-MVP.
+- All platform paths: add only the progress, cancellation, error, checkpoint, and job-state bridging required by QFAT.
+- Immediate publishing only. Do not expose scheduling in the MVP UI or carry over upstream schedule assumptions.
+
 
 ## 7. Security, privacy, and reliability
 - Bind the local API to loopback by default; do not expose it to the LAN or public internet in the MVP.
@@ -322,16 +282,12 @@ Adapt the imported Spoolcast modules; do not embed CLI behavior in the web appli
 - Keep external network activity limited to the explicitly selected platform authorization and publishing actions; no telemetry in the MVP.
 - Preserve the upstream MIT license and attribution.
 
-## 8. Cross-platform development and verification
-The MVP must be testable on the owner's separate Linux and Windows PCs.
-- Keep paths, temporary files, process startup, SQLite access, and secure credential integration cross-platform.
-- Use environment/configuration validation at backend startup with actionable diagnostics.
-- Provide documented development commands for installing dependencies, starting frontend/backend, running typecheck, tests, and production builds.
-- Use mocked platform APIs for automated tests.
-- Do not require live Google/Meta credentials for the normal unit/integration test suite.
-- Perform manual sandbox authorization and upload smoke tests only with explicit owner approval.
-- Record platform-specific checks separately for Linux and Windows.
-- Do not claim cross-platform support based solely on a successful build on one OS.
+## 8. Platform scope and verification
+
+Linux is the active MVP implementation and verification target. Run automated checks locally on Linux; GitHub Actions and hosted CI are not used. Windows remains deferred and is not an active implementation or acceptance target until the owner explicitly authorizes it.
+
+Use mocked platform APIs for automated tests. Manual sandbox authorization and upload smoke tests require explicit owner approval. Do not claim cross-platform support based solely on a Linux build. Record exact local commands, environment, and outcomes in task reports.
+
 
 ## 9. MVP release acceptance criteria
 The MVP is ready for owner review when all of the following are true:
@@ -361,18 +317,17 @@ Potential follow-up capabilities, each requiring a separate scope and acceptance
 - Optional scheduling, if explicitly re-approved as a separate product capability.
 - CSV import/export and AI metadata only if the owner later changes the current scope decision.
 
-## 11. Open implementation decisions
-The product direction is established, but these technical choices must be resolved in a dedicated architecture task before implementation:
-1. Exact HTTP server framework and API route conventions for the Node.js backend.
-2. Exact SQLite library, migration strategy, and database location.
-3. Linux and Windows credential-provider implementation and failure behavior.
-4. Local media staging directory, retention policy, and disk-space handling.
-5. Exact Meta permissions, app mode/review requirements, and currently supported Graph API version.
-6. Exact supported file formats/size limits for YouTube, Facebook video, Reels, and Facebook single-image posts.
-7. Whether YouTube thumbnail upload and playlist insertion are included in the first MVP release or deferred.
-8. Whether a minimal local session/token is needed for browser-to-loopback API protection and how it is bootstrapped safely.
+## 11. Remaining implementation decisions
 
-These are implementation design decisions, not permission to expand the MVP product scope.
+Resolve only when the relevant feature task reaches the decision point:
+1. Exact provider OAuth requirements, Meta permissions, app review state, and supported Graph API version.
+2. Supported media formats and size limits for each platform.
+3. Whether YouTube thumbnail upload and playlist insertion are included or deferred.
+4. Exact safe-retry/reconciliation behavior for ambiguous provider outcomes.
+5. The final migration/cutover procedure from the existing key-file credential provider to Linux Secret Service.
+
+These are bounded implementation details. They do not authorize new frameworks, replacement upload engines, broad package restructuring, Windows work, or expansion of MVP scope.
+
 
 ## 12. Decision log
 
@@ -399,4 +354,4 @@ These are implementation design decisions, not permission to expand the MVP prod
 
 ---
 
-**Owner review note:** This PRD records the product direction agreed in the QFAT planning conversation. It does not authorize implementation by itself. The next step is a GPT-authored architecture/task breakdown that resolves the open implementation decisions and updates any conflicting legacy repository guidance before OpenCode begins coding.
+**Owner direction (2026-11-13):** Prefer reuse of the imported Spoolcast engine and the existing QFAT server/web structure. Keep implementation changes small and directly tied to MVP user flows. Do not rebuild working platform integrations or expand architecture without a concrete requirement and owner approval.
