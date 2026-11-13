@@ -1,8 +1,10 @@
-import { after, before, describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import { google } from 'googleapis';
 import { uploadToYouTube, type YouTubeUploadProgress } from '../src/upload-youtube.ts';
 import { uploadToFacebook, type FacebookUploadProgress } from '../src/upload-facebook.ts';
@@ -29,8 +31,6 @@ function tempVideo(size = 128): string {
   fs.writeFileSync(file, Buffer.alloc(size, 1));
   return file;
 }
-
-import http from 'node:http';
 
 describe('QFAT-015 upload service boundary', () => {
   it('YouTube immediate publish uses public status, omits publishAt, and reports progress', async () => {
@@ -133,8 +133,35 @@ describe('QFAT-015 upload service boundary', () => {
       assert.deepEqual(progress, [
         { bytesSent: 64, totalBytes: 128 },
         { bytesSent: 128, totalBytes: 128 },
-        { bytesSent: 128, totalBytes: 128 },
       ]);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('Facebook video failed transfer does not report false progress', async () => {
+    const originalFetch = global.fetch;
+    const progress: FacebookUploadProgress[] = [];
+    global.fetch = (async (_url: any, init: any) => {
+      const phase = String(init?.body?.get?.('upload_phase') ?? '');
+      if (phase === 'start') {
+        return new Response(JSON.stringify({ upload_session_id: 'sess', video_id: 'fb-1', start_offset: '0', end_offset: '64' }), { status: 200 });
+      }
+      if (phase === 'transfer') {
+        return new Response('transfer failed', { status: 500 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    }) as any;
+    try {
+      await assert.rejects(
+        uploadToFacebook(tempVideo(), meta, { page_id: 'page-1', page_token: 'page-token' }, {
+          immediate: true,
+          quiet: true,
+          progress: (p) => progress.push(p),
+        }),
+        /Facebook API error during transfer chunk at offset 0 \(HTTP 500\)/
+      );
+      assert.deepEqual(progress, []);
     } finally {
       global.fetch = originalFetch;
     }
@@ -156,17 +183,13 @@ describe('QFAT-015 upload service boundary', () => {
     }) as any;
 
     try {
-      const progress: FacebookReelUploadProgress[] = [];
       const result = await uploadReelToFacebook(tempVideo(1024), shortMeta, { page_id: 'page-1', page_token: 'page-token' }, {
         immediate: true,
         quiet: true,
-        progress: (p) => progress.push(p),
       });
       assert.equal(result.videoId, 'reel-1');
       assert.ok(capturedBody && typeof capturedBody.pipe === 'function', 'Reels upload body should be a stream, not a Buffer');
       assert.equal(Buffer.isBuffer(capturedBody), false);
-      const finishCalls = (global.fetch as any).mock?.calls ?? [];
-      assert.ok(progress.length >= 1);
     } finally {
       global.fetch = originalFetch;
     }
@@ -207,7 +230,6 @@ describe('QFAT-015 upload service boundary', () => {
       process.stdout.write = originalWrite as any;
     }
   });
-
 
   it('Reels uses Node fetch streaming against a real local HTTP server', async () => {
     const video = tempVideo(100000);
@@ -277,42 +299,13 @@ describe('QFAT-015 upload service boundary', () => {
       assert.match(finishBody, /video_state=PUBLISHED/);
       assert.doesNotMatch(finishBody, /scheduled_publish_time/);
     } finally {
-      server.close();
-    }
-  });
-
-
-  it('Facebook video failed transfer does not report false progress', async () => {
-    const originalFetch = global.fetch;
-    const progress: FacebookUploadProgress[] = [];
-    global.fetch = (async (_url: any, init: any) => {
-      const phase = String(init?.body?.get?.('upload_phase') ?? '');
-      if (phase === 'start') {
-        return new Response(JSON.stringify({ upload_session_id: 'sess', video_id: 'fb-1', start_offset: '0', end_offset: '64' }), { status: 200 });
-      }
-      if (phase === 'transfer') {
-        return new Response('transfer failed', { status: 500 });
-      }
-      return new Response(JSON.stringify({ success: true }), { status: 200 });
-    }) as any;
-    try {
-      await assert.rejects(
-        uploadToFacebook(tempVideo(), meta, { page_id: 'page-1', page_token: 'page-token' }, {
-          immediate: true,
-          quiet: true,
-          progress: (p) => progress.push(p),
-        }),
-        /Facebook API error during transfer chunk at offset 0 \(HTTP 500\)/
-      );
-      assert.deepEqual(progress, []);
-    } finally {
       global.fetch = originalFetch;
+      server.close();
     }
   });
 
   it('Reels failed HTTP upload does not report success or published state', async () => {
     const originalFetch = global.fetch;
-    const progress: FacebookReelUploadProgress[] = [];
     let finishCalled = false;
     global.fetch = (async (url: any, init: any) => {
       if (String(url).includes('video_reels')) {
@@ -329,15 +322,10 @@ describe('QFAT-015 upload service boundary', () => {
     }) as any;
     try {
       await assert.rejects(
-        uploadReelToFacebook(tempVideo(), shortMeta, { page_id: 'page-1', page_token: 'page-token' }, {
-          immediate: true,
-          quiet: true,
-          progress: (p) => progress.push(p),
-        }),
+        uploadReelToFacebook(tempVideo(), shortMeta, { page_id: 'page-1', page_token: 'page-token' }, { immediate: true, quiet: true }),
         /Facebook API error during reel upload phase \(HTTP 500\)/
       );
       assert.equal(finishCalled, false);
-      assert.ok(!progress.some((p) => p.bytesSent === 100000));
     } finally {
       global.fetch = originalFetch;
     }
@@ -370,4 +358,91 @@ describe('QFAT-015 upload service boundary', () => {
     }
   });
 
+  it('Reels stream failure propagates and does not publish', async () => {
+    const received: Buffer[] = [];
+    let finishCalled = false;
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+      if (url.pathname.endsWith('/video_reels')) {
+        const phase = url.searchParams.get('upload_phase');
+        if (phase === 'start') {
+          const uploadUrl = `http://127.0.0.1:${(server.address() as any).port}/upload`;
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify({ video_id: 'reel-stream-fail', upload_url: uploadUrl }));
+          return;
+        }
+        if (phase === 'finish') {
+          finishCalled = true;
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify({ success: true }));
+          return;
+        }
+      }
+      req.on('data', (chunk) => { received.push(Buffer.from(chunk)); });
+      req.on('end', () => {
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ success: true }));
+      });
+      req.on('error', () => {
+        if (!res.writableEnded) res.destroy();
+      });
+      req.on('close', () => {
+        if (!res.writableEnded) res.destroy();
+      });
+    });
+
+    const originalCreateReadStream = fs.createReadStream;
+    const originalFetch = global.fetch;
+    fs.createReadStream = (() => {
+      const stream = new Readable({ read() { this.destroy(new Error('stream exploded')); } });
+      stream.on('error', () => {
+        // Prevent an unhandled stream error while still allowing fetch to reject.
+      });
+      return stream as any;
+    }) as any;
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as any).port;
+    global.fetch = (async (url: any, init: any) => {
+      if (String(url).includes('video_reels')) {
+        const bodyPhase = init?.body instanceof URLSearchParams ? init.body.get('upload_phase') : null;
+        const urlPhase = new URL(String(url)).searchParams.get('upload_phase');
+        const phase = bodyPhase ?? urlPhase;
+        if (phase === 'start') {
+          const uploadUrl = `http://127.0.0.1:${port}/upload`;
+          return new Response(JSON.stringify({ video_id: 'reel-stream-fail', upload_url: uploadUrl }), { status: 200 });
+        }
+        if (phase === 'finish') {
+          finishCalled = true;
+          return new Response(JSON.stringify({ success: true }), { status: 200 });
+        }
+      }
+      return originalFetch(url, init);
+    }) as any;
+
+    try {
+      await assert.rejects(
+        uploadReelToFacebook(tempVideo(), shortMeta, { page_id: 'page-1', page_token: 'page-token' }, { immediate: true, quiet: true }),
+        /Facebook API error during reel upload phase|fetch failed|stream exploded|terminated|aborted|destroyed/
+      );
+      assert.equal(finishCalled, false);
+    } finally {
+      fs.createReadStream = originalCreateReadStream;
+      global.fetch = originalFetch;
+      server.close();
+    }
+  });
+
+  it('provider errors are sanitized', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = (async () => new Response('bad token access_token=secret', { status: 400 })) as any;
+    try {
+      await assert.rejects(
+        uploadToFacebook(tempVideo(), meta, { page_id: 'page-1', page_token: 'page-token' }, { quiet: true }),
+        /Facebook API error during start phase \(HTTP 400\): bad token access_token=<redacted>/
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
 });

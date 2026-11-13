@@ -73,7 +73,7 @@ Environment: Linux, Node.js v24.22.2, npm 11.19.1.
 |---|---|---|
 | `npm run typecheck` | PASS | `tsc --noEmit` |
 | `npm run build` | PASS | `tsc` |
-| `npx tsx --test test/upload-service.test.ts` | PASS | 10 tests, 0 failures |
+| `npx tsx --test test/upload-service.test.ts` | PASS | 12 tests, 0 failures |
 | Real local HTTP server Reels streaming test | PASS | 100000 bytes received; progress final 100000/100000 |
 | `npx tsc --noEmit --strict --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck --allowImportingTsExtensions test/upload-service.test.ts` | PASS | Test typecheck |
 
@@ -98,6 +98,15 @@ Sources: existing Spoolcast implementation in `src/upload-*.ts`; Facebook Graph 
 4. The Reels real-server test uses an actual local HTTP server and verifies 100000 bytes received through Node Fetch with `duplex: 'half'`.
 5. `global.fetch` is restored in `finally` for the affected tests.
 6. The outdated Reels comment now describes bounded-memory streaming.
+
+## Final review remediation
+
+- Restored `global.fetch` in every affected test, including the real local HTTP server test.
+- Added an actual stream-failure test using a destroyed Readable stream; the upload fails and no finish/publish phase runs.
+- Retained separate HTTP error-response tests for Reels upload and start phases.
+- Removed the unnecessary duplicate final progress callback; Facebook progress now reports confirmed offsets only: 64 then 128.
+- Corrected the Reels comment to describe bounded-memory streaming.
+- All 12 tests pass.
 
 ## Git Publication
 

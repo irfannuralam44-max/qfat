@@ -90,14 +90,20 @@ export async function uploadReelToFacebook(
 
   // Stream the file in bounded memory instead of reading it entirely into one Buffer.
   let bytesSent = 0;
-  const uploadBody = fs.createReadStream(videoPath).pipe(new Transform({
+  const source = fs.createReadStream(videoPath);
+  const uploadBody = new Transform({
     transform(chunk, _encoding, callback) {
       const size = Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(chunk);
       bytesSent += size;
       options.progress?.({ bytesSent, totalBytes: fileSize });
       callback(null, chunk);
     },
-  }));
+  });
+  source.on('error', (error) => uploadBody.destroy(error));
+  source.pipe(uploadBody);
+  uploadBody.on('error', () => {
+    // Allow fetch to observe the destroyed body without an unhandled stream error.
+  });
 
   const uploadResp = await fetch(uploadUrl, {
     method: 'POST',
@@ -109,9 +115,8 @@ export async function uploadReelToFacebook(
     },
     body: uploadBody as any,
     duplex: 'half',
-  });
+  } as any);
   await assertOk(uploadResp, 'reel upload phase');
-  options.progress?.({ bytesSent: fileSize, totalBytes: fileSize });
 
   // --------------------------------------------------------------------------
   // Phase 3: Finish — publish as SCHEDULED with the caption.
