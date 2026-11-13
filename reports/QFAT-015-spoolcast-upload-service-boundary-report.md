@@ -73,7 +73,7 @@ Environment: Linux, Node.js v24.22.2, npm 11.19.1.
 |---|---|---|
 | `npm run typecheck` | PASS | `tsc --noEmit` |
 | `npm run build` | PASS | `tsc` |
-| `npx tsx --test test/upload-service.test.ts` | PASS | 7 tests, 0 failures |
+| `npx tsx --test test/upload-service.test.ts` | PASS | 10 tests, 0 failures |
 | Real local HTTP server Reels streaming test | PASS | 100000 bytes received; progress final 100000/100000 |
 | `npx tsc --noEmit --strict --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck --allowImportingTsExtensions test/upload-service.test.ts` | PASS | Test typecheck |
 
@@ -89,6 +89,15 @@ No live Google/Meta APIs, credentials, OAuth, uploads, database, or hosted CI we
 - Facebook Reels scheduled: finish phase `video_state=SCHEDULED` plus `scheduled_publish_time`.
 
 Sources: existing Spoolcast implementation in `src/upload-*.ts`; Facebook Graph API behavior as implemented by the existing three-phase protocol; YouTube Data API `videos.insert` status fields.
+
+## Outstanding review findings addressed
+
+1. Facebook Page multi-chunk progress is now covered by a deterministic two-chunk mock. Progress is emitted only after each transfer response and matches server-confirmed offsets: `64`, then `128`.
+2. A failed transfer response does not emit progress and throws before finish.
+3. Reels streaming tests now include successful streaming, HTTP upload failure, and start-phase failure. No finish request or published state follows a failed transfer.
+4. The Reels real-server test uses an actual local HTTP server and verifies 100000 bytes received through Node Fetch with `duplex: 'half'`.
+5. `global.fetch` is restored in `finally` for the affected tests.
+6. The outdated Reels comment now describes bounded-memory streaming.
 
 ## Git Publication
 

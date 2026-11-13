@@ -106,9 +106,13 @@ describe('QFAT-015 upload service boundary', () => {
       calls.push({ url: String(url), body: init?.body });
       const phase = String(init?.body?.get?.('upload_phase') ?? '');
       if (phase === 'start') {
-        return new Response(JSON.stringify({ upload_session_id: 'sess', video_id: 'fb-1', start_offset: '0', end_offset: '128' }), { status: 200 });
+        return new Response(JSON.stringify({ upload_session_id: 'sess', video_id: 'fb-1', start_offset: '0', end_offset: '64' }), { status: 200 });
       }
       if (phase === 'transfer') {
+        const requestStart = Number(init?.body?.get?.('start_offset') ?? 0);
+        if (requestStart === 0) {
+          return new Response(JSON.stringify({ start_offset: '64', end_offset: '128' }), { status: 200 });
+        }
         return new Response(JSON.stringify({ start_offset: '128', end_offset: '128' }), { status: 200 });
       }
       return new Response(JSON.stringify({ success: true }), { status: 200 });
@@ -126,7 +130,11 @@ describe('QFAT-015 upload service boundary', () => {
       assert.ok(finishCall);
       assert.equal(finishCall.body.get('published'), 'true');
       assert.equal(finishCall.body.has('scheduled_publish_time'), false);
-      assert.ok(progress.length >= 1);
+      assert.deepEqual(progress, [
+        { bytesSent: 64, totalBytes: 128 },
+        { bytesSent: 128, totalBytes: 128 },
+        { bytesSent: 128, totalBytes: 128 },
+      ]);
     } finally {
       global.fetch = originalFetch;
     }
@@ -270,6 +278,95 @@ describe('QFAT-015 upload service boundary', () => {
       assert.doesNotMatch(finishBody, /scheduled_publish_time/);
     } finally {
       server.close();
+    }
+  });
+
+
+  it('Facebook video failed transfer does not report false progress', async () => {
+    const originalFetch = global.fetch;
+    const progress: FacebookUploadProgress[] = [];
+    global.fetch = (async (_url: any, init: any) => {
+      const phase = String(init?.body?.get?.('upload_phase') ?? '');
+      if (phase === 'start') {
+        return new Response(JSON.stringify({ upload_session_id: 'sess', video_id: 'fb-1', start_offset: '0', end_offset: '64' }), { status: 200 });
+      }
+      if (phase === 'transfer') {
+        return new Response('transfer failed', { status: 500 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    }) as any;
+    try {
+      await assert.rejects(
+        uploadToFacebook(tempVideo(), meta, { page_id: 'page-1', page_token: 'page-token' }, {
+          immediate: true,
+          quiet: true,
+          progress: (p) => progress.push(p),
+        }),
+        /Facebook API error during transfer chunk at offset 0 \(HTTP 500\)/
+      );
+      assert.deepEqual(progress, []);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('Reels failed HTTP upload does not report success or published state', async () => {
+    const originalFetch = global.fetch;
+    const progress: FacebookReelUploadProgress[] = [];
+    let finishCalled = false;
+    global.fetch = (async (url: any, init: any) => {
+      if (String(url).includes('video_reels')) {
+        const bodyPhase = init?.body instanceof URLSearchParams ? init.body.get('upload_phase') : null;
+        if (bodyPhase === 'start') {
+          return new Response(JSON.stringify({ video_id: 'reel-fail', upload_url: 'https://upload.example/fail' }), { status: 200 });
+        }
+        if (bodyPhase === 'finish') {
+          finishCalled = true;
+          return new Response(JSON.stringify({ success: true }), { status: 200 });
+        }
+      }
+      return new Response('upload failed', { status: 500 });
+    }) as any;
+    try {
+      await assert.rejects(
+        uploadReelToFacebook(tempVideo(), shortMeta, { page_id: 'page-1', page_token: 'page-token' }, {
+          immediate: true,
+          quiet: true,
+          progress: (p) => progress.push(p),
+        }),
+        /Facebook API error during reel upload phase \(HTTP 500\)/
+      );
+      assert.equal(finishCalled, false);
+      assert.ok(!progress.some((p) => p.bytesSent === 100000));
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('Reels start phase HTTP failure is reported and does not publish', async () => {
+    const originalFetch = global.fetch;
+    let finishCalled = false;
+    global.fetch = (async (url: any, init: any) => {
+      if (String(url).includes('video_reels')) {
+        const bodyPhase = init?.body instanceof URLSearchParams ? init.body.get('upload_phase') : null;
+        if (bodyPhase === 'start') {
+          return new Response('start failed', { status: 401 });
+        }
+        if (bodyPhase === 'finish') {
+          finishCalled = true;
+          return new Response(JSON.stringify({ success: true }), { status: 200 });
+        }
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    }) as any;
+    try {
+      await assert.rejects(
+        uploadReelToFacebook(tempVideo(), shortMeta, { page_id: 'page-1', page_token: 'page-token' }, { immediate: true, quiet: true }),
+        /Facebook API error during reel start phase \(HTTP 401\)/
+      );
+      assert.equal(finishCalled, false);
+    } finally {
+      global.fetch = originalFetch;
     }
   });
 

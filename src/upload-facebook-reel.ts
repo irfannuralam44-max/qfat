@@ -12,8 +12,8 @@
  * Reel requirements (enforced by Facebook, not validated here): 9:16 aspect,
  * 1080×1920 recommended, 3–90 s duration, .mp4.
  *
- * The whole file is read into memory for a single-shot upload. Reels are short,
- * so this is fine; long-form videos should use uploadToFacebook (chunked) instead.
+ * The file is streamed to the rupload host in bounded memory. Reels are short,
+ * but the implementation does not read the entire file into one Buffer.
  */
 
 import fs from 'node:fs';
