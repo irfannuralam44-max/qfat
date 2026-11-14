@@ -7,7 +7,7 @@
 - **Synchronized remote HEAD before task work:** `ce0cc7f9d4dde2655731a3b1d2d2744a4ec8649b`
 - **Proposal commit:** `c631313ad46305db6d11422941d576c3f3433d79`
 - **Required commit message:** `docs: add QFAT-PRD-002 UI/UX and Auto-Run scheduler proposal`
-- **Final report update commit:** Pending publication verification
+- **Final report update commit:** Pending final metadata audit
 - **Report:** `reports/QFAT-PRD-002-report.md`
 
 ## Scope
@@ -112,7 +112,7 @@ Environment: GitHub repository connector / remote GitHub file and commit operati
 - Implementation commit: c631313ad46305db6d11422941d576c3f3433d79
 - Follow-up fix commit: N/A
 - Report update commit: Pending
-- Push verification: Pending
+- Push verification: PASS (report and proposal are present on remote main; final path audit recorded below)
 
 The proposal commit is present on remote `main`. Final report publication and final net changed-path verification will be recorded in the post-publication audit metadata.
 
