@@ -127,7 +127,7 @@ No source, test, package, dependency, configuration, database/schema, credential
 - Branch: main
 - Implementation commit: 77065717d668c5efb7891de3d93c4e8ecfeff08e
 - Follow-up fix commit: 5b6e23449dc304fd1eab7ac51c7004c22e8a8deb
-- Report update commit: 8279aeb59a9d2898d967b502510adcccbba4ed05
+- Report update commit: 102b3517e6360c8afcbf9d8d5ca44fc13f4d5677
 - Push verification: PASS
 
 The report-creation commit above was re-fetched from remote `main`. The final remote compare from the synchronized task HEAD confirms only the two authorized documentation paths and this report changed. The report and design files are present and readable on GitHub. This verifies source publication only, not CI.
@@ -141,3 +141,19 @@ Additional documentation commit sequence:
 ## Handoff
 
 Documentation work is ready for GPT/Owner audit. D-024-01 and D-024-02 are recorded as Owner-decided. Owner-only publishing access and the remaining technical blockers stay open. Runtime integration is not authorized or ready; no follow-on task was created.
+
+
+## GPT Post-publication Audit — 2026-11-14
+
+**Independent audit result: PASS WITH FINDINGS for the documentation deliverables.** This is not runtime authorization or Owner acceptance.
+
+- Verified that remote `main` resolves exactly to `102b3517e6360c8afcbf9d8d5ca44fc13f4d5677`.
+- Compared the QFAT-024 synchronized task baseline `a81ee20acb68875f8ea5e39c4e284297e378eca5` to that HEAD: 6 commits ahead, 0 behind. The final net changed-path set is exactly the two authorized documentation files and this report.
+- Compared `8279aeb59a9d2898d967b502510adcccbba4ed05` to the handoff HEAD: exactly one later commit, modifying only this report. The handoff SHA is therefore the verified report-metadata update commit; the report's Git Publication field is corrected accordingly.
+- Compared the handoff SHA to `main`: identical, confirming that the reported commit is the current remote branch HEAD.
+- Independently fetched the scope-control decisions and invocation-design addendum, and spot-checked the cited source facts in `src/tokens.ts`, `src/config.ts`, root/server package manifests, `src/run.ts`, `src/manifest.ts`, QFAT media storage, and Vite configuration. The inspected evidence supports the documented Spoolcast credential ownership, missing package boundary, queue-wide CLI behavior, manifest constraint, UUID media-path issue, and network/authentication distinction.
+- No source/runtime changes are present in the audited diff. Local working-tree state and local-only checks remain unverifiable through the GitHub repository interface and are not upgraded to PASS by this audit.
+
+The two Owner decisions are correctly recorded: single-owner MVP and Spoolcast-exclusive provider OAuth/account/token authority. Owner-only publishing authorization, Spoolcast home/process access, package/build boundary, media handoff, immediate-mode manifest behavior, progress/lifetime, cancellation, duplicate submission, and truthful Scheduled/Published status remain open or blocked. In-process reuse remains an investigation preference only; no topology is selected.
+
+No follow-on task or runtime implementation is authorized by this audit.
