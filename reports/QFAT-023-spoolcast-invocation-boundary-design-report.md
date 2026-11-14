@@ -110,3 +110,52 @@ The report-creation commit above was re-fetched from remote `main`; the design a
 ## Handoff
 
 This work is ready for GPT/Owner audit of the design evidence and the recorded OPEN OWNER DECISION items. It is not Owner-accepted and does not authorize runtime implementation. Stop after this task.
+
+
+---
+
+## Independent GPT Audit — 2026-11-14
+
+- **Audit result:** PASS WITH FINDINGS — documentation deliverables accepted as source-grounded decision support; runtime architecture remains BLOCKED / OPEN OWNER DECISION.
+- **Audited branch:** `main`
+- **Agent publication-verification commit:** `7ed230dd9860e755b68a3e4715c29220bf0bc746`
+- **Task-specification commit / compare base:** `5e5c4b74c55abac709bbbf9f01ab0e502d0df83b`
+
+### Independent publication and scope verification
+
+GPT re-fetched the agent report and design document from remote `main`, fetched the reported publication-verification commit, and compared the task-specification commit to that commit:
+
+- Compare result: **4 commits ahead, 0 behind**.
+- Final net changed paths: exactly:
+  - `docs/design/QFAT-SPOOLCAST-INVOCATION-DESIGN.md` — added.
+  - `reports/QFAT-023-spoolcast-invocation-boundary-design-report.md` — added.
+- The four commits in the task range were inspected individually. The design commit and formatting follow-up touched only the design document; the report and remote-publication verification commits touched only the report.
+- The reported task file remains unchanged after its creation commit. No source/runtime/test/dependency/configuration/schema path appears in the final net diff.
+
+### Source spot-check
+
+GPT independently re-fetched the relevant source at the design's stated baseline `5e5c4b74c55abac709bbbf9f01ab0e502d0df83b` and confirmed the central claims:
+
+1. Root Spoolcast is an ESM package exposing a CLI binary, with Node `>=20`, `NodeNext` compilation rooted at `src/`, and no declared service export. `apps/server` is a separate ESM package with Node `>=22`, its own TypeScript build, and no declared Spoolcast dependency.
+2. `src/cli.ts` dynamically imports command entry modules; `src/run.ts` scans queue items, loads token state, runs item/target operations, writes the existing ledger, and emits CLI output. It is not a one-item machine-request service interface.
+3. `src/tokens.ts` stores aliased YouTube refresh tokens and Facebook Page tokens in Spoolcast's token store and reads app-level credentials separately. QFAT's `CredentialProvider` exposes opaque Buffer payloads with internal `id/purpose/provider` context; no account mapping is established by these interfaces.
+4. `apps/server/src/index.ts` binds Fastify to `127.0.0.1` and registers health, security, and media routes only. `apps/web/vite.config.ts` binds the Vite server to `0.0.0.0:5173` and proxies API requests to loopback.
+5. Security routes validate Origin/Host and mutation requests use a session plus CSRF token. The bootstrap route creates a session after Origin/Host validation; it does not authenticate a human identity or authorize a provider account. `createSessionCookie` does not set `Secure`, consistent with the documented HTTP-local topology but not a transport-security guarantee.
+6. The media API response exposes opaque media metadata/IDs rather than a filesystem path. The managed storage uses a UUID `storageKey` without preserving the original extension in the stored filename. Spoolcast's `videoMimeType(filePath)` derives MIME from the path extension and treats every non-`.mov` path as `video/mp4`.
+
+### Audit finding
+
+**F-01 — Media handoff design needs an explicit extension/MIME compatibility caveat (non-blocking for this documentation-only task).**
+
+The design correctly marks media handoff as unresolved and notes that Spoolcast adapters need a local video path. However, the exact source interaction adds an important detail not stated in the design: QFAT's media storage filename is an extensionless UUID, while Spoolcast's `videoMimeType()` derives MIME from the filename extension (`.mov` → QuickTime; everything else → MP4). The public media record retains `mimeType` and `originalFilename`, but the API does not expose the path.
+
+Consequently, simply resolving a QFAT media ID to its current stored path would not preserve the source extension for the adapter. In particular, a MOV could be treated as MP4 by the current adapter helper. Any future media handoff must explicitly decide how to preserve/validate the true media type at the trusted Node boundary without trusting a browser-supplied path. This may require a separately authorized adapter/input or safe staging design; **do not implement a workaround under QFAT-023**.
+
+### Limitations and final disposition
+
+- The agent accurately disclosed that local `git diff --check`, `git status --short`, staged-path review, and local full-diff checks were not run because no local checkout/shell was available. GPT likewise audited remote GitHub content and source, not a local working tree or executed tests.
+- Source spot-checks support the design's central conclusions. No claim of runtime readiness or live provider verification is accepted.
+- The design's nine Owner decisions remain open. In particular, no invocation topology, credential owner/mapping, publishing authorization model, immediate-mode manifest path, media handoff, progress transport, cancellation policy, durable status model, or duplicate-submission behavior is approved.
+- No QFAT-024 or implementation task is created by this audit.
+
+**Disposition:** QFAT-023 documentation deliverables are accepted **PASS WITH FINDINGS** as decision-support documentation. Runtime integration remains **NOT AUTHORIZED**. The Owner must decide the open architecture/security/credential/media questions and authorize a separate bounded task before any implementation.
