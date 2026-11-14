@@ -7,7 +7,7 @@
 - **Synchronized remote HEAD before task work:** `ce0cc7f9d4dde2655731a3b1d2d2744a4ec8649b`
 - **Proposal commit:** `c631313ad46305db6d11422941d576c3f3433d79`
 - **Required commit message:** `docs: add QFAT-PRD-002 UI/UX and Auto-Run scheduler proposal`
-- **Final report update commit:** 19313cfeb45dbb49a411221dac4b9a2b7e3dcd16
+- **Earlier report update commit:** `19313cfeb45dbb49a411221dac4b9a2b7e3dcd16` (not the final task HEAD; see corrected publication history below).
 - **Report:** `reports/QFAT-PRD-002-report.md`
 
 ## Scope
@@ -105,16 +105,20 @@ Environment: GitHub repository connector / remote GitHub file and commit operati
 4. **Provider quota and dynamic eligibility-rule delivery are not established by the inspected repository sources.** They are marked assumptions / OPEN OWNER DECISION and must be verified before implementation.
 5. **No local typecheck or app test was necessary or run** because no code changed.
 
-## Git Publication
+## Git Publication — corrected history
 
-- Repository: irfannuralam44-max/qfat
-- Branch: main
-- Implementation commit: c631313ad46305db6d11422941d576c3f3433d79
-- Follow-up fix commit: N/A
-- Report update commit: 19313cfeb45dbb49a411221dac4b9a2b7e3dcd16
-- Push verification: PASS
+- Repository: `irfannuralam44-max/qfat`
+- Branch: `main`
+- Baseline before QFAT-PRD-002: `ce0cc7f9d4dde2655731a3b1d2d2744a4ec8649b`
+- Proposal creation: `c631313ad46305db6d11422941d576c3f3433d79` — added the PRD.
+- Report creation: `87d0af3` — added this report.
+- Required-message follow-up: `19313cfeb45dbb49a411221dac4b9a2b7e3dcd16` — updated report metadata; this was not the final task HEAD.
+- Publication-metadata follow-up: `3a449c0fefac16addc4d45ffa4052cfd5ef7c495` — added report audit metadata; this was the remote `main` HEAD before the present audit corrections.
+- PRD audit correction: `2b05fa12d3e00c848d4dd933946b532cb63930af` — clarified operational-read approval gates, unknown-rule fallback, and fixture-only P1 scope.
+- This report revision follows the PRD audit correction. Its resulting commit SHA is reported in the current GPT handoff; the report does not attempt to contain its own commit SHA.
+- Push verification: PASS for each published commit above.
 
-The proposal commit is present on remote `main`. Final report publication and final net changed-path verification will be recorded in the post-publication audit metadata.
+The previous handoff incorrectly described `19313cf...` as the final task SHA. That description is superseded. The verified pre-correction HEAD was `3a449c0fefac16addc4d45ffa4052cfd5ef7c495`; the PRD correction then advanced `main` to `2b05fa12d3e00c848d4dd933946b532cb63930af`.
 
 ## Handoff
 
@@ -133,3 +137,24 @@ Documentation deliverables are ready for GPT/Owner audit. This report does not c
 - `npm run typecheck` remains NOT RUN and not required because no TypeScript changed. No live provider calls or hosted CI were performed.
 
 The proposal remains `PROPOSED — pending Owner approval`. Part B remains unapproved and Spoolcast-Core-only. No implementation is authorized by this publication.
+
+
+## GPT audit corrections — 2026-11-14
+
+The follow-up content audit against QFAT-PRD-001 and `docs/QFAT-SCOPE-AND-CHANGE-CONTROL.md` found four documentation issues. They have now been addressed within the two originally authorized document paths; no source/runtime path was changed.
+
+| Finding | Correction |
+|---|---|
+| F-01 — Part A language could imply Accounts/Queue/History/operational Overview were already approved | PRD now states these are proposed surfaces only. Real operational data requires P2 and an Owner-approved read contract covering authority, access control, ownership, freshness, and redaction. |
+| F-02 — Eligibility preview did not define behavior when authoritative Spoolcast rules were unavailable | PRD now requires **Unknown / cannot verify** and blocks confirmation for the selected target set if rules are missing, unavailable, stale, or contradictory. Browser constants, cached examples, and assumptions cannot substitute for authoritative rules. |
+| F-03 — P1 wording could be read as authorization to implement all operational screens | PRD now limits P1 to frontend shell/foundation, reusable UI primitives, accessible state patterns, and visibly non-live fixtures. It explicitly excludes real operational data, read integrations, and live diagnostics. The P1 task template acceptance criteria are narrowed accordingly. |
+| F-04 — Publication history omitted the final report metadata commit and misidentified the task SHA | This report now records the commit chain and explicitly distinguishes the earlier required-message follow-up from the pre-correction HEAD. The current handoff supplies the SHA produced by this report revision. |
+
+### Scope and verification of corrections
+
+- Only these existing files were updated: `docs/proposals/PRD-QFAT-UIUX-AND-AUTO-SCHEDULER.md` and `reports/QFAT-PRD-002-report.md`.
+- PRD correction commit: `2b05fa12d3e00c848d4dd933946b532cb63930af`.
+- No implementation, runtime, API, bridge, provider, OAuth, credential, queue, ledger, scheduler, persistence, dependency, or test code was changed.
+- Remote GitHub file updates were used. Local `git status`, `git diff --name-status`, and local typecheck remain NOT RUN because this environment has no local checkout/shell. Remote compare is not represented as execution of local Git commands.
+- The report correction itself is committed after the PRD correction; its exact commit SHA is provided in the handoff outside this file.
+- The proposal remains **PROPOSED — pending Owner approval**. These documentation corrections do not authorize P1 implementation, P2 read integration, P3 publishing integration, or P4 Auto-Run.
