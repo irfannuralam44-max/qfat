@@ -11,7 +11,7 @@ A local browser-to-Node bridge/launcher/API is conditional and may be added only
 
 ## Owner decisions — operating model and provider credentials — 2026-11-14
 
-### D-024-01 — Single-owner MVP <badge-placeholder/>
+### D-024-01 — Single-owner MVP
 
 The QFAT MVP is operated by one owner. Do not introduce multi-user registration, roles, per-user permissions, teams, or user/account ownership abstractions. The owner may use trusted LAN/Tailscale devices as browser clients; that operating intent does not establish that the current application authenticates the owner or enforces a trusted-device allowlist.
 
