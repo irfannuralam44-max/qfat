@@ -102,8 +102,10 @@ No source, tests, dependencies, configuration, database/schema, credentials, med
 - Branch: main
 - Implementation commit: 358aec4c28c16dc16a22d77f12b58d6f7520e1b6
 - Follow-up fix commit: dc48019d9e7d121a6e9246ed6e38365b781ef8d9
-- Report update commit: Pending
-- Push verification: Pending
+- Report update commit: f67f112f8f32bb1a657a21a91a7bb4adb4029520
+- Push verification: PASS
+
+The report-creation commit above was re-fetched from remote `main`; the design and report paths were confirmed present and readable. The final remote compare from the synchronized HEAD contains only the two authorized Markdown paths. This verifies source publication only, not CI.
 
 ## Handoff
 
