@@ -127,8 +127,10 @@ No source, test, package, dependency, configuration, database/schema, credential
 - Branch: main
 - Implementation commit: 77065717d668c5efb7891de3d93c4e8ecfeff08e
 - Follow-up fix commit: 5b6e23449dc304fd1eab7ac51c7004c22e8a8deb
-- Report update commit: Pending
-- Push verification: Pending
+- Report update commit: 8279aeb59a9d2898d967b502510adcccbba4ed05
+- Push verification: PASS
+
+The report-creation commit above was re-fetched from remote `main`. The final remote compare from the synchronized task HEAD confirms only the two authorized documentation paths and this report changed. The report and design files are present and readable on GitHub. This verifies source publication only, not CI.
 
 Additional documentation commit sequence:
 - Scope-control Owner decision: `d6a091f1508c926397e76eabbe1c77e158733abf`
