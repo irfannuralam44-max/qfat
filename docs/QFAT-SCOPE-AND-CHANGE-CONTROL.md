@@ -8,6 +8,30 @@ QFAT is the frontend/UI for the existing Spoolcast application. Spoolcast remain
 
 A local browser-to-Node bridge/launcher/API is conditional and may be added only when source inspection proves it is the smallest necessary mechanism to invoke existing Spoolcast operations safely. It must not become a parallel backend or own a replacement engine, provider protocols, OAuth/account/token system, scheduler, queue/job orchestration, independent publishing ledger, generic adapter framework, or unrelated persistence/media/credential subsystem.
 
+
+## Owner decisions — operating model and provider credentials — 2026-11-14
+
+### D-024-01 — Single-owner MVP <badge-placeholder/>
+
+The QFAT MVP is operated by one owner. Do not introduce multi-user registration, roles, per-user permissions, teams, or user/account ownership abstractions. The owner may use trusted LAN/Tailscale devices as browser clients; that operating intent does not establish that the current application authenticates the owner or enforces a trusted-device allowlist.
+
+The current browser Origin/Host checks, bootstrap session, and CSRF synchronizer token are request-context protections, not human authentication or proof of owner identity. The Vite frontend listens on `0.0.0.0:5173`, accepts private IPv4 and Tailscale CGNAT origins, and the bootstrap route creates a session after Origin/Host validation without an owner login or device authorization step. A future publishing boundary must not be exposed on this basis alone.
+
+**OPEN OWNER DECISION:** the minimum enforceable owner-only access control for publishing over LAN/Tailscale remains undefined. The Owner must decide and approve how trusted devices/network are identified and enforced (for example, whether an externally managed network allowlist is sufficient or whether an application-level owner proof is required). Do not invent a login, pairing flow, device registry, or firewall/Tailscale configuration in this documentation task.
+
+### D-024-02 — Spoolcast is the sole provider OAuth/account/token authority
+
+The Owner has decided that all provider OAuth authorization, provider account selection/aliases, refresh/page tokens, and app-level provider credentials remain managed by the existing Spoolcast application.
+
+- Spoolcast `src/auth-youtube.ts` and `src/auth-facebook.ts` remain the authorization flows; Spoolcast `src/tokens.ts` remains the token-store and account-resolution authority.
+- The authoritative store remains `SPOOLCAST_HOME/.secrets/tokens.json`; Google OAuth client credentials remain in `google-client.json`, and Facebook app credentials remain in `fb-app.json` or the existing environment variables.
+- Reuse existing Spoolcast account resolution where a separately approved integration can technically consume it. Do not create a QFAT OAuth flow, QFAT provider-account source of truth, alias registry, token copy, migration, synchronization, or dual-write.
+- QFAT's `CredentialProvider` and encrypted SQLite credential records are **not** the source of truth and must not be used to store Spoolcast provider tokens under this decision.
+- Provider tokens, client secrets, and credential payloads must remain inside the trusted local Node/Spoolcast execution boundary. They must not enter browser state, HTTP responses, URLs, process arguments, logs, progress events, or user-visible error strings.
+
+This decision settles credential ownership; it does not prove that QFAT can currently locate or access the Spoolcast home directory. `src/config.ts` computes its `PATHS` once at module initialization from `SPOOLCAST_HOME` or `process.cwd()`. A future in-process integration must establish the correct Spoolcast home before importing/using those modules, without changing token ownership. The current QFAT server has no configured Spoolcast-home contract. **OPEN OWNER DECISION:** deployment/configuration ownership and OS-level access to the existing Spoolcast home remain to be specified before runtime work.
+
+
 ## In scope
 - Frontend screens and interactions presenting verified, owner-approved Spoolcast capabilities.
 - Input collection, client-side validation/presentation, accessibility, and truthful status display.
